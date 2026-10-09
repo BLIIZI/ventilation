@@ -22,4 +22,9 @@ for (const mode of ['constant', 'onoff', 'adaptive'] as const) {
   const r = simulate(demoNetwork(), p); res['adaptive_gen'] = r;
   console.log(`Предлагаемая + общеобменная по потребности: вент ${r.fanKWh.toFixed(2)} кВт·ч, тепло ${r.heatKWh.toFixed(0)} кВт·ч, ср.расход МВВ ${r.avgFlow.toFixed(0)} м³/ч, <95% ${(r.underFlowShare*100).toFixed(1)}%, >110% ${(r.overFlowShare*100).toFixed(1)}%, Mn max ${r.maxC.Mn.toFixed(3)} ср ${r.avgC.Mn.toFixed(3)}`);
 }
+console.log('--- для сравнения: без пусконаладочной балансировки (как в первой версии) ---');
+for (const mode of ['constant', 'onoff'] as const) {
+  const r = simulate(demoNetwork(), shiftParams(mode, pSet, false));
+  console.log(`${names[mode]} (без балансировки): вент ${r.fanKWh.toFixed(2)}, тепло ${r.heatKWh.toFixed(0)}, >110% ${(r.overFlowShare*100).toFixed(1)}%`);
+}
 writeFileSync('shift-results.json', JSON.stringify(Object.fromEntries(Object.entries(res).map(([k, v]: any) => [k, { ...v, series: v.series }]))));

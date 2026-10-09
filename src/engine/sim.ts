@@ -31,7 +31,9 @@ export interface SimParams {
   pSet?: number;         // уставка разрежения в коллекторе для режима onoff, Па
   record?: number;       // шаг записи временного ряда, с
   kI?: number;
-  nFF?: (active: string[]) => number;   // упреждение: расчётная частота для данного набора работающих постов (из balance)           // коэффициент интегрального регулятора расхода (в пространстве ln ζ), 1/с
+  nFF?: (active: string[]) => number;
+  openAngles?: Record<string, number>; // положение «открыто» после пусконаладочной балансировки (режимы constant/onoff)
+  nConst?: number;                     // частота для режима constant (расчётный режим после наладки)   // упреждение: расчётная частота для данного набора работающих постов (из balance)           // коэффициент интегрального регулятора расхода (в пространстве ln ζ), 1/с
 }
 export interface Sample { t: number; n: number; Q: Record<string, number>; alpha: Record<string, number>; on: Record<string, boolean>; C: Record<string, number>; P: number; heat: number; }
 export interface SimResult {
@@ -64,9 +66,9 @@ export function simulate(net: Network, p: SimParams): SimResult {
 
     // ---- регуляторы: целевые углы и частота
     const target: Record<string, number> = {};
-    if (p.mode === 'constant') { ids.forEach(id => (target[id] = 0)); nTarget = p.nMax; }
+    if (p.mode === 'constant') { ids.forEach(id => (target[id] = p.openAngles?.[id] ?? 0)); nTarget = p.nConst ?? p.nMax; }
     if (p.mode === 'onoff') {
-      ids.forEach(id => (target[id] = on[id] ? 0 : 90));
+      ids.forEach(id => (target[id] = on[id] ? (p.openAngles?.[id] ?? 0) : 90));
       // ЧП: ПИ по разрежению в коллекторе (давление перед общим трактом)
       const pColl = sol && n > 0 ? sol.pFan - sol.segLoss['common'] : 0;
       nTarget = anyOn ? Math.min(p.nMax, Math.max(p.nMin, nTarget + 0.5 * ((p.pSet ?? 600) - pColl) * p.dt)) : 0;

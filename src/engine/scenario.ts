@@ -29,7 +29,14 @@ export function makeSchedule(ids: string[], duration: number, seed = 7) {
   return (id: string, t: number) => !(t >= 4 * 3600 && t < 5 * 3600) && iv[id].some(([a, b]) => t >= a && t < b);
 }
 
-export function shiftParams(mode: Mode, pSet: number): SimParams {
+/** Пусконаладка: балансировка ветвей при расчётном режиме (все посты по 1500 м³/ч) — фиксированные углы и частота */
+export function commissioning() {
+  const b = balance(demoNetwork(), { post1: m3h(1500), post2: m3h(1500), post3: m3h(1500) });
+  return { angles: b.angles, n: b.fanSpeed, pSet: b.sol.pFan - b.sol.segLoss['common'] };
+}
+
+export function shiftParams(mode: Mode, pSet: number, balanced = true): SimParams {
+  const com = balanced ? commissioning() : null;
   const ids = ['post1', 'post2', 'post3'];
   const duration = 8 * 3600;
   return {
@@ -43,5 +50,6 @@ export function shiftParams(mode: Mode, pSet: number): SimParams {
     damperStroke: 8,  // 8 с — время хода заслонки Plymovent AD (паспорт); одинаково для сравнения режимов
     fanRamp: 10, nMax: 1500, nMin: 300, pSet, kI: 4,
     nFF: mode === 'adaptive' ? feedforwardTable(ids, m3h(1500)) : undefined,
+    openAngles: com ? com.angles : undefined, nConst: com ? com.n : undefined,
   };
 }
