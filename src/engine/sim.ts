@@ -30,6 +30,7 @@ export interface GenVent {
   sensor: { of: string; ratio: number; tau: number; noise: number }; // датчик общей массы аэрозоля → оценка Mn = ratio·C_аэр
   kP: number; kI: number;    // коэффициенты коррекции (доля Ldesign на единицу относительной ошибки; 1/с)
   ffTau?: number;            // сглаживание упреждающего сигнала, с (инерционное звено 1-го порядка)
+  antiWindup?: boolean;      // условное интегрирование (по умолчанию включено); false — только для сравнения в исследовании
   dpDesign: number; etaFan: number; ramp: number; // для энергии вентилятора ОВ: P = P_расч·(L/L_расч)^3; время разгона ЧП, с
 }
 export interface SimParams {
@@ -139,7 +140,7 @@ export function createSimulator(net: Network, p: SimParams) {
     if (n < 30) sol = null;
     else sol = solve(net, sol ? ids.map(id => Math.max(sol!.Q[id], 1e-4)) : undefined);
     const Qtot = sol ? sol.Qtotal : 0;
-    const P = sol ? sol.power : 0;
+    const P = sol ? sol.powerEl : 0;   // электрическая мощность (если заданы данные двигателя)
 
     // ---- помещение: V dC/dt = Σ(1-η)G − (L_мо + L_оо)(C − q_пр)
     // η снижается, если расход поста меньше требуемого: η = η_ном·min(1, Q/Q_тр) [Д]
@@ -157,7 +158,10 @@ export function createSimulator(net: Network, p: SimParams) {
         Lt = ffF;
         if (g.mode === 'fffb') {
           const est = sensorC * g.sensor.ratio, e = (est - g.Cset) / g.Cset;   // оценка Mn по датчику общей массы
-          fbInt = Math.max(-g.Ldesign, Math.min(g.Ldesign, fbInt + g.kI * e * g.Ldesign * p.dt));
+          // anti-windup (условное интегрирование): интеграл не копится, если выход упёрся в ограничение в ту же сторону
+          const uFree = Lt + g.kP * e * g.Ldesign + fbInt;
+          const satHi = uFree >= g.Lmax && e > 0, satLo = uFree <= g.Lmin && e < 0;
+          if (g.antiWindup === false || (!satHi && !satLo)) fbInt = Math.max(-g.Ldesign, Math.min(g.Ldesign, fbInt + g.kI * e * g.Ldesign * p.dt));
           Lt += g.kP * e * g.Ldesign + fbInt;
         }
       }

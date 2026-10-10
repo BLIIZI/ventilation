@@ -63,7 +63,30 @@ export function damperAngleForZeta(zeta: number, table = BUTTERFLY_ROUND): numbe
 /** Характеристика вентилятора по точкам каталога (Q м³/ч, p Па) при n0 об/мин.
  *  Пересчёт на другую частоту — законы подобия: Q~n, p~n², N~n³ [М]
  *  (U.S. DOE. Improving Fan System Performance: A Sourcebook for Industry, 2003). */
-export interface FanCurve { n0: number; points: Array<[number, number]>; eta: number; }
+export interface FanCurve {
+  n0: number; points: Array<[number, number]>; eta: number;   // eta — КПД вентилятора (на валу)
+  motorW?: number; motorEta?: number;   // номинальная мощность и КПД двигателя; если заданы — считается электрическая мощность с ЧП
+}
+
+/** КПД частотного преобразователя от нагрузки (доля номинальной мощности ЧП).
+ *  US DOE, Motor Systems Tip Sheet #11 «Adjustable Speed Drive Part-Load Efficiency», табл. 1, строка 5 hp (типовой ШИМ-ЧП). [Н/справ.] */
+export const VFD_EFF: Array<[number, number]> = [[0.016, 0.35], [0.125, 0.80], [0.25, 0.88], [0.42, 0.91], [0.5, 0.92], [0.75, 0.94], [1.0, 0.95]];
+/** Относительный КПД асинхронного двигателя при частичной нагрузке (к номинальному). [Д][П]
+ *  50–100 %: по каталогам IE3 КПД практически постоянен; ниже 50 % падает (DOE, «Determining Electric Motor Load and Efficiency»).
+ *  Точки ниже 50 % — оценка, уточнить по каталогу конкретного двигателя. */
+export const MOTOR_REL: Array<[number, number]> = [[0.05, 0.55], [0.1, 0.75], [0.25, 0.93], [0.5, 1.0], [1.0, 1.0]];
+function tab(t: Array<[number, number]>, x: number) {
+  if (x <= t[0][0]) return t[0][1];
+  for (let i = 1; i < t.length; i++) if (x <= t[i][0]) { const [x0, y0] = t[i - 1], [x1, y1] = t[i]; return y0 + (x - x0) * (y1 - y0) / (x1 - x0); }
+  return t[t.length - 1][1];
+}
+/** Электрическая мощность из сети: P_эл = P_вал / (η_дв(β)·η_ЧП(β)), β = P_вал / P_ном */
+export function electricPower(fan: FanCurve, shaftW: number): number {
+  if (shaftW <= 0) return 0;
+  if (!fan.motorW || !fan.motorEta) return shaftW;
+  const beta = shaftW / fan.motorW;
+  return shaftW / (fan.motorEta * tab(MOTOR_REL, beta) * tab(VFD_EFF, beta));
+}
 
 export function fanPressure(fan: FanCurve, Q: number, n: number): number {
   const k = n / fan.n0;
@@ -84,7 +107,7 @@ export function fanPressure(fan: FanCurve, Q: number, n: number): number {
 }
 
 /** Потребляемая мощность N = Q·p/η, Вт [М]; η — постоянная [Д] (уточнить по каталогу) */
-export const fanPower = (fan: FanCurve, Q: number, p: number) => Q * p / fan.eta;
+export const fanPower = (fan: FanCurve, Q: number, p: number) => Math.max(0, Q * p) / fan.eta; // < 0 физически невозможно для вентилятора: за пределами характеристики мощность 0 [М]
 
 // ---------- Фильтр
 /** Сопротивление фильтра Δp = Δp_ном·(Q/Q_ном)^m·k_загр [М/Д]

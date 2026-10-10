@@ -33,7 +33,7 @@ export function designLgen(eta = 0.9, n = 3) {
 
 export function shift4(mode: GenVent['mode'], opts: { Cset?: number; etaReal?: number } = {}): SimParams {
   const ids = ['post1', 'post2', 'post3'];
-  const base = shiftParams('adaptive', 351);
+  const base = shiftParams('adaptive');
   const sh = makeShift(ids, base.duration);
   const Ld = designLgen();
   return {

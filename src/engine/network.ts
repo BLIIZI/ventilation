@@ -3,7 +3,7 @@
 // «вход отсоса → ... → вентилятор → выброс»: Σ Δp(участков пути) = p_вент(Q_общ).
 // Неизвестные — расходы отсосов Q_1..Q_N; решается методом Ньютона (якобиан численный).
 // Расход на любом участке = сумма расходов отсосов, проходящих через него (закон сохранения массы).
-import { ductLoss, damperZeta, fanPressure, filterLoss, m3h } from './physics.ts';
+import { ductLoss, damperZeta, fanPressure, filterLoss, m3h, fanPower, electricPower } from './physics.ts';
 import type { FanCurve, FilterSpec } from './physics.ts';
 
 export type Element =
@@ -27,6 +27,7 @@ export interface Solution {
   Qtotal: number;
   pFan: number;                 // давление вентилятора, Па
   power: number;                // мощность на валу, Вт
+  powerEl: number;              // электрическая мощность (с КПД двигателя и ЧП), Вт; без данных двигателя = power
   segLoss: Record<string, number>;
   iterations: number;
   converged: boolean;
@@ -80,7 +81,8 @@ export function solve(net: Network, guess?: number[]): Solution {
   for (const s of net.segments) segLoss[s.id] = segLossFn(s, f[s.id] ?? 0);
   segLoss['common'] = segLossFn({ elements: net.common }, Qt);
   const Q: Record<string, number> = { ...f }; net.hoods.forEach((h, i) => (Q[h] = q[i]));
-  return { Q, Qtotal: Qt, pFan, power: Qt * pFan / net.fan.eta, segLoss, iterations: it, converged: ok };
+  const power = fanPower(net.fan, Qt, pFan);
+  return { Q, Qtotal: Qt, pFan, power, powerEl: electricPower(net.fan, power), segLoss, iterations: it, converged: ok };
 }
 
 function gauss(A: number[][], b: number[]): number[] {

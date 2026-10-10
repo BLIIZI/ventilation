@@ -68,7 +68,30 @@ function damperAngleForZeta(zeta        , table = BUTTERFLY_ROUND)         {
 /** Характеристика вентилятора по точкам каталога (Q м³/ч, p Па) при n0 об/мин.
  *  Пересчёт на другую частоту — законы подобия: Q~n, p~n², N~n³ [М]
  *  (U.S. DOE. Improving Fan System Performance: A Sourcebook for Industry, 2003). */
-                                                                                       
+                           
+                                                                                                
+                                                                                                                                    
+ 
+
+/** КПД частотного преобразователя от нагрузки (доля номинальной мощности ЧП).
+ *  US DOE, Motor Systems Tip Sheet #11 «Adjustable Speed Drive Part-Load Efficiency», табл. 1, строка 5 hp (типовой ШИМ-ЧП). [Н/справ.] */
+const VFD_EFF                          = [[0.016, 0.35], [0.125, 0.80], [0.25, 0.88], [0.42, 0.91], [0.5, 0.92], [0.75, 0.94], [1.0, 0.95]];
+/** Относительный КПД асинхронного двигателя при частичной нагрузке (к номинальному). [Д][П]
+ *  50–100 %: по каталогам IE3 КПД практически постоянен; ниже 50 % падает (DOE, «Determining Electric Motor Load and Efficiency»).
+ *  Точки ниже 50 % — оценка, уточнить по каталогу конкретного двигателя. */
+const MOTOR_REL                          = [[0.05, 0.55], [0.1, 0.75], [0.25, 0.93], [0.5, 1.0], [1.0, 1.0]];
+function tab(t                         , x        ) {
+  if (x <= t[0][0]) return t[0][1];
+  for (let i = 1; i < t.length; i++) if (x <= t[i][0]) { const [x0, y0] = t[i - 1], [x1, y1] = t[i]; return y0 + (x - x0) * (y1 - y0) / (x1 - x0); }
+  return t[t.length - 1][1];
+}
+/** Электрическая мощность из сети: P_эл = P_вал / (η_дв(β)·η_ЧП(β)), β = P_вал / P_ном */
+function electricPower(fan          , shaftW        )         {
+  if (shaftW <= 0) return 0;
+  if (!fan.motorW || !fan.motorEta) return shaftW;
+  const beta = shaftW / fan.motorW;
+  return shaftW / (fan.motorEta * tab(MOTOR_REL, beta) * tab(VFD_EFF, beta));
+}
 
 function fanPressure(fan          , Q        , n        )         {
   const k = n / fan.n0;
@@ -89,7 +112,7 @@ function fanPressure(fan          , Q        , n        )         {
 }
 
 /** Потребляемая мощность N = Q·p/η, Вт [М]; η — постоянная [Д] (уточнить по каталогу) */
-const fanPower = (fan          , Q        , p        ) => Q * p / fan.eta;
+const fanPower = (fan          , Q        , p        ) => Math.max(0, Q * p) / fan.eta; // < 0 физически невозможно для вентилятора: за пределами характеристики мощность 0 [М]
 
 // ---------- Фильтр
 /** Сопротивление фильтра Δp = Δp_ном·(Q/Q_ном)^m·k_загр [М/Д]
@@ -121,6 +144,7 @@ const filterLoss = (f            , Q        ) =>
                  
                                                            
                                                        
+                                                                                                                  
                                   
                      
                      
@@ -174,7 +198,8 @@ function solve(net         , guess           )           {
   for (const s of net.segments) segLoss[s.id] = segLossFn(s, f[s.id] ?? 0);
   segLoss['common'] = segLossFn({ elements: net.common }, Qt);
   const Q                         = { ...f }; net.hoods.forEach((h, i) => (Q[h] = q[i]));
-  return { Q, Qtotal: Qt, pFan, power: Qt * pFan / net.fan.eta, segLoss, iterations: it, converged: ok };
+  const power = fanPower(net.fan, Qt, pFan);
+  return { Q, Qtotal: Qt, pFan, power, powerEl: electricPower(net.fan, power), segLoss, iterations: it, converged: ok };
 }
 
 function gauss(A            , b          )           {
@@ -280,6 +305,7 @@ function balance(net         , req                        , nMin = 300, nMax = 1
                                                                                                                              
                                                                                                           
                                                                                                     
+                                                                                                                            
                                                                                                                              
  
                             
@@ -389,7 +415,7 @@ function createSimulator(net         , p           ) {
     if (n < 30) sol = null;
     else sol = solve(net, sol ? ids.map(id => Math.max(sol .Q[id], 1e-4)) : undefined);
     const Qtot = sol ? sol.Qtotal : 0;
-    const P = sol ? sol.power : 0;
+    const P = sol ? sol.powerEl : 0;   // электрическая мощность (если заданы данные двигателя)
 
     // ---- помещение: V dC/dt = Σ(1-η)G − (L_мо + L_оо)(C − q_пр)
     // η снижается, если расход поста меньше требуемого: η = η_ном·min(1, Q/Q_тр) [Д]
@@ -407,7 +433,10 @@ function createSimulator(net         , p           ) {
         Lt = ffF;
         if (g.mode === 'fffb') {
           const est = sensorC * g.sensor.ratio, e = (est - g.Cset) / g.Cset;   // оценка Mn по датчику общей массы
-          fbInt = Math.max(-g.Ldesign, Math.min(g.Ldesign, fbInt + g.kI * e * g.Ldesign * p.dt));
+          // anti-windup (условное интегрирование): интеграл не копится, если выход упёрся в ограничение в ту же сторону
+          const uFree = Lt + g.kP * e * g.Ldesign + fbInt;
+          const satHi = uFree >= g.Lmax && e > 0, satLo = uFree <= g.Lmin && e < 0;
+          if (g.antiWindup === false || (!satHi && !satLo)) fbInt = Math.max(-g.Ldesign, Math.min(g.Ldesign, fbInt + g.kI * e * g.Ldesign * p.dt));
           Lt += g.kP * e * g.Ldesign + fbInt;
         }
       }
@@ -490,9 +519,44 @@ function demoNetwork()          {
       { kind: 'filter', id: 'filter', spec: { dpNom: 400, qNom: 4500 / 3600, m: 2, fouling: 1 } },
       { kind: 'duct', id: 'discharge', d: 0.4, l: 5, zeta: 1.0 },
     ],
-    fan: { n0: 1500, eta: 0.65, points: [[0, 1400], [2000, 1300], [4000, 1050], [5000, 850], [6000, 550], [7000, 150]] },
+    fan: { n0: 1500, eta: 0.65, points: [[0, 1400], [2000, 1300], [4000, 1050], [5000, 850], [6000, 550], [7000, 150]], motorW: 2200, motorEta: 0.867 },
+    // двигатель 2,2 кВт, 4 полюса, класс IE3: КПД ≥ 86,7 % (ГОСТ Р МЭК 60034-30-1 / IEC 60034-30-1, табл. 3); макс. мощность на валу ≈ 1,9 кВт
     fanSpeed: 1500,
   };
+}
+
+/** Генератор сети на N постов: посты вдоль коллектора, диаметры подбираются на скорость ≈ 12 м/с при расчётном расходе.
+ *  [Д] Геометрия условная; вентилятор масштабируется по расходу (характеристика демо-вентилятора × N/3). */
+function makeNetwork(N        , Qpost = 1500, wDesign = 12)          {
+  const dFor = (Qm3h        ) => Math.max(0.1, Math.round(Math.sqrt(4 * (Qm3h / 3600) / (Math.PI * wDesign)) * 1000 / 5) * 5 / 1000);
+  const segs                      = [];
+  for (let i = 1; i <= N; i++) {
+    segs.push({ id: `post${i}`, parent: `c${i}`, elements: [
+      { kind: 'duct', id: `hood${i}`, d: dFor(Qpost), l: 6, zeta: 1.5 },
+      { kind: 'damper', id: `damper${i}`, d: dFor(Qpost), alpha: 0 },
+    ] });
+    segs.push({ id: `c${i}`, parent: i < N ? `c${i + 1}` : null, elements: [
+      { kind: 'duct', id: `c${i}`, d: dFor(Qpost * i), l: i < N ? 5 : 10, zeta: i < N ? 0.2 : 0.5 },
+    ] });
+  }
+  const s = N / 3;
+  return {
+    segments: segs, hoods: Array.from({ length: N }, (_, i) => `post${i + 1}`),
+    common: [
+      { kind: 'filter', id: 'filter', spec: { dpNom: 400, qNom: N * Qpost / 3600, m: 2, fouling: 1 } },
+      { kind: 'duct', id: 'discharge', d: dFor(Qpost * N), l: 5, zeta: 1.0 },
+    ],
+    fan: { n0: 1500, eta: 0.65, points: ([[0, 1400], [2000, 1300], [4000, 1050], [5000, 850], [6000, 550], [7000, 150]]                           ).map(([q, p]) => [q * s, p]                    ), ...pickMotor(1900 * s) },
+    fanSpeed: 1500,
+  };
+}
+
+/** Двигатели IE3, 4 полюса, 50 Гц: номинальная мощность, Вт → минимальный КПД (IEC 60034-30-1, табл. 3) */
+const IE3_4P                          = [[750, 0.825], [1100, 0.841], [1500, 0.853], [2200, 0.867], [3000, 0.877], [4000, 0.886], [5500, 0.896], [7500, 0.904], [11000, 0.914], [15000, 0.921], [18500, 0.926], [22000, 0.930], [30000, 0.936], [37000, 0.939], [45000, 0.942], [55000, 0.946], [75000, 0.950]];
+/** Подбор двигателя: ближайший стандартный ≥ максимальной мощности на валу */
+function pickMotor(maxShaftW        ) {
+  const m = IE3_4P.find(([w]) => w >= maxShaftW) ?? IE3_4P[IE3_4P.length - 1];
+  return { motorW: m[0], motorEta: m[1] };
 }
 
 
@@ -532,8 +596,8 @@ function commissioning() {
   return { angles: b.angles, n: b.fanSpeed, pSet: b.sol.pFan - b.sol.segLoss['common'] };
 }
 
-function shiftParams(mode      , pSet        , balanced = true)            {
-  const com = balanced ? commissioning() : null;
+function shiftParams(mode      , pSet         , balanced = true)            {
+  const c0 = commissioning(), com = balanced ? c0 : null;
   const ids = ['post1', 'post2', 'post3'];
   const duration = 8 * 3600;
   return {
@@ -545,7 +609,7 @@ function shiftParams(mode      , pSet        , balanced = true)            {
     ],
     room: { V: 48 * 24 * 14.4, Lgen: m3h(8600), dT: 20.2 }, // объём цеха из диплома; общеобменная — по блоку 1 (η = 0,9, 3 поста)
     damperStroke: 8,  // 8 с — время хода заслонки Plymovent AD (паспорт); одинаково для сравнения режимов
-    fanRamp: 10, nMax: 1500, nMin: 300, pSet, kI: 4,
+    fanRamp: 10, nMax: 1500, nMin: 300, pSet: pSet ?? c0.pSet, kI: 4,   // уставка разрежения — из пусконаладки, если не задана
     nFF: mode === 'adaptive' ? feedforwardTable(ids, m3h(1500)) : undefined,
     openAngles: com ? com.angles : undefined, nConst: com ? com.n : undefined,
   };
@@ -586,7 +650,7 @@ function designLgen(eta = 0.9, n = 3) {
 
 function shift4(mode                 , opts                                      = {})            {
   const ids = ['post1', 'post2', 'post3'];
-  const base = shiftParams('adaptive', 351);
+  const base = shiftParams('adaptive');
   const sh = makeShift(ids, base.duration);
   const Ld = designLgen();
   return {
@@ -602,5 +666,5 @@ function shift4(mode                 , opts                                     
 }
 
 
-window.Engine = { AIR, m3h, toM3h, area, velocity, dynPressure, lambdaAltshul, ductLoss, BUTTERFLY_ROUND, damperZeta, damperAngleForZeta, fanPressure, fanPower, filterLoss, solve, setDamper, balance, interp, createSimulator, simulate, demoNetwork, feedforwardTable, makeSchedule, commissioning, shiftParams, WIRE_12, makeShift, MN, AER, designLgen, shift4 };
+window.Engine = { AIR, m3h, toM3h, area, velocity, dynPressure, lambdaAltshul, ductLoss, BUTTERFLY_ROUND, damperZeta, damperAngleForZeta, VFD_EFF, MOTOR_REL, electricPower, fanPressure, fanPower, filterLoss, solve, setDamper, balance, interp, createSimulator, simulate, demoNetwork, makeNetwork, IE3_4P, pickMotor, feedforwardTable, makeSchedule, commissioning, shiftParams, WIRE_12, makeShift, MN, AER, designLgen, shift4 };
 })();

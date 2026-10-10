@@ -35,8 +35,8 @@ export function commissioning() {
   return { angles: b.angles, n: b.fanSpeed, pSet: b.sol.pFan - b.sol.segLoss['common'] };
 }
 
-export function shiftParams(mode: Mode, pSet: number, balanced = true): SimParams {
-  const com = balanced ? commissioning() : null;
+export function shiftParams(mode: Mode, pSet?: number, balanced = true): SimParams {
+  const c0 = commissioning(), com = balanced ? c0 : null;
   const ids = ['post1', 'post2', 'post3'];
   const duration = 8 * 3600;
   return {
@@ -48,7 +48,7 @@ export function shiftParams(mode: Mode, pSet: number, balanced = true): SimParam
     ],
     room: { V: 48 * 24 * 14.4, Lgen: m3h(8600), dT: 20.2 }, // объём цеха из диплома; общеобменная — по блоку 1 (η = 0,9, 3 поста)
     damperStroke: 8,  // 8 с — время хода заслонки Plymovent AD (паспорт); одинаково для сравнения режимов
-    fanRamp: 10, nMax: 1500, nMin: 300, pSet, kI: 4,
+    fanRamp: 10, nMax: 1500, nMin: 300, pSet: pSet ?? c0.pSet, kI: 4,   // уставка разрежения — из пусконаладки, если не задана
     nFF: mode === 'adaptive' ? feedforwardTable(ids, m3h(1500)) : undefined,
     openAngles: com ? com.angles : undefined, nConst: com ? com.n : undefined,
   };
