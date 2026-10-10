@@ -53,7 +53,7 @@ export interface SimParams {
   gen?: GenVent;
   nConst?: number;                     // частота для режима constant (расчётный режим после наладки)   // упреждение: расчётная частота для данного набора работающих постов (из balance)           // коэффициент интегрального регулятора расхода (в пространстве ln ζ), 1/с
 }
-export interface Sample { t: number; n: number; Q: Record<string, number>; alpha: Record<string, number>; on: Record<string, boolean>; C: Record<string, number>; P: number; heat: number; Lgen: number; sensor: number; }
+export interface Sample { t: number; n: number; Q: Record<string, number>; alpha: Record<string, number>; on: Record<string, boolean>; C: Record<string, number>; P: number; heat: number; Lgen: number; sensor: number; pFan: number; Qtot: number; }
 export interface SimResult {
   fanKWh: number; heatKWh: number; avgFlow: number;      // кВт·ч, кВт·ч, м³/ч
   underFlowShare: number;   // доля времени работы постов с расходом < 95 % требуемого
@@ -73,7 +73,9 @@ export function interp(tab: Array<[number, number]>, x: number) {
   const [x0, y0] = tab[tab.length - 2], [x1, y1] = tab[tab.length - 1]; return y1 + (x - x1) * (y1 - y0) / (x1 - x0);
 }
 
-export function simulate(net: Network, p: SimParams): SimResult {
+/** Пошаговый симулятор: step() продвигает модель на dt и возвращает текущее состояние.
+ *  Используется и для расчёта смены (simulate), и в интерактивном интерфейсе. */
+export function createSimulator(net: Network, p: SimParams) {
   const ids = p.posts.map(x => x.id);
   const damper = (id: string) => net.segments.find(s => s.id === id)!.elements.find(e => e.kind === 'damper') as { alpha: number };
   const alpha: Record<string, number> = {}; ids.forEach(id => (alpha[id] = 90));
@@ -89,7 +91,8 @@ export function simulate(net: Network, p: SimParams): SimResult {
   const series: Sample[] = [];
   const dAlphaMax = 90 / p.damperStroke * p.dt, dnMax = p.nMax / p.fanRamp * p.dt;
 
-  for (let t = 0; t <= p.duration; t += p.dt) {
+  let t = 0;
+  function step(): Sample {
     const on: Record<string, boolean> = {}; ids.forEach(id => (on[id] = p.schedule(id, t)));
     const anyOn = ids.some(id => on[id]);
     const Q = (id: string) => (sol ? sol.Q[id] : 0);
@@ -189,11 +192,24 @@ export function simulate(net: Network, p: SimParams): SimResult {
       onTime += p.dt; const r = Q(ps.id) / ps.Qset;
       if (r < 0.95) under += p.dt; if (r > 1.10) over += p.dt;
     }
-    if (p.record && Math.abs(t / p.record - Math.round(t / p.record)) < 1e-9)
-      series.push({ t, n, Q: Object.fromEntries(ids.map(id => [id, Q(id) * 3600])), alpha: { ...alpha }, on, C: { ...C }, P, heat, Lgen: Lgen * 3600, sensor: sensorC });
+    const sample: Sample = { t, n, Q: Object.fromEntries(ids.map(id => [id, Q(id) * 3600])), alpha: { ...alpha }, on, C: { ...C }, P, heat, Lgen: Lgen * 3600, sensor: sensorC, pFan: sol ? sol.pFan : 0, Qtot: Qtot * 3600 };
+    if (p.record && Math.abs(t / p.record - Math.round(t / p.record)) < 1e-9) series.push(sample);
+    t += p.dt;
+    return sample;
   }
-  const avgC: Record<string, number> = {}; for (const k in sumC) avgC[k] = sumC[k] / p.duration;
-  return { fanKWh: fanJ / 3.6e6, heatKWh: heatJ / 3.6e6, avgFlow: flowInt / p.duration * 3600,
-    underFlowShare: onTime ? under / onTime : 0, overFlowShare: onTime ? over / onTime : 0, maxC, avgC, series,
-    genKWh: genJ / 3.6e6, overPdkShare: overPdk / p.duration, avgLgen: genInt / p.duration * 3600 };
+  /** Итоги; duration — интервал усреднения, с (по умолчанию длительность сценария) */
+  function result(duration = p.duration): SimResult {
+    const d = Math.max(duration, 1e-9);
+    const avgC: Record<string, number> = {}; for (const k in sumC) avgC[k] = sumC[k] / d;
+    return { fanKWh: fanJ / 3.6e6, heatKWh: heatJ / 3.6e6, avgFlow: flowInt / d * 3600,
+      underFlowShare: onTime ? under / onTime : 0, overFlowShare: onTime ? over / onTime : 0, maxC, avgC, series,
+      genKWh: genJ / 3.6e6, overPdkShare: overPdk / d, avgLgen: genInt / d * 3600 };
+  }
+  return { step, result, net, params: p, time: () => t };
+}
+
+export function simulate(net: Network, p: SimParams): SimResult {
+  const sim = createSimulator(net, p);
+  for (let t = 0; t <= p.duration; t += p.dt) sim.step();
+  return sim.result();
 }
