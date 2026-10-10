@@ -15,7 +15,23 @@ export type Mode = 'constant' | 'onoff' | 'adaptive';
 // adaptive  — предлагаемая система: ПИ-регулятор расхода в каждой ветви + сброс давления (критическая ветвь открыта)
 
 export interface Substance { name: string; g: number; pdk: number; qIn: number; } // g, г/кг; ПДК, q_пр — мг/м³
-export interface PostSpec { id: string; B: number; Qset: number; etaNom: number; } // B кг/ч, Qset м³/с
+export interface PostSpec { id: string; B: number; Qset: number; etaNom: number; current?: (t: number) => number; etaReal?: number; }
+// etaReal — фактическая эффективность захвата (если отличается от принятой в расчёте η_ном): проверка устойчивости к ошибке модели
+// B кг/ч (если current не задан), Qset м³/с; current(t) — сварочный ток, А → B по таблице проволоки
+
+/** Общеобменная вентиляция (блок 4) */
+export interface GenVent {
+  mode: 'const' | 'posts' | 'ff' | 'fffb';
+  // const — постоянный расчётный расход; posts — по числу работающих постов;
+  // ff — упреждение по току сварки (расчёт выделения); fffb — упреждение + коррекция по датчику концентрации
+  Ldesign: number; Lmin: number; Lmax: number;   // м³/с
+  limiting: string;          // лимитирующее вещество (обычно Mn)
+  Cset: number;              // целевая концентрация лимитирующего вещества, мг/м³
+  sensor: { of: string; ratio: number; tau: number; noise: number }; // датчик общей массы аэрозоля → оценка Mn = ratio·C_аэр
+  kP: number; kI: number;    // коэффициенты коррекции (доля Ldesign на единицу относительной ошибки; 1/с)
+  ffTau?: number;            // сглаживание упреждающего сигнала, с (инерционное звено 1-го порядка)
+  dpDesign: number; etaFan: number; ramp: number; // для энергии вентилятора ОВ: P = P_расч·(L/L_расч)^3; время разгона ЧП, с
+}
 export interface SimParams {
   mode: Mode;
   dt: number;            // шаг, с
@@ -33,18 +49,29 @@ export interface SimParams {
   kI?: number;
   nFF?: (active: string[]) => number;
   openAngles?: Record<string, number>; // положение «открыто» после пусконаладочной балансировки (режимы constant/onoff)
+  wire?: Array<[number, number]>;  // таблица «ток, А → расход проволоки, кг/ч»
+  gen?: GenVent;
   nConst?: number;                     // частота для режима constant (расчётный режим после наладки)   // упреждение: расчётная частота для данного набора работающих постов (из balance)           // коэффициент интегрального регулятора расхода (в пространстве ln ζ), 1/с
 }
-export interface Sample { t: number; n: number; Q: Record<string, number>; alpha: Record<string, number>; on: Record<string, boolean>; C: Record<string, number>; P: number; heat: number; }
+export interface Sample { t: number; n: number; Q: Record<string, number>; alpha: Record<string, number>; on: Record<string, boolean>; C: Record<string, number>; P: number; heat: number; Lgen: number; sensor: number; }
 export interface SimResult {
   fanKWh: number; heatKWh: number; avgFlow: number;      // кВт·ч, кВт·ч, м³/ч
   underFlowShare: number;   // доля времени работы постов с расходом < 95 % требуемого
   overFlowShare: number;    // доля времени работы постов с расходом > 110 % требуемого
   maxC: Record<string, number>; avgC: Record<string, number>;
+  genKWh: number; overPdkShare: number; avgLgen: number;   // энергия вентилятора ОВ; доля времени, когда лимитирующее вещество > ПДК; средний расход ОВ, м³/ч
   series: Sample[];
 }
 
 const HEAT_COEF = 1.2; // кВт на 1 м³/с на 1 °C (Kulmala, VTT, 2015) [М]
+
+export function interp(tab: Array<[number, number]>, x: number) {
+  if (x <= tab[0][0]) return tab[0][1] * x / tab[0][0];           // ниже первой точки — пропорционально [Д]
+  for (let i = 1; i < tab.length; i++) if (x <= tab[i][0]) {
+    const [x0, y0] = tab[i - 1], [x1, y1] = tab[i]; return y0 + (x - x0) * (y1 - y0) / (x1 - x0);
+  }
+  const [x0, y0] = tab[tab.length - 2], [x1, y1] = tab[tab.length - 1]; return y1 + (x - x1) * (y1 - y0) / (x1 - x0);
+}
 
 export function simulate(net: Network, p: SimParams): SimResult {
   const ids = p.posts.map(x => x.id);
@@ -55,7 +82,10 @@ export function simulate(net: Network, p: SimParams): SimResult {
   let n = 0, nTarget = 0, sol: Solution | null = null, lastKey = '';
   const C: Record<string, number> = {}; p.substances.forEach(s => (C[s.name] = s.qIn));
   const maxC: Record<string, number> = { ...C }, sumC: Record<string, number> = {}; p.substances.forEach(s => (sumC[s.name] = 0));
-  let fanJ = 0, heatJ = 0, flowInt = 0, onTime = 0, under = 0, over = 0;
+  let fanJ = 0, heatJ = 0, flowInt = 0, onTime = 0, under = 0, over = 0, genJ = 0, overPdk = 0, genInt = 0;
+  let LgenNow = p.gen ? p.gen.Ldesign : p.room.Lgen, fbInt = 0, sensorC = 0, seed = 12345, ffF = 0;
+  const noise = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648 - 0.5) * 2; // [-1;1]
+  const Bof = (ps: PostSpec, t: number) => (ps.current && p.wire ? interp(p.wire, ps.current(t)) : ps.B);
   const series: Sample[] = [];
   const dAlphaMax = 90 / p.damperStroke * p.dt, dnMax = p.nMax / p.fanRamp * p.dt;
 
@@ -111,16 +141,46 @@ export function simulate(net: Network, p: SimParams): SimResult {
     // ---- помещение: V dC/dt = Σ(1-η)G − (L_мо + L_оо)(C − q_пр)
     // η снижается, если расход поста меньше требуемого: η = η_ном·min(1, Q/Q_тр) [Д]
     const nOn = ids.filter(id => on[id]).length;
-    const Lgen = p.room.LgenPerPost !== undefined ? (p.room.LgenMin ?? 0) + p.room.LgenPerPost * nOn : p.room.Lgen;
+    let Lgen = p.room.LgenPerPost !== undefined ? (p.room.LgenMin ?? 0) + p.room.LgenPerPost * nOn : p.room.Lgen;
+    if (p.gen) {
+      const g = p.gen, lim = p.substances.find(x => x.name === g.limiting)!;
+      let Lt = g.Ldesign;
+      if (g.mode === 'posts') Lt = g.Lmin + (g.Ldesign - g.Lmin) * nOn / ids.length;
+      if (g.mode === 'ff' || g.mode === 'fffb') {
+        // упреждение: L = Σ(1−η_ном)·g·B(I) / (C_уст − q_пр) — формула блока 1 для целевой концентрации
+        let G = 0; for (const ps of p.posts) if (on[ps.id]) G += (1 - ps.etaNom) * lim.g * 1000 * Bof(ps, t) / 3600;
+        const ffRaw = G / (g.Cset - lim.qIn);
+        ffF += g.ffTau ? (ffRaw - ffF) * p.dt / g.ffTau : ffRaw - ffF;
+        Lt = ffF;
+        if (g.mode === 'fffb') {
+          const est = sensorC * g.sensor.ratio, e = (est - g.Cset) / g.Cset;   // оценка Mn по датчику общей массы
+          fbInt = Math.max(-g.Ldesign, Math.min(g.Ldesign, fbInt + g.kI * e * g.Ldesign * p.dt));
+          Lt += g.kP * e * g.Ldesign + fbInt;
+        }
+      }
+      Lt = Math.min(g.Lmax, Math.max(g.Lmin, Lt));
+      const dL = g.Lmax / g.ramp * p.dt; LgenNow += Math.max(-dL, Math.min(dL, Lt - LgenNow));
+      Lgen = LgenNow;
+      const Pg = g.Ldesign * g.dpDesign / g.etaFan * Math.pow(Lgen / g.Ldesign, 3);
+      genJ += Pg * p.dt;
+    }
+    genInt += Lgen * p.dt;
     const Lout = Qtot + Lgen;
     for (const s of p.substances) {
       let Groom = 0; // мг/с
       for (const ps of p.posts) if (on[ps.id]) {
-        const eta = ps.etaNom * Math.min(1, Q(ps.id) / ps.Qset);
-        Groom += (1 - eta) * s.g * 1000 * ps.B / 3600;
+        const eta = (ps.etaReal ?? ps.etaNom) * Math.min(1, Q(ps.id) / ps.Qset);
+        Groom += (1 - eta) * s.g * 1000 * Bof(ps, t) / 3600;
       }
       C[s.name] += p.dt * (Groom - Lout * (C[s.name] - s.qIn)) / p.room.V;
       maxC[s.name] = Math.max(maxC[s.name], C[s.name]); sumC[s.name] += C[s.name] * p.dt;
+    }
+    if (p.gen) {
+      const g = p.gen, lim = p.substances.find(x => x.name === g.limiting)!;
+      if (C[lim.name] > lim.pdk) overPdk += p.dt;
+      // датчик: инерционное звено 1-го порядка + шум (доля от показания) [Д]
+      const meas = C[g.sensor.of] * (1 + g.sensor.noise * noise());
+      sensorC += (meas - sensorC) * p.dt / g.sensor.tau;
     }
     // ---- энергия и качество регулирования
     const heat = HEAT_COEF * Lout * p.room.dT; // кВт
@@ -130,9 +190,10 @@ export function simulate(net: Network, p: SimParams): SimResult {
       if (r < 0.95) under += p.dt; if (r > 1.10) over += p.dt;
     }
     if (p.record && Math.abs(t / p.record - Math.round(t / p.record)) < 1e-9)
-      series.push({ t, n, Q: Object.fromEntries(ids.map(id => [id, Q(id) * 3600])), alpha: { ...alpha }, on, C: { ...C }, P, heat });
+      series.push({ t, n, Q: Object.fromEntries(ids.map(id => [id, Q(id) * 3600])), alpha: { ...alpha }, on, C: { ...C }, P, heat, Lgen: Lgen * 3600, sensor: sensorC });
   }
   const avgC: Record<string, number> = {}; for (const k in sumC) avgC[k] = sumC[k] / p.duration;
   return { fanKWh: fanJ / 3.6e6, heatKWh: heatJ / 3.6e6, avgFlow: flowInt / p.duration * 3600,
-    underFlowShare: onTime ? under / onTime : 0, overFlowShare: onTime ? over / onTime : 0, maxC, avgC, series };
+    underFlowShare: onTime ? under / onTime : 0, overFlowShare: onTime ? over / onTime : 0, maxC, avgC, series,
+    genKWh: genJ / 3.6e6, overPdkShare: overPdk / p.duration, avgLgen: genInt / p.duration * 3600 };
 }
