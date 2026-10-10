@@ -49,10 +49,23 @@ test('Характеристика вентилятора монотонно п�
 function residuals(net: Network, Q: Record<string, number>) {
   // независимая проверка баланса давлений по каждому пути отсос → вентилятор
   const byId = new Map(net.segments.map(s => [s.id, s]));
-  const el = (e: any, q: number) => e.kind === 'duct' ? ductLoss(q, e.d, e.l, e.zeta) : e.kind === 'damper' ? ductLoss(q, e.d, 0, damperZeta(e.alpha)) : e.spec.dpNom * Math.pow(q / e.spec.qNom, e.spec.m) * e.spec.fouling;
+  // независимая запись формул (Идельчик): тройник — ζ к скорости в сборном канале; диффузор — к скорости в узком сечении
+  const pd = (q: number, d: number) => 0.6 * (q / (Math.PI * d * d / 4)) ** 2;
+  const el = (e: any, q: number, qp = q, sideQ = 0) => {
+    switch (e.kind) {
+      case 'duct': return ductLoss(q, e.d, e.l, e.zeta);
+      case 'damper': return ductLoss(q, e.d, 0, damperZeta(e.alpha));
+      case 'filter': return e.spec.dpNom * Math.pow(q / e.spec.qNom, e.spec.m) * e.spec.fouling;
+      case 'local': return e.zeta * pd(q, e.d);
+      case 'diffuser': { const n = (1 - (e.d1 / e.d2) ** 2) ** 2; return Math.min(n, 3.2 * Math.tan(15 / 2 * Math.PI / 180) ** 1.25 * n) * pd(q, e.d1); }
+      case 'teeSide': { const r = q / qp; return (1 + (r * (e.dc / e.db) ** 2) ** 2 - 2 * (1 - r) ** 2) * pd(qp, e.dc); }
+      case 'teeStraight': { const r = sideQ / qp; return (1.55 * r - r * r) * pd(qp, e.dc); }
+    }
+    throw new Error('неизвестный элемент ' + e.kind);
+  };
   const Qt = net.hoods.reduce((a, h) => a + Q[h], 0);
   const pf = fanPressure(net.fan, Qt, net.fanSpeed) - net.common.reduce((a, e) => a + el(e, Qt), 0);
-  return net.hoods.map(h => { let s = byId.get(h), sum = 0; while (s) { sum += s.elements.reduce((a, e) => a + el(e, Q[s!.id]), 0); s = s.parent ? byId.get(s.parent) : undefined; } return sum - pf; });
+  return net.hoods.map(h => { let s = byId.get(h), sum = 0; while (s) { const sg = s; sum += sg.elements.reduce((a, e: any) => a + el(e, Q[sg.id], sg.parent ? Q[sg.parent] : Q[sg.id], e.side ? Q[e.side] : 0), 0); s = s.parent ? byId.get(s.parent) : undefined; } return sum - pf; });
 }
 
 test('Фаззинг: 300 случайных режимов сети 3 постов — сходимость, баланс давлений < 0,01 Па, сохранение массы', () => {

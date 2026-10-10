@@ -19,8 +19,11 @@ export const dynPressure = (w: number, rho = AIR.rho) => rho * w * w / 2;
  *  Проверено: воспроизводит λ·l/d из таблицы 4.1 диплома (kэ = 0,1 мм). */
 export function lambdaAltshul(w: number, d: number, ke = KE_STEEL, nu = AIR.nu): number {
   const Re = Math.max(Math.abs(w) * d / nu, 1);
-  if (Re < 2300) return 64 / Re; // ламинарный режим (Пуазейль) — на практике в вентиляции не встречается
-  return 0.11 * Math.pow(ke / d + 68 / Re, 0.25);
+  const turb = (r: number) => 0.11 * Math.pow(ke / d + 68 / r, 0.25);
+  if (Re <= 2000) return 64 / Re;              // ламинарный режим (Пуазейль) — бывает только в утечках через закрытую заслонку
+  if (Re >= 4000) return turb(Re);             // турбулентный — формула Альтшуля
+  // переходная зона 2000 < Re < 4000: линейная интерполяция между режимами, чтобы λ была непрерывной [М]
+  const t = (Re - 2000) / 2000; return (1 - t) * (64 / 2000) + t * turb(4000);
 }
 
 /** Потери давления на участке воздуховода Δp = (λ·l/d + Σζ)·pд, Па [М]

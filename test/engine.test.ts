@@ -73,3 +73,39 @@ test('Недостижимый расход — понятное предупр�
   assert.equal(r.feasible, false);
   assert.match(r.message, /недостижим/);
 });
+
+// ---------- местные сопротивления (Идельчик, 1992) и энергетический баланс сети
+import { bendZeta, suddenExpansionZeta, diffuserZeta, teeSideZeta, teeStraightZeta } from '../src/engine/fittings.ts';
+import { lossBreakdown, solve as solveNet } from '../src/engine/network.ts';
+import { lambdaAltshul as lam } from '../src/engine/physics.ts';
+test('Отвод: ζ(90°, R/D = 1) = 0,21; ζ(90°, R/D = 1,5) = 0,21/√1,5 = 0,171; 45° ≈ 0,62·B₁; ζ растёт с углом и падает с R/D', () => {
+  assert.ok(Math.abs(bendZeta(90, 1) - 0.21) < 0.001);
+  assert.ok(Math.abs(bendZeta(90, 1.5) - 0.21 / Math.sqrt(1.5)) < 0.001);
+  assert.ok(Math.abs(bendZeta(45, 1) / bendZeta(90, 1) - 0.62) < 0.01);
+  assert.ok(bendZeta(30, 1) < bendZeta(60, 1) && bendZeta(60, 1) < bendZeta(90, 1));
+  assert.ok(bendZeta(90, 0.5) > bendZeta(90, 1) && bendZeta(90, 1) > bendZeta(90, 3));
+});
+test('Расширение: Борда–Карно (1 − F₁/F₂)²; диффузор 15° — меньше внезапного; одинаковые сечения — 0', () => {
+  assert.ok(Math.abs(suddenExpansionZeta(0.2, 0.4) - (1 - 0.25) ** 2) < 1e-12);
+  assert.ok(diffuserZeta(0.2, 0.4) < suddenExpansionZeta(0.2, 0.4) && diffuserZeta(0.3, 0.3) === 0);
+});
+test('Тройник на слияние: проход ζ = 1,55r − r² (r = Q_б/Q_с); бок при r → 0 отрицателен (эжекция), растёт с r', () => {
+  assert.equal(teeStraightZeta(0, 1), 0); assert.ok(Math.abs(teeStraightZeta(0.5, 1) - 0.525) < 1e-12);
+  assert.ok(teeSideZeta(1e-9, 1, 0.2, 0.2) < 0);
+  let prev = -Infinity; for (let r = 0; r <= 1; r += 0.05) { const z = teeSideZeta(r, 1, 0.2, 0.315); assert.ok(z > prev); prev = z; }
+});
+test('Трение: λ непрерывна на границах режимов (Re = 2000 и 4000)', () => {
+  const nu = 15.06e-6, d = 0.2, w = (Re: number) => Re * nu / d;
+  for (const R of [2000, 4000]) assert.ok(Math.abs(lam(w(R - 1e-6), d) - lam(w(R + 1e-6), d)) < 1e-6, `Re = ${R}`);
+});
+test('Энергетический баланс: на каждом пути «отсос → выброс» сумма потерь всех элементов = давлению вентилятора (±0,01 Па)', () => {
+  const net = demoNetwork(); setDamper(net, 'post2', 35); net.fanSpeed = 1300;
+  const s = solveNet(net), br = lossBreakdown(net, s), bySeg = new Map<string, number>();
+  for (const r of br) bySeg.set(r.seg, (bySeg.get(r.seg) ?? 0) + r.dp);
+  for (const h of net.hoods) {
+    let sum = bySeg.get('common')!, sg = net.segments.find(x => x.id === h);
+    while (sg) { sum += bySeg.get(sg.id)!; sg = sg.parent ? net.segments.find(x => x.id === sg!.parent) : undefined; }
+    assert.ok(Math.abs(sum - s.pFan) < 0.01, `${h}: Σ потерь ${sum.toFixed(3)} против p вент. ${s.pFan.toFixed(3)}`);
+  }
+  for (const k of ['local', 'diffuser', 'teeSide', 'teeStraight', 'damper', 'duct', 'filter']) assert.ok(br.some(r => r.kind === k), k);
+});

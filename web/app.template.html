@@ -137,6 +137,11 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px}
         </div>
         <label class="label" for="foul" style="display:block;margin-top:8px">Загрязнение фильтра: <span id="foulV">×1,0</span></label>
         <input type="range" id="foul" min="1" max="3" step="0.1" value="1">
+        <details style="margin-top:8px"><summary>Потери давления по элементам (Идельчик)</summary>
+          <label class="label" style="display:block;margin:6px 0 4px">Путь воздуха от поста: <select id="lossPost"></select></label>
+          <table class="subs"><thead><tr><th>Элемент</th><th>ζ / λl/d</th><th>Δp, Па</th></tr></thead><tbody id="lossBody"></tbody></table>
+          <p class="note">Сумма по пути = давлению вентилятора (проверяется автотестом). Тройник: ζ зависит от отношения расходов, может быть &lt; 0 (эжекция).</p>
+        </details>
       </div>
       <div class="card sys">
         <div class="label">Воздух в цехе</div>
@@ -272,6 +277,21 @@ function renderCards() {
     });
     card.querySelectorAll('input[data-f]').forEach(el => el.onchange = () => { c.factorsOverride = { ...(c.factorsOverride ?? {}), [el.dataset.f]: +el.value }; reset(); });
   });
+}
+const KIND_RU = { duct: 'трение по длине', damper: 'заслонка', filter: 'фильтр', diffuser: 'переход на больший диаметр', teeSide: 'тройник: боковой вход', teeStraight: 'тройник: проход' };
+function renderLoss(m) {
+  const sel = document.getElementById('lossPost');
+  if (sel.options.length !== IDS.length) sel.innerHTML = IDS.map((id, i) => `<option value="${id}">Пост ${i + 1}</option>`).join('');
+  const sol = E.solve(m.net), br = E.lossBreakdown(m.net, sol), id = sel.value || IDS[0];
+  const path = []; let sg = m.net.segments.find(x => x.id === id);
+  while (sg) { path.push(sg.id); sg = sg.parent ? m.net.segments.find(x => x.id === sg.parent) : null; }
+  path.push('common');
+  const elOf = r => (r.seg === 'common' ? m.net.common : m.net.segments.find(x => x.id === r.seg).elements).find(e => e.id === r.id);
+  const rows = br.filter(r => path.includes(r.seg)).map(r => { const e = elOf(r);
+    const name = e.kind === 'local' ? e.label : e.kind === 'damper' ? `заслонка, ${fmt(e.alpha)}°` : KIND_RU[e.kind] + (e.kind === 'duct' ? `, ${fmtN(e.l)} м` : '');
+    return `<tr><td>${name}</td><td>${e.kind === 'local' ? fmt(e.zeta, 2) : e.kind === 'damper' ? fmt(E.damperZeta(e.alpha), 2) : ''}</td><td>${fmt(r.dp, 1)}</td></tr>`; });
+  const sum = br.filter(r => path.includes(r.seg)).reduce((a, r) => a + r.dp, 0);
+  document.getElementById('lossBody').innerHTML = rows.join('') + `<tr class="lim"><td>Итого по пути</td><td></td><td>${fmt(sum, 1)}</td></tr><tr><td>Давление вентилятора</td><td></td><td>${fmt(sol.pFan, 1)}</td></tr>`;
 }
 function renderDesign() {
   const d = E.designReport(cfg);
@@ -468,6 +488,7 @@ function updatePanel() {
   const wr = worstRatio(s.C), mnEl = document.getElementById('mn'); mnEl.textContent = fmt(wr, 2); mnEl.classList.toggle('alert', wr > 1);
   document.getElementById('sens').textContent = fmt(s.sensor, 2);
   document.getElementById('heat').textContent = fmt(s.heat, 1);
+  if (document.querySelector('details[open] #lossBody') || frame % 60 === 0) renderLoss(m);
   document.getElementById('subsBody').innerHTML = report.substances.map((x, k) => { const c = s.C[x.id] ?? 0, r = c / x.pdk;
     return `<tr class="${k === 0 ? 'lim' : ''}"><td>${E.SUBSTANCES[x.id].name.split(' (')[0]}${x.status === 'П' ? ' <span class="st">[сверить]</span>' : ''}</td><td>${fmt(c, 3)}</td><td>${fmtN(x.pdk)}</td><td class="${r > 1 ? 'alert' : ''}">${fmt(r, 2)}</td></tr>`; }).join('');
   const rA = A.sim.result(Math.max(A.last.t, 1)), rB = B.sim.result(Math.max(B.last.t, 1));

@@ -52,10 +52,12 @@ test('Зона дыхания: C_дых = C_цеха + G_ут/β, β = ½·2πr�
     assert.ok(rel(last.Cbz[id], exp) < 1e-9, id);
     assert.ok(last.Cbz[id] >= last.C.Mn);
   }
-  assert.ok(Math.abs(last.Cbz.post2 - last.C.Mn - Gesc / beta) < 1e-6);
+  const full = ['post1', 'post2', 'post3'].filter(id => last.Q[id] >= 1500);   // посты, получающие полный расход (η = η_ном)
+  for (const id of full) assert.ok(Math.abs(last.Cbz[id] - last.C.Mn - Gesc / beta) < 1e-6, id);
   const p1 = { ...p, posts: p.posts.map(x => ({ ...x, etaReal: 1 })) };
   const l1 = simulate(demoNetwork(), p1).series.at(-1)!;
-  for (const id of ['post2', 'post3']) assert.ok(Math.abs(l1.Cbz[id] - l1.C.Mn) < 1e-12);
+  for (const id of ['post1', 'post2', 'post3'].filter(x => l1.Q[x] >= 1500)) assert.ok(Math.abs(l1.Cbz[id] - l1.C.Mn) < 1e-12, id);
+  assert.ok(['post1', 'post2', 'post3'].some(x => l1.Q[x] >= 1500));
 });
 
 test('Зона дыхания: при выключенном посте C_дых = C_цеха; среднесменная ≤ максимальной', () => {

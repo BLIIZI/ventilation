@@ -1,7 +1,7 @@
 // Сборка расчётного ядра в один браузерный скрипт: снять типы TypeScript, убрать import/export, склеить по порядку зависимостей.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
-const order = ['norms', 'physics', 'network', 'balance', 'sim', 'demo-network', 'scenario', 'scenario4', 'substances', 'processes', 'plant'];
+const order = ['norms', 'physics', 'fittings', 'network', 'balance', 'sim', 'demo-network', 'scenario', 'scenario4', 'substances', 'processes', 'plant'];
 const names = [];
 let out = '// Расчётное ядро vent-sim (собрано из src/engine/*.ts). Не редактировать вручную.\n(function(){\n"use strict";\n';
 for (const f of order) {

@@ -7,7 +7,10 @@ rho, nu = 1.2, 15.06e-6
 A = lambda d: math.pi*d*d/4
 def lam(w, d, ke=1e-4):
     Re = max(abs(w)*d/nu, 1)
-    return 64/Re if Re < 2300 else 0.11*(ke/d + 68/Re)**0.25
+    T = lambda r: 0.11*(ke/d + 68/r)**0.25
+    if Re <= 2000: return 64/Re
+    if Re >= 4000: return T(Re)
+    t = (Re-2000)/2000; return (1-t)*64/2000 + t*T(4000)
 def dloss(Q, d, l, z):
     w = Q/A(d); return (lam(w, d)*l/d + z)*rho*w*w/2
 ZT = [(0,.2),(5,.24),(10,.52),(15,.9),(20,1.54),(25,2.51),(30,3.91),(35,6.22),(40,10.8),(45,18.7),(50,32.6),(55,58.8),(60,118),(65,256),(70,751),(90,1e4)]
