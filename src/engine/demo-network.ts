@@ -19,7 +19,8 @@ export function demoNetwork(): Network {
     ],
     hoods: ['post1', 'post2', 'post3'],
     common: [
-      { kind: 'filter', id: 'filter', spec: { dpNom: 400, qNom: 4500 / 3600, m: 2, fouling: 1 } },
+      { kind: 'filter', id: 'filter', spec: { dpNom: 400, qNom: 4500 / 3600, m: 1, fouling: 1 } },
+      // m = 1: фильтрующий материал + слой пыли — закон Дарси, Δp = S·V при неизменной пылевой нагрузке (US EPA, Air Pollution Control Cost Manual, разд. 6, гл. 1, ур. 1.1, 1.3)
       { kind: 'duct', id: 'discharge', d: 0.4, l: 5, zeta: 1.0 },
     ],
     fan: { n0: 1500, eta: 0.65, points: [[0, 1400], [2000, 1300], [4000, 1050], [5000, 850], [6000, 550], [7000, 150]], motorW: 2200, motorEta: 0.867 },
@@ -46,7 +47,7 @@ export function makeNetwork(N: number, Qpost = 1500, wDesign = 12): Network {
   return {
     segments: segs, hoods: Array.from({ length: N }, (_, i) => `post${i + 1}`),
     common: [
-      { kind: 'filter', id: 'filter', spec: { dpNom: 400, qNom: N * Qpost / 3600, m: 2, fouling: 1 } },
+      { kind: 'filter', id: 'filter', spec: { dpNom: 400, qNom: N * Qpost / 3600, m: 1, fouling: 1 } },
       { kind: 'duct', id: 'discharge', d: dFor(Qpost * N), l: 5, zeta: 1.0 },
     ],
     fan: { n0: 1500, eta: 0.65, points: ([[0, 1400], [2000, 1300], [4000, 1050], [5000, 850], [6000, 550], [7000, 150]] as Array<[number, number]>).map(([q, p]) => [q * s, p] as [number, number]), ...pickMotor(1900 * s) },

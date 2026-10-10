@@ -8,7 +8,7 @@ import type { FanCurve, FilterSpec } from './physics.ts';
 
 export type Element =
   | { kind: 'duct'; id: string; d: number; l: number; zeta: number }   // участок: d, м; l, м; Σζ
-  | { kind: 'damper'; id: string; d: number; alpha: number }           // заслонка: угол, ° (0 — открыта)
+  | { kind: 'damper'; id: string; d: number; alpha: number; table?: Array<[number, number]> } // заслонка: угол, ° (0 — открыта); table — фактическая характеристика ζ(α), если отличается от справочной
   | { kind: 'filter'; id: string; spec: FilterSpec };
 
 export interface Segment { id: string; parent: string | null; elements: Element[]; }
@@ -36,7 +36,7 @@ export interface Solution {
 const elemLoss = (e: Element, Q: number) => {
   switch (e.kind) {
     case 'duct': return ductLoss(Q, e.d, e.l, e.zeta);
-    case 'damper': return ductLoss(Q, e.d, 0, damperZeta(e.alpha));
+    case 'damper': return ductLoss(Q, e.d, 0, damperZeta(e.alpha, e.table));
     case 'filter': return filterLoss(e.spec, Q);
   }
 };

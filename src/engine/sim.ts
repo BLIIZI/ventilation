@@ -7,7 +7,7 @@
 // 6) интегрируются энергия вентилятора и тепло на подогрев приточного воздуха.
 import { solve } from './network.ts';
 import type { Network, Solution } from './network.ts';
-import { damperZeta, damperAngleForZeta } from './physics.ts';
+import { damperZeta, damperAngleForZeta, area } from './physics.ts';
 
 export type Mode = 'constant' | 'onoff' | 'adaptive';
 // constant  — без регулирования: заслонки открыты, вентилятор 100 % всю смену
@@ -52,9 +52,13 @@ export interface SimParams {
   openAngles?: Record<string, number>; // положение «открыто» после пусконаладочной балансировки (режимы constant/onoff)
   wire?: Array<[number, number]>;  // таблица «ток, А → расход проволоки, кг/ч»
   gen?: GenVent;
+  nearField?: { r: number; s: number };
+  // модель «ближняя зона / дальняя зона» (Nicas, 1996; AIHA, 2009): C_дых = C_цеха + G_ут/β, β = ½·S·s,
+  // S = 2πr² — поверхность полусферы радиуса r над столом, s — случайная скорость воздуха в цехе, м/с [Д]
+  wMin?: number;   // минимальная транспортная скорость в воздуховодах, м/с (контроль осаждения пыли)
   nConst?: number;                     // частота для режима constant (расчётный режим после наладки)   // упреждение: расчётная частота для данного набора работающих постов (из balance)           // коэффициент интегрального регулятора расхода (в пространстве ln ζ), 1/с
 }
-export interface Sample { t: number; n: number; Q: Record<string, number>; alpha: Record<string, number>; on: Record<string, boolean>; C: Record<string, number>; P: number; heat: number; Lgen: number; sensor: number; pFan: number; Qtot: number; }
+export interface Sample { Cbz: Record<string, number>; t: number; n: number; Q: Record<string, number>; alpha: Record<string, number>; on: Record<string, boolean>; C: Record<string, number>; P: number; heat: number; Lgen: number; sensor: number; pFan: number; Qtot: number; }
 export interface SimResult {
   fanKWh: number; heatKWh: number; avgFlow: number;      // кВт·ч, кВт·ч, м³/ч
   underFlowShare: number;   // доля времени работы постов с расходом < 95 % требуемого
@@ -62,6 +66,12 @@ export interface SimResult {
   maxC: Record<string, number>; avgC: Record<string, number>;
   genKWh: number; overPdkShare: number; avgLgen: number;   // энергия вентилятора ОВ; доля времени, когда лимитирующее вещество > ПДК; средний расход ОВ, м³/ч
   series: Sample[];
+  bzTWA: Record<string, number>;   // среднесменная концентрация лимитирующего вещества в зоне дыхания сварщика по постам, мг/м³
+  bzMax: Record<string, number>;   // максимальная мгновенная в зоне дыхания (для сравнения с ПДК не годится)
+  bz15max: Record<string, number>; // максимум 15-минутного скользящего среднего в зоне дыхания (сравнивать с ПДК м.р.); '__room' — по цеху
+  lowVelShare: number;             // доля времени работы вентилятора, когда хотя бы на одном участке с рабочим потоком w < wMin
+  lowVelBySeg: Record<string, number>;
+  nonConverged: number;            // число шагов, где решатель сети не сошёлся (должно быть 0)
 }
 
 const HEAT_COEF = 1.2; // кВт на 1 м³/с на 1 °C (Kulmala, VTT, 2015) [М]
@@ -83,6 +93,18 @@ export function createSimulator(net: Network, p: SimParams) {
   const lnZ: Record<string, number> = {}; ids.forEach(id => (lnZ[id] = Math.log(damperZeta(30))));
   const memZ: Record<string, number> = { ...lnZ }; // упреждение: при включении поста заслонка сразу идёт в последнее рабочее положение
   let n = 0, nTarget = 0, sol: Solution | null = null, lastKey = '';
+  // какие посты обслуживает каждый участок (для контроля транспортной скорости)
+  const segHoods = new Map<string, string[]>();
+  for (const h of ids) { let sg = net.segments.find(x => x.id === h); while (sg) { if (!segHoods.has(sg.id)) segHoods.set(sg.id, []); segHoods.get(sg.id)!.push(h); sg = sg.parent ? net.segments.find(x => x.id === sg!.parent) : undefined; } }
+  const segD = (els: any[]) => els.filter(e => e.kind === 'duct').map(e => e.d as number);
+  const limName = p.gen?.limiting ?? p.substances[0].name;
+  const bzSum: Record<string, number> = {}, bzMax: Record<string, number> = {}; ids.forEach(id => { bzSum[id] = 0; bzMax[id] = 0; });
+  // скользящее 15-минутное среднее (максимально разовая ПДК сравнивается со средним за время отбора пробы) [Н: МУ/ГОСТ 12.1.005]
+  const W = Math.max(1, Math.round(900 / p.dt));
+  const ring: Record<string, number[]> = {}, ringSum: Record<string, number> = {}, bz15: Record<string, number> = {};
+  [...ids, '__room'].forEach(id => { ring[id] = []; ringSum[id] = 0; bz15[id] = 0; });
+  const push = (id: string, v: number) => { const r = ring[id]; r.push(v); ringSum[id] += v; if (r.length > W) ringSum[id] -= r.shift()!; if (r.length === W) bz15[id] = Math.max(bz15[id], ringSum[id] / W); };
+  const lowSeg: Record<string, number> = {}; let lowAny = 0, fanOnTime = 0, nonConv = 0;
   const C: Record<string, number> = {}; p.substances.forEach(s => (C[s.name] = s.qIn));
   const maxC: Record<string, number> = { ...C }, sumC: Record<string, number> = {}; p.substances.forEach(s => (sumC[s.name] = 0));
   let fanJ = 0, heatJ = 0, flowInt = 0, onTime = 0, under = 0, over = 0, genJ = 0, overPdk = 0, genInt = 0;
@@ -139,7 +161,18 @@ export function createSimulator(net: Network, p: SimParams) {
     // ---- сеть
     if (n < 30) sol = null;
     else sol = solve(net, sol ? ids.map(id => Math.max(sol!.Q[id], 1e-4)) : undefined);
+    if (sol && !sol.converged) nonConv++;
     const Qtot = sol ? sol.Qtotal : 0;
+    // ---- транспортная скорость на участках с рабочим потоком
+    if (sol && p.wMin) {
+      fanOnTime += p.dt; let any = false;
+      const check = (id: string, Qs: number, ds: number[]) => {
+        for (const d of ds) if (Qs / area(d) < p.wMin!) { lowSeg[id] = (lowSeg[id] ?? 0) + p.dt; any = true; return; }
+      };
+      for (const sg of net.segments) if ((segHoods.get(sg.id) ?? []).some(h => on[h])) check(sg.id, sol.Q[sg.id], segD(sg.elements));
+      if (anyOn) check('common', Qtot, segD(net.common));
+      if (any) lowAny += p.dt;
+    }
     const P = sol ? sol.powerEl : 0;   // электрическая мощность (если заданы данные двигателя)
 
     // ---- помещение: V dC/dt = Σ(1-η)G − (L_мо + L_оо)(C − q_пр)
@@ -182,6 +215,20 @@ export function createSimulator(net: Network, p: SimParams) {
       C[s.name] += p.dt * (Groom - Lout * (C[s.name] - s.qIn)) / p.room.V;
       maxC[s.name] = Math.max(maxC[s.name], C[s.name]); sumC[s.name] += C[s.name] * p.dt;
     }
+    // ---- зона дыхания сварщика (ближняя зона)
+    const lim = p.substances.find(x => x.name === limName)!;
+    const Cbz: Record<string, number> = {};
+    for (const ps of p.posts) {
+      let c = C[lim.name];
+      if (p.nearField && on[ps.id]) {
+        const eta = (ps.etaReal ?? ps.etaNom) * Math.min(1, Q(ps.id) / ps.Qset);
+        const Gesc = (1 - eta) * lim.g * 1000 * Bof(ps, t) / 3600;           // мг/с, ушло мимо отсоса
+        const beta = 0.5 * 2 * Math.PI * p.nearField.r ** 2 * p.nearField.s; // м³/с
+        c += Gesc / beta;
+      }
+      Cbz[ps.id] = c; bzSum[ps.id] += c * p.dt; bzMax[ps.id] = Math.max(bzMax[ps.id], c); push(ps.id, c);
+    }
+    push('__room', C[lim.name]);
     if (p.gen) {
       const g = p.gen, lim = p.substances.find(x => x.name === g.limiting)!;
       if (C[lim.name] > lim.pdk) overPdk += p.dt;
@@ -196,7 +243,7 @@ export function createSimulator(net: Network, p: SimParams) {
       onTime += p.dt; const r = Q(ps.id) / ps.Qset;
       if (r < 0.95) under += p.dt; if (r > 1.10) over += p.dt;
     }
-    const sample: Sample = { t, n, Q: Object.fromEntries(ids.map(id => [id, Q(id) * 3600])), alpha: { ...alpha }, on, C: { ...C }, P, heat, Lgen: Lgen * 3600, sensor: sensorC, pFan: sol ? sol.pFan : 0, Qtot: Qtot * 3600 };
+    const sample: Sample = { Cbz, t, n, Q: Object.fromEntries(ids.map(id => [id, Q(id) * 3600])), alpha: { ...alpha }, on, C: { ...C }, P, heat, Lgen: Lgen * 3600, sensor: sensorC, pFan: sol ? sol.pFan : 0, Qtot: Qtot * 3600 };
     if (p.record && Math.abs(t / p.record - Math.round(t / p.record)) < 1e-9) series.push(sample);
     t += p.dt;
     return sample;
@@ -207,7 +254,11 @@ export function createSimulator(net: Network, p: SimParams) {
     const avgC: Record<string, number> = {}; for (const k in sumC) avgC[k] = sumC[k] / d;
     return { fanKWh: fanJ / 3.6e6, heatKWh: heatJ / 3.6e6, avgFlow: flowInt / d * 3600,
       underFlowShare: onTime ? under / onTime : 0, overFlowShare: onTime ? over / onTime : 0, maxC, avgC, series,
-      genKWh: genJ / 3.6e6, overPdkShare: overPdk / d, avgLgen: genInt / d * 3600 };
+      genKWh: genJ / 3.6e6, overPdkShare: overPdk / d, avgLgen: genInt / d * 3600,
+      bzTWA: Object.fromEntries(ids.map(id => [id, bzSum[id] / d])), bzMax: { ...bzMax }, bz15max: { ...bz15 },
+      lowVelShare: fanOnTime ? lowAny / fanOnTime : 0,
+      lowVelBySeg: Object.fromEntries(Object.entries(lowSeg).map(([k, v]) => [k, fanOnTime ? v / fanOnTime : 0])),
+      nonConverged: nonConv };
   }
   return { step, result, net, params: p, time: () => t };
 }

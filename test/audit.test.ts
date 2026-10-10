@@ -87,12 +87,17 @@ test('Монотонность: прикрытие любой заслонки �
   }
 });
 
-test('Законы подобия в сети без статического напора: Q ~ n, p ~ n², N ~ n³ (±0,5 %)', () => {
+test('Законы подобия в квадратичной сети: Q ~ n, p ~ n², N ~ n³ (±1 %); с линейным фильтром — НЕ выполняются', () => {
   // при фиксированных заслонках и квадратичной сети расход пропорционален частоте (Re-зависимость λ даёт малую поправку)
-  const a = solve(Object.assign(demoNetwork(), { fanSpeed: 1500 })), b = solve(Object.assign(demoNetwork(), { fanSpeed: 750 }));
+  const quad = () => { const n = demoNetwork(); (n.common[0] as any).spec.m = 2; return n; };
+  const a = solve(Object.assign(quad(), { fanSpeed: 1500 })), b = solve(Object.assign(quad(), { fanSpeed: 750 }));
   assert.ok(Math.abs(b.Qtotal / a.Qtotal - 0.5) < 0.01, `Q: ${(b.Qtotal / a.Qtotal).toFixed(4)}`);
   assert.ok(Math.abs(b.pFan / a.pFan - 0.25) < 0.01, `p: ${(b.pFan / a.pFan).toFixed(4)}`);
   assert.ok(Math.abs(b.power / a.power - 0.125) < 0.01, `N: ${(b.power / a.power).toFixed(4)}`);
+  // реальный фильтр (m = 1): часть сопротивления «линейная» → при снижении частоты расход падает быстрее, чем ~n,
+  // и экономия по «закону куба» завышена. Это и есть причина считать энергию по сети, а не по законам подобия.
+  const c = solve(Object.assign(demoNetwork(), { fanSpeed: 1500 })), e = solve(Object.assign(demoNetwork(), { fanSpeed: 750 }));
+  assert.ok(e.Qtotal / c.Qtotal < 0.47, `линейный фильтр: Q750/Q1500 = ${(e.Qtotal / c.Qtotal).toFixed(3)}`);
 });
 
 test('Все заслонки закрыты: утечка через каждую = истечение через ζ(90°) при перепаде ≈ давлению вентилятора', () => {

@@ -11,7 +11,6 @@ export interface BalanceResult {
 }
 
 const ALPHA_OPEN = 0, ALPHA_CLOSED = 90;
-const Z_OPEN = damperZeta(ALPHA_OPEN), Z_MAX = damperZeta(70);
 
 function anglesForSpeed(net: Network, req: Record<string, number>, n: number) {
   net.fanSpeed = n;
@@ -23,12 +22,13 @@ function anglesForSpeed(net: Network, req: Record<string, number>, n: number) {
     net.hoods.forEach((h, i) => {
       if (!(req[h] > 0)) return;
       const d = dampers[i];
-      const z = damperZeta(d.alpha);
+      const z = damperZeta(d.alpha, d.table);
       const ratio = sol.Q[h] / req[h];
       maxErr = Math.max(maxErr, Math.abs(ratio - 1));
       // Δp заслонки ~ ζ·Q²: чтобы уменьшить расход в ratio раз, увеличиваем сопротивление ветви
-      const zNew = Math.min(Math.max(z * Math.pow(ratio, 2 * 0.7) + (ratio - 1) * 0.5, Z_OPEN), Z_MAX);
-      d.alpha = damperAngleForZeta(zNew, BUTTERFLY_ROUND);
+      const tb = d.table ?? BUTTERFLY_ROUND;
+      const zNew = Math.min(Math.max(z * Math.pow(ratio, 2 * 0.7) + (ratio - 1) * 0.5, damperZeta(0, tb)), damperZeta(70, tb));
+      d.alpha = damperAngleForZeta(zNew, tb);
     });
     sol = solve(net, net.hoods.map(h => sol.Q[h]));
     if (maxErr < 0.0005) break;
