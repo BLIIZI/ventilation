@@ -1110,6 +1110,11 @@ const PROCESSES            = [
 
 const processById = (id        ) => PROCESSES.find(p => p.id === id) ;
 
+/** Какие группы процессов доступны в интерфейсе. Сейчас — только сварка (решение 11.10.2026: остальные процессы —
+ *  после согласования с руководителем). Чтобы включить, добавить группы: 'Резка', 'Механическая обработка', 'Покраска', 'Пайка', 'Гальваника / химия'. */
+const ENABLED_GROUPS = ['Сварка'];
+const activeProcesses = () => PROCESSES.filter(p => ENABLED_GROUPS.includes(p.group));
+
 /** Настройка поста: процесс, материал, параметры, тип отсоса; factorsOverride — свои удельные показатели (ввод пользователя) */
                                                                                                                                                                                                     
 
@@ -1230,14 +1235,14 @@ function buildPlant(cfg             )                                           
   return { net, params, report, makeNet };
 }
 
-/** Пример смешанного цеха: 4 разных процесса */
+/** Пример цеха с разными видами сварки (4 поста) */
 const MIXED_EXAMPLE               = [
   { id: 'post1', process: 'mag_co2', material: 'sv08g2s', params: { I: 225 } },
   { id: 'post2', process: 'mma', material: 'uoni1345', params: { B: 1.5 } },
   { id: 'post3', process: 'saw', material: 'fc12', params: { B: 6 }, hood: 'table' },
-  { id: 'post4', process: 'gas_cut', material: 'carbon', params: { thick: 10, area: 1 } },
+  { id: 'post4', process: 'contact', material: 'butt', params: { P: 1 } },
 ];
 
 
-window.Engine = { RHO_AIR, NU_AIR, C_AIR, KE_STEEL, W_MIN_WELDING, Q_POST_MIN_M3H, ETA_LEV_DEFAULT, K_SETTLE, SV08G2S, FC12, PDK_MN_WELD_LE20, PDK_MN_WELD_20_30, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, alphaMelt, wireRate, ACTUATOR_TIMES_GOST7192, IE3_4P_GOST, MOTOR_LOSS_RATIO, motorEfficiency, AIR, m3h, toM3h, area, velocity, dynPressure, lambdaAltshul, ductLoss, BUTTERFLY_ROUND, damperZeta, damperAngleForZeta, VFD_EFF, electricPower, fanPressure, fanPower, filterLoss, solve, setDamper, balance, interp, createSimulator, simulate, demoNetwork, makeNetwork, IE3_4P, pickMotor, makeNetworkFor, I_BASE, B_BASE, genVentByFormula, feedforwardTable, makeSchedule, commissioning, shiftParams, WIRE_12, makeShift, MN, AER, designLgen, shift4, pdkOf, SUBSTANCES, mnCategory, P_Q, PROCESSES, processById, paramsOf, emissionOf, qminOf, qsetOf, designReport, buildPlant, MIXED_EXAMPLE };
+window.Engine = { RHO_AIR, NU_AIR, C_AIR, KE_STEEL, W_MIN_WELDING, Q_POST_MIN_M3H, ETA_LEV_DEFAULT, K_SETTLE, SV08G2S, FC12, PDK_MN_WELD_LE20, PDK_MN_WELD_20_30, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, alphaMelt, wireRate, ACTUATOR_TIMES_GOST7192, IE3_4P_GOST, MOTOR_LOSS_RATIO, motorEfficiency, AIR, m3h, toM3h, area, velocity, dynPressure, lambdaAltshul, ductLoss, BUTTERFLY_ROUND, damperZeta, damperAngleForZeta, VFD_EFF, electricPower, fanPressure, fanPower, filterLoss, solve, setDamper, balance, interp, createSimulator, simulate, demoNetwork, makeNetwork, IE3_4P, pickMotor, makeNetworkFor, I_BASE, B_BASE, genVentByFormula, feedforwardTable, makeSchedule, commissioning, shiftParams, WIRE_12, makeShift, MN, AER, designLgen, shift4, pdkOf, SUBSTANCES, mnCategory, P_Q, PROCESSES, processById, ENABLED_GROUPS, activeProcesses, paramsOf, emissionOf, qminOf, qsetOf, designReport, buildPlant, MIXED_EXAMPLE };
 })();

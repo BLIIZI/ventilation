@@ -82,7 +82,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px}
 
 <div class="app">
   <header>
-    <h1>Цифровой двойник вытяжки<small>3 поста · процесс на каждом выбирается из библиотеки (российские методики) · местная вытяжка + общеобменная</small></h1>
+    <h1>Цифровой двойник вытяжки<small>сварочные посты (от 1 до 8) · вид сварки и материал на каждом — из Методики 1997 · местная вытяжка + общеобменная</small></h1>
     <div class="spacer"></div>
     <div><div class="label">Показать в 3D</div>
       <div class="seg" id="viewSeg">
@@ -149,7 +149,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px}
         <table class="subs" style="margin-top:8px"><thead><tr><th>Вещество</th><th>C, мг/м³</th><th>ПДК</th><th>C/ПДК</th></tr></thead><tbody id="subsBody"></tbody></table>
         <p class="note" id="designNote"></p>
       </div>
-      <p class="note">Удельные выделения — методики перечня Минприроды (сварка, резка, мехобработка, покраска, гальваника); ПДК — СанПиН 1.2.3685-21; нормы отсоса — ГОСТ 12.3.003-86 и др. Сеть и вентилятор подбираются автоматически под выбранные посты (геометрия условная). 76 автотестов.</p>
+      <p class="note">Удельные выделения — Методика 1997 по сварочным работам (перечень Минприроды, п. 18); ПДК — СанПиН 1.2.3685-21; нормы отсоса — ГОСТ 12.3.003-86 и др. Сеть и вентилятор подбираются автоматически под выбранные посты (геометрия условная). 78 автотестов.</p>
     </aside>
   </main>
 
@@ -167,8 +167,10 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px}
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const E = window.Engine;
-const IDS = ['post1', 'post2', 'post3'];
-const COL = { post1: '#2a78d6', post2: '#eb6834', post3: '#1baf7a' };
+let IDS = [];
+const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#c84fd0', '#e3b341', '#4cc3c9', '#e5625c', '#9aa86b'];
+const COL = {};
+const MAX_POSTS = 8;
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 // ---------- состояние интерфейса
@@ -178,9 +180,15 @@ const setPressed = (seg, btn) => seg.querySelectorAll('button').forEach(b => b.s
 const cfg = [
   { id: 'post1', process: 'mag_co2', material: 'sv08g2s', params: { I: 225, d: 1.2 }, hood: 'table', eta: 0.8 },
   { id: 'post2', process: 'mma', material: 'uoni1345', params: { B: 1.5 }, hood: 'table', eta: 0.8 },
-  { id: 'post3', process: 'gas_cut', material: 'carbon', params: { thick: 10, area: 1 }, hood: 'cut_gas', eta: 0.8 },
+  { id: 'post3', process: 'saw', material: 'fc12', params: { B: 6 }, hood: 'table', eta: 0.8 },
 ];
-const ui = { auto: true, view: 'B', speed: 10, paused: false, posts: Object.fromEntries(IDS.map(id => [id, { on: false }])), fouling: 1 };
+const ui = { auto: true, view: 'B', speed: 10, paused: false, posts: {}, fouling: 1 };
+/** номера постов идут подряд; цвет — по номеру */
+function syncIds() {
+  IDS = cfg.map((c, i) => (c.id = `post${i + 1}`));
+  IDS.forEach((id, i) => { COL[id] = PALETTE[i % PALETTE.length]; if (!ui.posts[id]) ui.posts[id] = { on: false }; });
+}
+syncIds();
 let shift = E.makeSchedule(IDS, 8 * 3600, 7);
 const isOn = (id, t) => ui.auto ? shift(id, t % (8 * 3600)) : ui.posts[id].on;
 
@@ -198,12 +206,15 @@ function build(kind) {
 const worstRatio = C => groups.reduce((w, mem) => Math.max(w, mem.reduce((a, s) => a + C[s.name] / s.pdk, 0)), 0);
 let A, B;
 function reset() { A = build('A'); B = build('B'); shift = E.makeSchedule(IDS, 8 * 3600, 7); applyFouling(); renderDesign(); warm(); }
+/** число постов изменилось: карточки, расчёт и 3D-сцена собираются заново */
+let scene3dReady = false;
+function changeLayout() { renderCards(); reset(); if (scene3dReady) build3d(); }
 function applyFouling() { for (const m of [A, B]) m.net.common[0].spec.fouling = ui.fouling; }
 function warm() { for (let i = 0; i < 1200; i++) for (const m of [A, B]) { m.last = m.sim.step(); m.hist.push(m.last); if (m.hist.length > WIN) m.hist.shift(); } }
 
 // ---------- карточки постов: выбор процесса, материала, параметров, отсоса
 const postsEl = document.getElementById('posts');
-const PROCS = E.PROCESSES, procGroups = [...new Set(PROCS.map(p => p.group))];
+const PROCS = E.activeProcesses(), procGroups = [...new Set(PROCS.map(p => p.group))];
 const fmtN = v => String(v).replace('.', ',');
 function cardHtml(id, i) {
   const c = cfg[i], pr = E.processById(c.process);
@@ -226,7 +237,7 @@ function cardHtml(id, i) {
       <label>Захват отсоса η (Методика: 0,8)<input type="number" data-k="eta" min="0.3" max="0.99" step="0.01" value="${c.eta ?? 0.8}"></label>
     </div>
     <div class="src" id="src-${id}"></div>
-    <div class="row"><button class="btn" id="tog-${id}" aria-pressed="false">Включить</button></div>
+    <div class="row"><button class="btn" id="tog-${id}" aria-pressed="false">Включить</button>${IDS.length > 1 ? `<button class="btn" id="del-${id}">Удалить пост</button>` : ''}</div>
     <div class="kv">
       <div><b id="q-${id}">—</b><span>расход, м³/ч</span></div>
       <div><b id="o-${id}">—</b><span>открытие, %</span></div>
@@ -236,10 +247,16 @@ function cardHtml(id, i) {
   </div>`;
 }
 function renderCards() {
-  postsEl.innerHTML = IDS.map((id, i) => cardHtml(id, i)).join('');
+  postsEl.innerHTML = IDS.map((id, i) => cardHtml(id, i)).join('') +
+    `<div class="card"><button class="btn" id="addPost" ${IDS.length >= MAX_POSTS ? 'disabled' : ''}>+ Добавить сварочный пост</button>
+     <span class="note" style="margin-left:8px">постов: ${IDS.length} из ${MAX_POSTS}; сеть и вентилятор подбираются заново</span></div>`;
+  document.getElementById('addPost').onclick = () => { if (cfg.length >= MAX_POSTS) return;
+    cfg.push({ id: '', process: 'mag_co2', material: 'sv08g2s', params: { I: 225, d: 1.2 }, hood: 'table', eta: 0.8 }); syncIds(); changeLayout(); };
   IDS.forEach((id, i) => {
     const card = document.getElementById(`card-${id}`), c = cfg[i];
     document.getElementById(`tog-${id}`).onclick = () => { setAuto(false); ui.posts[id].on = !ui.posts[id].on; };
+    const del = document.getElementById(`del-${id}`);
+    if (del) del.onclick = () => { cfg.splice(i, 1); const st = IDS.map(x => ui.posts[x]); st.splice(i, 1); ui.posts = {}; syncIds(); IDS.forEach((x, k) => (ui.posts[x] = st[k])); changeLayout(); };
     card.querySelectorAll('select[data-k]').forEach(el => el.onchange = () => {
       const k = el.dataset.k;
       if (k === 'process') { const pr = E.processById(el.value); c.process = el.value; c.material = pr.materials[0].id; c.hood = pr.hoods[0].id; c.params = {}; c.factorsOverride = undefined; }
@@ -305,61 +322,73 @@ const M = {
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 22), M.floor); floor.rotation.x = -Math.PI / 2; scene.add(floor);
 const grid = new THREE.GridHelper(40, 40, '#3a464e', '#2c363c'); grid.position.y = 0.01; scene.add(grid);
 
-const Y_COLL = 5.2, Z = 0, XS = { post1: -7, post2: -1.5, post3: 4 };
+const Y_COLL = 5.2, Z = 0, STEP = 5.5;
+let rig = null, rotor = null, tail = [], X_END = 0;
+const XS = {};
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const tube = (a, b, r, mat) => {
   const v = new THREE.Vector3().subVectors(b, a), L = v.length();
   const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L, 24, 1, true), mat);
-  m.position.copy(a).addScaledVector(v, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().normalize()); scene.add(m); return m;
+  m.position.copy(a).addScaledVector(v, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().normalize()); rig.add(m); return m;
 };
-const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const posts3d = {};
-for (const id of IDS) {
-  const x = XS[id];
-  const table = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 1.4), M.dark); table.position.set(x, 0.45, Z + 1.2); scene.add(table);
-  const work = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.15, 0.5), M.steel); work.position.set(x, 0.98, Z + 1.2); scene.add(work);
-  const hood = new THREE.Mesh(new THREE.ConeGeometry(0.75, 0.6, 28, 1, true), M.steel); hood.position.set(x, 2.35, Z + 1.2); scene.add(hood);
-  tube(V(x, 2.6, Z + 1.2), V(x, 3.0, Z + 1.2), 0.22, M.steel);
-  tube(V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), 0.22, M.duct);
-  tube(V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z), 0.22, M.duct);
-  // заслонка: прозрачный корпус + диск на оси
-  const dPos = V(x, 4.35, Z + 0.3);
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.36, 28, 1, true), M.duct); body.position.copy(dPos);
-  body.quaternion.setFromUnitVectors(V(0, 1, 0), V(0, Y_COLL - 3.6, -0.6).normalize()); scene.add(body);
-  const pivot = new THREE.Group(); pivot.position.copy(dPos); pivot.quaternion.copy(body.quaternion); scene.add(pivot);
-  for (const off of [-0.18, 0.18]) { const fl = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.025, 8, 32), M.steel); fl.rotation.x = Math.PI / 2; fl.position.y = off; pivot.add(fl); }
-  const disk = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.025, 32), M.disk); pivot.add(disk);
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 8), M.dark); shaft.rotation.z = Math.PI / 2; pivot.add(shaft);
-  const act = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.22), new THREE.MeshStandardMaterial({ color: '#e0a23a', roughness: 0.6 })); act.position.set(0.46, 0, 0); pivot.add(act);
-  const arc = new THREE.PointLight('#ffb347', 0, 6, 2); arc.position.set(x, 1.15, Z + 1.2); scene.add(arc);
-  const spark = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), new THREE.MeshBasicMaterial({ color: '#fff2c4' })); spark.position.copy(arc.position); scene.add(spark);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.03, 8, 40), new THREE.MeshBasicMaterial({ color: COL[id] })); ring.rotation.x = Math.PI / 2; ring.position.set(x, 0.92, Z + 1.2); scene.add(ring);
-  posts3d[id] = { disk, arc, spark, path: [V(x, 1.4, Z + 1.2), V(x, 2.35, Z + 1.2), V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z)] };
-}
-// коллектор → фильтр → вентилятор → выброс
-const X_END = 9.5;
-tube(V(XS.post1 - 0.4, Y_COLL, Z), V(X_END, Y_COLL, Z), 0.36, M.duct);
-const filt = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.6, 1.8), M.filter); filt.position.set(X_END + 1.2, Y_COLL - 0.4, Z); scene.add(filt);
-tube(V(X_END + 2.2, Y_COLL, Z), V(X_END + 3.0, Y_COLL, Z), 0.36, M.duct);
-const fanHouse = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.7, 36), M.steel); fanHouse.rotation.x = Math.PI / 2; fanHouse.position.set(X_END + 3.9, Y_COLL, Z); scene.add(fanHouse);
-const rotor = new THREE.Group(); rotor.position.set(X_END + 3.9, Y_COLL, Z + 0.37); scene.add(rotor);
-for (let i = 0; i < 6; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.82, 0.04), M.disk); b.position.y = 0.42; const g = new THREE.Group(); g.rotation.z = i * Math.PI / 3; g.add(b); rotor.add(g); }
-const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.8, 24), new THREE.MeshStandardMaterial({ color: '#2f5f8a', roughness: 0.5 })); motor.rotation.x = Math.PI / 2; motor.position.set(X_END + 3.9, Y_COLL, Z - 0.75); scene.add(motor);
-tube(V(X_END + 3.9, Y_COLL + 0.9, Z), V(X_END + 3.9, Y_COLL + 4.5, Z), 0.36, M.duct);
-const tail = [V(X_END, Y_COLL, Z), V(X_END + 3.9, Y_COLL, Z), V(X_END + 3.9, Y_COLL + 4.5, Z)];
-
-// частицы потока: для каждого поста путь «отсос → ветвь → коллектор → вентилятор → выброс»
 const NP = 140;
 function pathOf(id) {
-  const pts = [...posts3d[id].path, ...tail.slice(0, 1).map(p => p), ...tail.slice(1)];
+  const pts = [...posts3d[id].path, ...tail];
   const seg = []; let L = 0; for (let i = 1; i < pts.length; i++) { const l = pts[i].distanceTo(pts[i - 1]); seg.push([pts[i - 1], pts[i], L, l]); L += l; }
   return { seg, L };
 }
-for (const id of IDS) {
-  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NP * 3), 3));
-  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: '#63b8db', size: 0.11, transparent: true, opacity: 0.85, depthWrite: false }));
-  scene.add(pts);
-  posts3d[id].pts = pts; posts3d[id].route = pathOf(id); posts3d[id].s = Float32Array.from({ length: NP }, () => Math.random());
+/** 3D-цех под текущее число постов: столы и отсосы вдоль коллектора, затем фильтр, вентилятор, выброс */
+function build3d() {
+  if (rig) { scene.remove(rig); rig.traverse(o => { if (o.geometry && o.geometry.dispose) o.geometry.dispose(); }); }
+  rig = new THREE.Group(); scene.add(rig);
+  for (const k of Object.keys(posts3d)) delete posts3d[k];
+  const x0 = -((IDS.length - 1) * STEP) / 2 - 3;
+  IDS.forEach((id, i) => (XS[id] = x0 + i * STEP));
+  X_END = x0 + (IDS.length - 1) * STEP + 4;
+  for (const id of IDS) {
+    const x = XS[id];
+    const table = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 1.4), M.dark); table.position.set(x, 0.45, Z + 1.2); rig.add(table);
+    const work = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.15, 0.5), M.steel); work.position.set(x, 0.98, Z + 1.2); rig.add(work);
+    const hood = new THREE.Mesh(new THREE.ConeGeometry(0.75, 0.6, 28, 1, true), M.steel); hood.position.set(x, 2.35, Z + 1.2); rig.add(hood);
+    tube(V(x, 2.6, Z + 1.2), V(x, 3.0, Z + 1.2), 0.22, M.steel);
+    tube(V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), 0.22, M.duct);
+    tube(V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z), 0.22, M.duct);
+    const dPos = V(x, 4.35, Z + 0.3);   // заслонка: прозрачный корпус + диск на оси
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.36, 28, 1, true), M.duct); body.position.copy(dPos);
+    body.quaternion.setFromUnitVectors(V(0, 1, 0), V(0, Y_COLL - 3.6, -0.6).normalize()); rig.add(body);
+    const pivot = new THREE.Group(); pivot.position.copy(dPos); pivot.quaternion.copy(body.quaternion); rig.add(pivot);
+    for (const off of [-0.18, 0.18]) { const fl = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.025, 8, 32), M.steel); fl.rotation.x = Math.PI / 2; fl.position.y = off; pivot.add(fl); }
+    const disk = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.025, 32), M.disk); pivot.add(disk);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 8), M.dark); shaft.rotation.z = Math.PI / 2; pivot.add(shaft);
+    const act = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.22), new THREE.MeshStandardMaterial({ color: '#e0a23a', roughness: 0.6 })); act.position.set(0.46, 0, 0); pivot.add(act);
+    const arc = new THREE.PointLight('#ffb347', 0, 6, 2); arc.position.set(x, 1.15, Z + 1.2); rig.add(arc);
+    const spark = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), new THREE.MeshBasicMaterial({ color: '#fff2c4' })); spark.position.copy(arc.position); rig.add(spark);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.03, 8, 40), new THREE.MeshBasicMaterial({ color: COL[id] })); ring.rotation.x = Math.PI / 2; ring.position.set(x, 0.92, Z + 1.2); rig.add(ring);
+    posts3d[id] = { disk, arc, spark, path: [V(x, 1.4, Z + 1.2), V(x, 2.35, Z + 1.2), V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z)] };
+  }
+  tube(V(XS[IDS[0]] - 0.4, Y_COLL, Z), V(X_END, Y_COLL, Z), 0.36, M.duct);   // коллектор → фильтр → вентилятор → выброс
+  const filt = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.6, 1.8), M.filter); filt.position.set(X_END + 1.2, Y_COLL - 0.4, Z); rig.add(filt);
+  tube(V(X_END + 2.2, Y_COLL, Z), V(X_END + 3.0, Y_COLL, Z), 0.36, M.duct);
+  const fanHouse = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.7, 36), M.steel); fanHouse.rotation.x = Math.PI / 2; fanHouse.position.set(X_END + 3.9, Y_COLL, Z); rig.add(fanHouse);
+  rotor = new THREE.Group(); rotor.position.set(X_END + 3.9, Y_COLL, Z + 0.37); rig.add(rotor);
+  for (let i = 0; i < 6; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.82, 0.04), M.disk); b.position.y = 0.42; const g = new THREE.Group(); g.rotation.z = i * Math.PI / 3; g.add(b); rotor.add(g); }
+  const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.8, 24), new THREE.MeshStandardMaterial({ color: '#2f5f8a', roughness: 0.5 })); motor.rotation.x = Math.PI / 2; motor.position.set(X_END + 3.9, Y_COLL, Z - 0.75); rig.add(motor);
+  tube(V(X_END + 3.9, Y_COLL + 0.9, Z), V(X_END + 3.9, Y_COLL + 4.5, Z), 0.36, M.duct);
+  tail = [V(X_END, Y_COLL, Z), V(X_END + 3.9, Y_COLL, Z), V(X_END + 3.9, Y_COLL + 4.5, Z)];
+  for (const id of IDS) {   // частицы потока: «отсос → ветвь → коллектор → вентилятор → выброс»
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NP * 3), 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: '#63b8db', size: 0.11, transparent: true, opacity: 0.85, depthWrite: false }));
+    rig.add(pts);
+    posts3d[id].pts = pts; posts3d[id].route = pathOf(id); posts3d[id].s = Float32Array.from({ length: NP }, () => Math.random());
+  }
+  const left = XS[IDS[0]] - 2, right = X_END + 5, span = right - left;   // камера и пол — под весь цех
+  controls.target.set((left + right) / 2, 3.2, 0);
+  camera.position.set(controls.target.x - 9 - span * 0.05, 10 + span * 0.12, 13 + span * 0.42);
+  floor.scale.set(Math.max(1, (span + 10) / 40), 1, 1); floor.position.x = controls.target.x;
+  grid.position.x = controls.target.x; grid.scale.set(Math.max(1, (span + 10) / 40), 1, 1);
 }
+build3d(); scene3dReady = true;
 function placeParticles(id, flow, dt) {
   const o = posts3d[id], { seg, L } = o.route, pos = o.pts.geometry.attributes.position;
   const vis = Math.round(NP * Math.min(1, flow / 1800)); const speed = 0.4 + 6 * flow / 1500; // условная скорость отображения

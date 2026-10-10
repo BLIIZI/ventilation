@@ -109,3 +109,12 @@ test('Отсос «задаётся проектировщиком»: расхо
   assert.equal(qsetOf({ id: 'p', process: 'grind', material: 'sharp100', params: { Q: 600 } }), 600);
   for (const pr of PROCESSES) assert.ok(qsetOf({ id: 'p', process: pr.id, material: pr.materials[0].id }) > 0, pr.name);
 });
+
+test('Сейчас в интерфейсе — только сварка; остальные процессы в библиотеке сохранены, но скрыты', async () => {
+  const { activeProcesses, ENABLED_GROUPS } = await import('../src/engine/processes.ts');
+  assert.deepEqual(ENABLED_GROUPS, ['Сварка']);
+  assert.ok(activeProcesses().every(p => p.group === 'Сварка'));
+  assert.deepEqual(activeProcesses().map(p => p.id).sort(), ['contact', 'gas_weld', 'mag_co2', 'mma', 'saw']);
+  assert.ok(PROCESSES.length > activeProcesses().length);
+  assert.ok(MIXED_EXAMPLE.every(p => processById(p.process).group === 'Сварка'));
+});
