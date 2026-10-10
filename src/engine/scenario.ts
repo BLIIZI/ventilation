@@ -3,6 +3,15 @@ import type { SimParams, Mode } from './sim.ts';
 import { m3h } from './physics.ts';
 import { balance } from './balance.ts';
 import { demoNetwork } from './demo-network.ts';
+import { ETA_LEV_DEFAULT, Q_POST_MIN_M3H, SV08G2S, PDK_MN_WELD_LE20, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, wireRate } from './norms.ts';
+
+/** Базовый режим сварки блока 3: ток 225 А, проволока Св-08Г2С Ø1,2 мм, вылет 15 мм → B = α_р·I (norms.ts) */
+export const I_BASE = 225;
+export const B_BASE = wireRate(I_BASE);
+/** Общеобменная вентиляция по блоку 1 (СП 60.13330.2020, прил. И): L = Σ(1−η)·g·B / (ПДК − q_пр), 3 поста, η по Методике */
+export function genVentByFormula(n = 3, eta = ETA_LEV_DEFAULT, B = B_BASE) {
+  return n * (1 - eta) * SV08G2S.mn * 1000 * B / 3600 / (PDK_MN_WELD_LE20.ss - MN_ATM_SS);   // м³/с
+}
 
 /** Таблица упреждения: расчётная частота вентилятора для каждого набора работающих постов (по установившемуся режиму блока 2) */
 export function feedforwardTable(ids: string[], Qset: number) {
@@ -41,14 +50,14 @@ export function shiftParams(mode: Mode, pSet?: number, balanced = true): SimPara
   const duration = 8 * 3600;
   return {
     mode, dt: 1, duration, schedule: makeSchedule(ids, duration), record: 10,
-    posts: ids.map(id => ({ id, B: 3, Qset: m3h(1500), etaNom: 0.9 })),       // 1500 м³/ч — ГОСТ 12.3.003-86 п. 2.11.1
+    posts: ids.map(id => ({ id, B: B_BASE, Qset: m3h(Q_POST_MIN_M3H), etaNom: ETA_LEV_DEFAULT })),  // 1500 м³/ч — ГОСТ 12.3.003-86 п. 2.11.1; η = 0,8 — Методика 1997
     substances: [
-      { name: 'Mn', g: 1.90, pdk: 0.2, qIn: 0.001 },   // Св-08Г2С, блок 1
-      { name: 'Fe2O3', g: 7.67, pdk: 6, qIn: 0.04 },
+      { name: 'Mn', g: SV08G2S.mn, pdk: PDK_MN_WELD_LE20.ss, qIn: MN_ATM_SS },   // Методика 1997 табл. 1; СанПиН 1.2.3685-21 табл. 2.1, 1.1
+      { name: 'Fe2O3', g: SV08G2S.fe, pdk: 6, qIn: 0.04 },                          // ПДК — [П] сверить строку «Железа оксид» СанПиН табл. 2.1
     ],
-    room: { V: 48 * 24 * 14.4, Lgen: m3h(8600), dT: 19.7 },  // Δt = 18 − (−1,7): t_в = 18 °C [Д]; −1,7 °C — средняя за отопительный период (≤ 8 °C, 202 сут), Москва, СП 131.13330.2025, табл. 3.1
-    // объём цеха из диплома; общеобменная — по блоку 1 (η = 0,9, 3 поста)
-    damperStroke: 8,  // 8 с — время хода заслонки Plymovent AD (паспорт); одинаково для сравнения режимов
+    room: { V: 48 * 24 * 14.4, Lgen: genVentByFormula(), dT: T_IN_WINTER - MOSCOW_HEATING.tAvg },
+    // объём цеха — из диплома; Δt = 18 − (−1,7) = 19,7 °C (СанПиН 1.2.3685-21; СП 131.13330.2025)
+    damperStroke: 8,  // 8 с — из ряда времени полного хода ГОСТ 7192-89 (исследованы также 15 и 30 с); одинаково для всех режимов
     fanRamp: 10, nMax: 1500, nMin: 300, pSet: pSet ?? c0.pSet, kI: 4,   // уставка разрежения — из пусконаладки, если не задана
     nFF: mode === 'adaptive' ? feedforwardTable(ids, m3h(1500)) : undefined,
     openAngles: com ? com.angles : undefined, nConst: com ? com.n : undefined,

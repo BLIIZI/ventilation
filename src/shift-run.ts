@@ -18,7 +18,7 @@ for (const mode of ['constant', 'onoff', 'adaptive'] as const) {
   console.log(`${names[mode]}: вент ${r.fanKWh.toFixed(2)} кВт·ч, тепло ${r.heatKWh.toFixed(0)} кВт·ч, ср.расход МВВ ${r.avgFlow.toFixed(0)} м³/ч, <95% ${(r.underFlowShare*100).toFixed(1)}%, >110% ${(r.overFlowShare*100).toFixed(1)}%, Mn max ${r.maxC.Mn.toFixed(3)} ср ${r.avgC.Mn.toFixed(3)} (${Date.now()-t0} мс)`);
 }
 {
-  const p = shiftParams('adaptive', pSet); p.room.LgenPerPost = m3h(8600 / 3); p.room.LgenMin = m3h(8600 / 3);
+  const p = shiftParams('adaptive', pSet); p.room.LgenPerPost = p.room.Lgen / 3; p.room.LgenMin = p.room.Lgen / 3;
   const r = simulate(demoNetwork(), p); res['adaptive_gen'] = r;
   console.log(`Предлагаемая + общеобменная по потребности: вент ${r.fanKWh.toFixed(2)} кВт·ч, тепло ${r.heatKWh.toFixed(0)} кВт·ч, ср.расход МВВ ${r.avgFlow.toFixed(0)} м³/ч, <95% ${(r.underFlowShare*100).toFixed(1)}%, >110% ${(r.overFlowShare*100).toFixed(1)}%, Mn max ${r.maxC.Mn.toFixed(3)} ср ${r.avgC.Mn.toFixed(3)}`);
 }

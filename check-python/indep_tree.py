@@ -30,7 +30,8 @@ def fanp(fan, Q, n):
             if q <= qb: p0 = pa+(q-qa)*(pb-pa)/(qb-qa); break
     return p0*k*k
 VFD = [(0.016,.35),(0.125,.80),(0.25,.88),(0.42,.91),(0.5,.92),(0.75,.94),(1.0,.95)]
-MOT = [(0.05,.55),(0.1,.75),(0.25,.93),(0.5,1.0),(1.0,1.0)]
+def motor(beta, en, k=0.5):  # разделение потерь: ΣP = P_пост + P_пер·β², P_пост/P_пер = k
+    ln = 1/en - 1; return beta/(beta + ln*(k+beta*beta)/(1+k))
 def tab(t, x):
     if x <= t[0][0]: return t[0][1]
     for (x0,y0),(x1,y1) in zip(t, t[1:]):
@@ -62,7 +63,7 @@ def solve(net):
     pr = brentq(resid, 1e-6, 5000, xtol=1e-10)
     Qt = fr(pr); pf = fanp(net['fan'], Qt, net['fanSpeed'])
     P = max(0, Qt*pf)/net['fan']['eta']; f = net['fan']
-    Pel = P/(f['motorEta']*tab(MOT, P/f['motorW'])*tab(VFD, P/f['motorW'])) if P > 0 else 0
+    Pel = P/(motor(P/f['motorW'], f['motorEta'])*tab(VFD, P/f['motorW'])) if P > 0 else 0
     return Qt, pf, P, Pel
 cases = json.load(open(sys.argv[1])); worst = [0, 0, 0, 0]
 for c in cases:

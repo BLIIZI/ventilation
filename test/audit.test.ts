@@ -9,6 +9,8 @@ import { demoNetwork, makeNetwork, pickMotor } from '../src/engine/demo-network.
 import { simulate, createSimulator } from '../src/engine/sim.ts';
 import { shift4 } from '../src/engine/scenario4.ts';
 import { shiftParams } from '../src/engine/scenario.ts';
+import { wireRate } from '../src/engine/norms.ts';
+import { interp } from '../src/engine/sim.ts';
 
 let seed = 42; const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
 const rel = (a: number, b: number) => Math.abs(a - b) / Math.max(Math.abs(b), 1e-12);
@@ -150,21 +152,21 @@ test('Детерминизм: два одинаковых прогона сме�
 test('Сохранение массы марганца за смену: V·ΔC = Σ(поступление − удаление)·dt (относ. ошибка < 10⁻⁹)', () => {
   const p = shift4('fffb'); p.duration = 3 * 3600; p.record = 1;
   const sim = createSimulator(demoNetwork(), p); let prevC = p.substances[0].qIn, bal = 0;
-  const B = (I: number) => (I <= 175 ? 1.68 * I / 175 : I <= 225 ? 1.68 + (I - 175) * (2.36 - 1.68) / 50 : 2.36 + (I - 225) * (3.73 - 2.36) / 45);
+  const B = (I: number) => interp(p.wire!, I);   // та же таблица, что в модели (α_р·I по norms.ts)
   for (let t = 0; t <= p.duration; t += 1) {
     const s = sim.step(); let G = 0;
-    for (const ps of p.posts) if (s.on[ps.id]) { const eta = ps.etaNom * Math.min(1, s.Q[ps.id] / 3600 / ps.Qset); G += (1 - eta) * 1.9 * 1000 * B(ps.current!(t)) / 3600; }
+    for (const ps of p.posts) if (s.on[ps.id]) { const eta = ps.etaNom * Math.min(1, s.Q[ps.id] / 3600 / ps.Qset); G += (1 - eta) * p.substances[0].g * 1000 * B(ps.current!(t)) / 3600; }
     bal += G - (s.Qtot + s.Lgen) / 3600 * (prevC - 0.001); prevC = s.C.Mn;
   }
   const V = p.room.V; const lhs = V * (prevC - 0.001), rhs = bal;
   assert.ok(rel(lhs, rhs) < 1e-9, `V·ΔC = ${lhs.toFixed(3)}, баланс = ${rhs.toFixed(3)} мг`);
 });
 
-test('Энергия тепла = 1,2 кВт/(м³/с·К) × ∫L dt × Δt (сверка интеграла)', () => {
+test('Энергия тепла = ρ·c·∫L dt·Δt, ρ·c = 1,2·1,005 кВт/(м³/с·К) (сверка интеграла)', () => {
   const p = shift4('fffb'); p.duration = 7200; p.record = 1;
   const sim = createSimulator(demoNetwork(), p); let LdT = 0;
   for (let t = 0; t <= p.duration; t++) { const s = sim.step(); LdT += (s.Qtot + s.Lgen) / 3600; }
-  const r = sim.result(); const expected = 1.2 * LdT * p.room.dT / 3600;
+  const r = sim.result(); const expected = 1.2 * 1.005 * LdT * p.room.dT / 3600;
   assert.ok(rel(r.heatKWh, expected) < 1e-9);
 });
 
@@ -209,10 +211,10 @@ test('Фильтр ×3 (недостижимо): динамика выходит
 });
 
 // ---------- привод: КПД двигателя и ЧП
-test('Электрическая мощность ≥ мощности на валу; при номинале = P_вал/(η_дв·η_ЧП) = P/(0,867·0,95)', () => {
+test('Электрическая мощность ≥ мощности на валу и равна P_вал/(η_дв(β)·η_ПЧ(β)); при номинале η_дв = 0,867 (ГОСТ IEC 60034-30-1)', () => {
   const f = demoNetwork().fan;
   assert.ok(Math.abs(electricPower(f, 2200) - 2200 / (0.867 * 0.95)) < 1e-6);
-  for (let w = 10; w <= 2500; w += 10) assert.ok(electricPower(f, w) >= w / 0.867 / 0.95 - 1e-9);
+  for (let w = 10; w <= 2500; w += 10) assert.ok(electricPower(f, w) > w);
   assert.equal(electricPower(f, 0), 0); assert.equal(electricPower(f, -50), 0);
 });
 
@@ -228,7 +230,7 @@ test('Подбор двигателя IE3: ближайший стандартн
 
 // ---------- общеобменная: anti-windup
 test('Anti-windup ОВ: на смене снижает пик Mn и при верной модели, и при ошибке захвата (η 0,8)', () => {
-  for (const etaReal of [undefined, 0.8]) {
+  for (const etaReal of [undefined, 0.7]) {
     const on = simulate(demoNetwork(), shift4('fffb', { etaReal }));
     const pOff = shift4('fffb', { etaReal }); pOff.gen!.antiWindup = false;
     const off = simulate(demoNetwork(), pOff);
@@ -238,12 +240,12 @@ test('Anti-windup ОВ: на смене снижает пик Mn и при ве�
 });
 
 test('ОВ на пределе L_max: если вытяжки не хватает физически, концентрация = баланс при L_max (а не уставка)', () => {
-  // все посты непрерывно 270 А, реальный захват 0,8: нужно 4·L_расч для 0,5 ПДК, а есть 1,5·L_расч → C → G/(L_max+L_МВВ)
-  const p = shift4('fffb', { etaReal: 0.8 }); p.record = 10; p.duration = 8 * 3600;
+  // все посты непрерывно 270 А, реальный захват 0,7 при расчётном 0,8: нужно 3·L_расч для 0,5 ПДК, а есть 1,5·L_расч → C → G/(L_max+L_МВВ)
+  const p = shift4('fffb', { etaReal: 0.7 }); p.record = 10; p.duration = 8 * 3600;
   p.schedule = () => true; p.posts.forEach(ps => (ps.current = () => 270));
   const r = simulate(demoNetwork(), p), last = r.series.at(-1)!;
   assert.ok(Math.abs(last.Lgen - p.gen!.Lmax * 3600) < 1, `ОВ ${last.Lgen.toFixed(0)}`);
-  const G = 3 * 0.2 * 1.9 * 1000 * 3.73 / 3600, Cbal = G / (p.gen!.Lmax + last.Qtot / 3600) + 0.001;
+  const G = 3 * 0.3 * 1.9 * 1000 * wireRate(270) / 3600, Cbal = G / (p.gen!.Lmax + last.Qtot / 3600) + 0.001;
   assert.ok(rel(last.C.Mn, Cbal) < 0.03, `C ${last.C.Mn.toFixed(4)} против баланса ${Cbal.toFixed(4)}`);
 });
 

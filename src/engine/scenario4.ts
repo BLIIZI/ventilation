@@ -2,10 +2,11 @@
 import type { SimParams, GenVent } from './sim.ts';
 import { m3h } from './physics.ts';
 import { shiftParams } from './scenario.ts';
+import { ETA_LEV_DEFAULT, SV08G2S, PDK_MN_WELD_LE20, MN_ATM_SS, wireRate } from './norms.ts';
 
-/** Расход проволоки ER70S-6 Ø1,2 мм (аналог Св-08Г2С [Д]) от тока: 175 А — 1,68; 225 А — 2,36; 270 А — 3,73 кг/ч.
- *  Источник: materialwelding.com (ориентировочные значения, без ссылки на испытания) — [П] уточнить по данным производителя. */
-export const WIRE_12: Array<[number, number]> = [[175, 1.68], [225, 2.36], [270, 3.73]];
+/** Расход проволоки Св-08Г2С Ø1,2 мм от тока: B = α_р(I)·I, α_р = 9,05 + 3,1·10⁻⁴·I·l/d², l = 15 мм (norms.ts; Соколов и др., ВолгГТУ, 2016).
+ *  Таблица с шагом 5 А для интерполяции: 175 А — 1,68; 225 А — 2,20; 270 А — 2,68 кг/ч. */
+export const WIRE_12: Array<[number, number]> = Array.from({ length: 80 }, (_, i) => [5 * (i + 1), wireRate(5 * (i + 1))] as [number, number]);
 
 /** Те же интервалы горения дуги, что в блоке 3; каждому интервалу — свой режим (175/225/270 А) */
 export function makeShift(ids: string[], duration: number, seed = 7) {
@@ -22,12 +23,12 @@ export function makeShift(ids: string[], duration: number, seed = 7) {
   };
 }
 
-export const MN = { name: 'Mn', g: 1.90, pdk: 0.2, qIn: 0.001 };   // СанПиН 1.2.3685-21, табл. 2.1, стр. 1222 (Mn ≤ 20 %)
-export const AER = { name: 'aerosol', g: 10.0, pdk: 1e9, qIn: 0 };   // сварочный аэрозоль, общая масса (для датчика)
+export const MN = { name: 'Mn', g: SV08G2S.mn, pdk: PDK_MN_WELD_LE20.ss, qIn: MN_ATM_SS };   // Методика 1997; СанПиН 1.2.3685-21, табл. 2.1, стр. 1222 (Mn ≤ 20 %)
+export const AER = { name: 'aerosol', g: SV08G2S.aerosol, pdk: 1e9, qIn: 0 };   // сварочный аэрозоль, общая масса (для датчика)
 
 /** Расчётный (проектный) расход ОВ: все 3 поста одновременно на максимальном режиме 270 А, C = ПДК (блок 1) */
-export function designLgen(eta = 0.9, n = 3) {
-  const G = n * (1 - eta) * MN.g * 1000 * 3.73 / 3600; // мг/с
+export function designLgen(eta = ETA_LEV_DEFAULT, n = 3) {
+  const G = n * (1 - eta) * MN.g * 1000 * wireRate(270) / 3600; // мг/с
   return G / (MN.pdk - MN.qIn);
 }
 
@@ -38,7 +39,7 @@ export function shift4(mode: GenVent['mode'], opts: { Cset?: number; etaReal?: n
   const Ld = designLgen();
   return {
     ...base, schedule: sh.schedule, wire: WIRE_12,
-    posts: ids.map(id => ({ id, B: 0, Qset: m3h(1500), etaNom: 0.9, etaReal: opts.etaReal, current: sh.current(id) })),
+    posts: ids.map(id => ({ id, B: 0, Qset: m3h(1500), etaNom: ETA_LEV_DEFAULT, etaReal: opts.etaReal, current: sh.current(id) })),
     substances: [MN, AER],
     gen: {
       mode, Ldesign: Ld, Lmin: 0.2 * Ld, Lmax: 1.5 * Ld, limiting: 'Mn', Cset: opts.Cset ?? 0.5 * MN.pdk,

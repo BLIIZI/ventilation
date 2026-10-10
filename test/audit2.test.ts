@@ -29,7 +29,8 @@ test('Помещение: после пуска переходный проце�
   const p = shiftParams('constant'); p.duration = 6 * 3600; p.record = 60; p.schedule = () => true;
   const r = simulate(demoNetwork(), p), last = r.series.at(-1)!, s = p.substances[0];
   const L = last.Qtot / 3600 + p.room.Lgen, V = p.room.V;
-  const G = ['post1', 'post2', 'post3'].reduce((a, id) => a + (1 - 0.9 * Math.min(1, last.Q[id] / 1500)) * s.g * 1000 * 3 / 3600, 0);
+  const eN = p.posts[0].etaNom, B = p.posts[0].B;
+  const G = ['post1', 'post2', 'post3'].reduce((a, id) => a + (1 - eN * Math.min(1, last.Q[id] / 1500)) * s.g * 1000 * B / 3600, 0);
   const Cinf = s.qIn + G / L, C0 = r.series.find(x => x.t === 600)!.C[s.name];
   for (const t of [1800, 3600, 7200, 14400, 21600]) {
     const an = Cinf + (C0 - Cinf) * Math.exp(-L * (t - 600) / V);
@@ -43,10 +44,11 @@ test('Зона дыхания: C_дых = C_цеха + G_ут/β, β = ½·2πr�
   const p = shiftParams('constant'); p.duration = 600; p.record = 10; p.schedule = () => true;
   p.nearField = { r: 1, s: 0.1 };
   const last = simulate(demoNetwork(), p).series.at(-1)!;
-  const Gesc = (1 - 0.9) * 1.9 * 1000 * 3 / 3600, beta = 0.5 * 2 * Math.PI * 1 * 0.1;
+  const eN = p.posts[0].etaNom, B = p.posts[0].B, g = p.substances[0].g;
+  const Gesc = (1 - eN) * g * 1000 * B / 3600, beta = 0.5 * 2 * Math.PI * 1 * 0.1;
   for (const id of ['post1', 'post2', 'post3']) {
-    const eta = 0.9 * Math.min(1, last.Q[id] / 1500);
-    const exp = last.C.Mn + (1 - eta) * 1.9 * 1000 * 3 / 3600 / beta;
+    const eta = eN * Math.min(1, last.Q[id] / 1500);
+    const exp = last.C.Mn + (1 - eta) * g * 1000 * B / 3600 / beta;
     assert.ok(rel(last.Cbz[id], exp) < 1e-9, id);
     assert.ok(last.Cbz[id] >= last.C.Mn);
   }
@@ -118,7 +120,7 @@ test('Масштабирование: 2…8 постов, случайные с�
     const ids = Array.from({ length: N }, (_, i) => `post${i + 1}`);
     const base = shiftParams('adaptive');
     const p: SimParams = { ...base, duration: 2 * 3600, record: 30, schedule: makeSchedule(ids, 2 * 3600, 100 + N), nFF: undefined,
-      posts: ids.map(id => ({ id, B: 3, Qset: m3h(1500), etaNom: 0.9 })), openAngles: undefined, nConst: undefined };
+      posts: ids.map(id => ({ id, B: base.posts[0].B, Qset: m3h(1500), etaNom: base.posts[0].etaNom })), openAngles: undefined, nConst: undefined };
     const r = simulate(makeNetwork(N), p);
     assert.equal(r.nonConverged, 0, `N=${N}`);
     for (const s of r.series) { assert.ok(Object.values(s.Q).every(q => Number.isFinite(q) && q >= 0)); assert.ok(Number.isFinite(s.C.Mn)); }
@@ -127,7 +129,7 @@ test('Масштабирование: 2…8 постов, случайные с�
 });
 
 // ---------- энергия
-test('Электрическая энергия смены ≥ энергии на валу; КПД цепочки на номинале 0,867·0,95 = 0,824', () => {
+test('Электрическая энергия смены ≥ энергии на валу; КПД цепочки на номинале 0,867·0,95 = 0,824 (двигатель — ГОСТ IEC 60034-30-1)', () => {
   const p = shiftParams('constant'); p.duration = 600; p.record = 1; p.schedule = () => true;
   const r = simulate(demoNetwork(), p); const net = demoNetwork();
   for (const h of net.hoods) setDamper(net, h, p.openAngles![h]); net.fanSpeed = p.nConst!;
@@ -154,4 +156,34 @@ test('15-минутное скользящее среднее: для посто
   assert.ok(Math.abs(r.bz15max.__room - r.maxC.Mn) < 0.01 * r.maxC.Mn + 0.002);
   const q = shiftParams('constant'); q.duration = 3000; q.schedule = () => false; q.nearField = { r: 1, s: 0.1 };
   const z = simulate(demoNetwork(), q); assert.ok(Math.abs(z.bz15max.post1 - q.substances[0].qIn) < 1e-12);
+});
+
+// ---------- российские нормативные величины (norms.ts)
+import * as N from '../src/engine/norms.ts';
+test('Реестр норм: значения совпадают с первоисточниками РФ', () => {
+  assert.equal(N.ETA_LEV_DEFAULT, 0.8);                 // Методика 1997, разд. 2.1, прим. 1
+  assert.equal(N.K_SETTLE, 0.4);                        // Методика 1997, разд. 2.3
+  assert.deepEqual(N.SV08G2S, { aerosol: 10.0, fe: 7.67, mn: 1.90, sio2: 0.43 });   // табл. 1
+  assert.ok(Math.abs(N.SV08G2S.fe + N.SV08G2S.mn + N.SV08G2S.sio2 - N.SV08G2S.aerosol) < 1e-9);  // компоненты = аэрозоль
+  assert.equal(N.Q_POST_MIN_M3H, 1500);                 // ГОСТ 12.3.003-86 п. 2.11.1
+  assert.equal(N.W_MIN_WELDING, 8);                     // Боломатов, АВОК 2021, табл. 4
+  assert.deepEqual(N.MOSCOW_HEATING, { days: 202, tAvg: -1.7 });   // СП 131.13330.2025
+  assert.ok(N.ACTUATOR_TIMES_GOST7192.includes(8) && N.ACTUATOR_TIMES_GOST7192.includes(15) && N.ACTUATOR_TIMES_GOST7192.includes(30));
+  assert.equal(shiftParams('adaptive').damperStroke, 8);
+  assert.ok(Math.abs(shiftParams('constant').room.dT - 19.7) < 1e-12);
+});
+
+test('КПД двигателя по разделению потерь (Копылов): η(1) = η_ном, максимум при β = √k ≈ 0,71, монотонный рост до максимума', () => {
+  const eN = 0.867;
+  assert.ok(Math.abs(N.motorEfficiency(1, eN) - eN) < 1e-12);
+  let best = 0, bArg = 0; for (let b = 0.01; b <= 1.2; b += 0.001) { const e = N.motorEfficiency(b, eN); if (e > best) { best = e; bArg = b; } }
+  assert.ok(Math.abs(bArg - Math.sqrt(0.5)) < 0.002, `максимум при β = ${bArg.toFixed(3)}`);
+  assert.ok(N.motorEfficiency(0.25, eN) < N.motorEfficiency(0.5, eN) && N.motorEfficiency(0.1, eN) < N.motorEfficiency(0.25, eN));
+});
+
+test('Оседание (Методика, K = 0,4): установившаяся концентрация в цехе уменьшается ровно в 0,4 раза над фоном; газ не оседает', () => {
+  const mk = (k?: number) => { const p = shiftParams('constant'); p.duration = 30000; p.record = 100; p.schedule = () => true; p.room.kSettle = k; return p; };
+  const a = simulate(demoNetwork(), mk()).series.at(-1)!, b = simulate(demoNetwork(), mk(0.4)).series.at(-1)!;
+  const q = shiftParams('constant').substances[0].qIn;
+  assert.ok(Math.abs((b.C.Mn - q) / (a.C.Mn - q) - 0.4) < 0.01, `${((b.C.Mn - q) / (a.C.Mn - q)).toFixed(4)}`);
 });

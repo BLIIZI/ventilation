@@ -3,18 +3,20 @@
 // 2) регуляторы задают целевые углы заслонок и частоту вентилятора (по режиму управления);
 // 3) приводы отрабатывают с ограниченной скоростью (время полного хода);
 // 4) сеть решается квазистационарно (блок 2): время прохода воздуха по сети — секунды [Д];
-// 5) концентрация в цехе — уравнение баланса массы при полном перемешивании [М];
+// 5) концентрация в цехе — нестационарное уравнение баланса вредных веществ при полном перемешивании V·dC/dτ = G − L(C − C_пр);
+//    стационарное решение — формула СП 60.13330.2020 (прил. И) [Н]; нестационарная форма — Эльтерман В.М. Вентиляция химических производств. — М.: Химия, 1980 [С][П: стр.];
 // 6) интегрируются энергия вентилятора и тепло на подогрев приточного воздуха.
 import { solve } from './network.ts';
 import type { Network, Solution } from './network.ts';
 import { damperZeta, damperAngleForZeta, area } from './physics.ts';
+import { RHO_AIR, C_AIR } from './norms.ts';
 
 export type Mode = 'constant' | 'onoff' | 'adaptive';
 // constant  — без регулирования: заслонки открыты, вентилятор 100 % всю смену
 // onoff     — промышленный стандарт: заслонка открыта/закрыта по датчику тока, ЧП держит постоянное разрежение
 // adaptive  — предлагаемая система: ПИ-регулятор расхода в каждой ветви + сброс давления (критическая ветвь открыта)
 
-export interface Substance { name: string; g: number; pdk: number; qIn: number; } // g, г/кг; ПДК, q_пр — мг/м³
+export interface Substance { name: string; g: number; pdk: number; qIn: number; settles?: boolean; } // g, г/кг; ПДК, q_пр — мг/м³; settles=false — газ (не оседает)
 export interface PostSpec { id: string; B: number; Qset: number; etaNom: number; current?: (t: number) => number; etaReal?: number; }
 // etaReal — фактическая эффективность захвата (если отличается от принятой в расчёте η_ном): проверка устойчивости к ошибке модели
 // B кг/ч (если current не задан), Qset м³/с; current(t) — сварочный ток, А → B по таблице проволоки
@@ -40,7 +42,9 @@ export interface SimParams {
   schedule: (post: string, t: number) => boolean;   // работает ли пост
   posts: PostSpec[];
   substances: Substance[];
-  room: { V: number; Lgen: number; dT: number; LgenPerPost?: number; LgenMin?: number };
+  room: { V: number; Lgen: number; dT: number; LgenPerPost?: number; LgenMin?: number; kSettle?: number };
+  // kSettle — доля аэрозоля, остающаяся во взвешенном состоянии (оседание). По умолчанию 1 (оседание не учитывается — запас).
+  // Вариант: 0,4 — коэффициент гравитационного оседания по Методике 1997, разд. 2.3 [Н]
   // объём м³; общеобменная м³/с (постоянная) или по потребности: LgenMin + LgenPerPost·(число работающих постов); Δt, °C
   damperStroke: number;  // время полного хода привода 0→90°, с
   fanRamp: number;       // время разгона ЧП 0→nMax, с
@@ -53,7 +57,10 @@ export interface SimParams {
   wire?: Array<[number, number]>;  // таблица «ток, А → расход проволоки, кг/ч»
   gen?: GenVent;
   nearField?: { r: number; s: number };
-  // модель «ближняя зона / дальняя зона» (Nicas, 1996; AIHA, 2009): C_дых = C_цеха + G_ут/β, β = ½·S·s,
+  // ОЦЕНКА концентрации в зоне дыхания. Российского нормативного метода расчёта нет: по нормам РФ концентрацию в зоне дыхания ИЗМЕРЯЮТ
+  // (ГОСТ 12.1.005-88; СанПиН 1.2.3685-21). Для оценки — модель «ближняя/дальняя зона» (Nicas, 1996; AIHA, 2009 — зарубежный метод):
+  // C_дых = C_цеха + G_ут/β, β = ½·S·s. Проверка порядка величины по российскому источнику: в зоне дыхания сварщика содержание вредных
+  // веществ выше фона цеха в 7–10 раз (Гримитлин А.М. Вентиляция сварочного производства // АВОК Северо-Запад, 2006, с. 36).
   // S = 2πr² — поверхность полусферы радиуса r над столом, s — случайная скорость воздуха в цехе, м/с [Д]
   wMin?: number;   // минимальная транспортная скорость в воздуховодах, м/с (контроль осаждения пыли)
   nConst?: number;                     // частота для режима constant (расчётный режим после наладки)   // упреждение: расчётная частота для данного набора работающих постов (из balance)           // коэффициент интегрального регулятора расхода (в пространстве ln ζ), 1/с
@@ -74,7 +81,9 @@ export interface SimResult {
   nonConverged: number;            // число шагов, где решатель сети не сошёлся (должно быть 0)
 }
 
-const HEAT_COEF = 1.2; // кВт на 1 м³/с на 1 °C (Kulmala, VTT, 2015) [М]
+// Теплота на нагрев приточного воздуха Q = ρ·c·L·(t_в − t_н), кВт — уравнение теплового баланса (Богословский В.Н. и др. Отопление и вентиляция. Ч. 2.
+// — М.: Стройиздат, 1976 [С]); ρ = 1,2 кг/м³ (ГОСТ 10921-2017), c = 1,005 кДж/(кг·°C) (Варгафтик, 1972)
+const HEAT_COEF = RHO_AIR * C_AIR; // 1,206 кВт на 1 м³/с на 1 °C
 
 export function interp(tab: Array<[number, number]>, x: number) {
   if (x <= tab[0][0]) return tab[0][1] * x / tab[0][0];           // ниже первой точки — пропорционально [Д]
@@ -210,7 +219,7 @@ export function createSimulator(net: Network, p: SimParams) {
       let Groom = 0; // мг/с
       for (const ps of p.posts) if (on[ps.id]) {
         const eta = (ps.etaReal ?? ps.etaNom) * Math.min(1, Q(ps.id) / ps.Qset);
-        Groom += (1 - eta) * s.g * 1000 * Bof(ps, t) / 3600;
+        Groom += (1 - eta) * s.g * 1000 * Bof(ps, t) / 3600 * (s.settles === false ? 1 : (p.room.kSettle ?? 1));
       }
       C[s.name] += p.dt * (Groom - Lout * (C[s.name] - s.qIn)) / p.room.V;
       maxC[s.name] = Math.max(maxC[s.name], C[s.name]); sumC[s.name] += C[s.name] * p.dt;

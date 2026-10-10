@@ -1,7 +1,8 @@
 // Физические зависимости. Внутри — СИ: м, м³/с, Па, кг/м³.
 // Каждая функция помечена источником и статусом: [Н] норматив, [М] инженерная модель, [Д] допущение, [П] требует проверки.
 
-export const AIR = { rho: 1.2, nu: 15.06e-6 }; // [М] воздух при +20 °C (плотность и кинематическая вязкость)
+import { RHO_AIR, NU_AIR, KE_STEEL, motorEfficiency } from './norms.ts';
+export const AIR = { rho: RHO_AIR, nu: NU_AIR }; // ГОСТ 10921-2017; Варгафтик, 1972 — см. norms.ts
 
 export const m3h = (q: number) => q / 3600;      // м³/ч -> м³/с
 export const toM3h = (q: number) => q * 3600;    // м³/с -> м³/ч
@@ -16,7 +17,7 @@ export const dynPressure = (w: number, rho = AIR.rho) => rho * w * w / 2;
 /** Коэффициент трения по формуле А.Д. Альтшуля λ = 0,11·(kэ/d + 68/Re)^0,25 [М]
  *  Альтшуль А.Д. Гидравлические сопротивления. — М.: Недра, 1982.
  *  Проверено: воспроизводит λ·l/d из таблицы 4.1 диплома (kэ = 0,1 мм). */
-export function lambdaAltshul(w: number, d: number, ke = 0.1e-3, nu = AIR.nu): number {
+export function lambdaAltshul(w: number, d: number, ke = KE_STEEL, nu = AIR.nu): number {
   const Re = Math.max(Math.abs(w) * d / nu, 1);
   if (Re < 2300) return 64 / Re; // ламинарный режим (Пуазейль) — на практике в вентиляции не встречается
   return 0.11 * Math.pow(ke / d + 68 / Re, 0.25);
@@ -24,7 +25,7 @@ export function lambdaAltshul(w: number, d: number, ke = 0.1e-3, nu = AIR.nu): n
 
 /** Потери давления на участке воздуховода Δp = (λ·l/d + Σζ)·pд, Па [М]
  *  Формула Дарси–Вейсбаха + местные сопротивления (Идельчик И.Е., 1992; Посохин В.Н., 2008). */
-export function ductLoss(Q: number, d: number, l: number, sumZeta: number, ke = 0.1e-3): number {
+export function ductLoss(Q: number, d: number, l: number, sumZeta: number, ke = KE_STEEL): number {
   const w = velocity(Math.abs(Q), d);
   const lam = lambdaAltshul(w, d, ke);
   return (lam * l / d + sumZeta) * dynPressure(w) * Math.sign(Q);
@@ -61,31 +62,28 @@ export function damperAngleForZeta(zeta: number, table = BUTTERFLY_ROUND): numbe
 
 // ---------- Вентилятор
 /** Характеристика вентилятора по точкам каталога (Q м³/ч, p Па) при n0 об/мин.
- *  Пересчёт на другую частоту — законы подобия: Q~n, p~n², N~n³ [М]
- *  (U.S. DOE. Improving Fan System Performance: A Sourcebook for Industry, 2003). */
+ *  Пересчёт на другую частоту — законы подобия (пропорциональности): Q~n, p~n², N~n³.
+ *  ГОСТ 10921-2017, разд. 14 «Правила пересчёта аэродинамических характеристик», прил. К [Н]; Калинушкин М.П. Вентиляторные установки. — М.: Высшая школа, 1979 [С]. */
 export interface FanCurve {
   n0: number; points: Array<[number, number]>; eta: number;   // eta — КПД вентилятора (на валу)
   motorW?: number; motorEta?: number;   // номинальная мощность и КПД двигателя; если заданы — считается электрическая мощность с ЧП
 }
 
-/** КПД частотного преобразователя от нагрузки (доля номинальной мощности ЧП).
- *  US DOE, Motor Systems Tip Sheet #11 «Adjustable Speed Drive Part-Load Efficiency», табл. 1, строка 5 hp (типовой ШИМ-ЧП). [Н/справ.] */
+/** КПД частотного преобразователя от нагрузки (доля номинальной мощности ПЧ).
+ *  [Д] Российского нормативного ЧИСЛОВОГО значения нет: методика определения потерь ПЧ — ГОСТ IEC 61800-9-2-2021 (с 01.01.2022), значения — по паспорту
+ *  конкретного ПЧ. До получения паспорта приняты типовые значения ШИМ-ПЧ 5 л.с. (US DOE Motor Tip Sheet #11, табл. 1) — указывать как зарубежный справочный. */
 export const VFD_EFF: Array<[number, number]> = [[0.016, 0.35], [0.125, 0.80], [0.25, 0.88], [0.42, 0.91], [0.5, 0.92], [0.75, 0.94], [1.0, 0.95]];
-/** Относительный КПД асинхронного двигателя при частичной нагрузке (к номинальному). [Д][П]
- *  50–100 %: по каталогам IE3 КПД практически постоянен; ниже 50 % падает (DOE, «Determining Electric Motor Load and Efficiency»).
- *  Точки ниже 50 % — оценка, уточнить по каталогу конкретного двигателя. */
-export const MOTOR_REL: Array<[number, number]> = [[0.05, 0.55], [0.1, 0.75], [0.25, 0.93], [0.5, 1.0], [1.0, 1.0]];
 function tab(t: Array<[number, number]>, x: number) {
   if (x <= t[0][0]) return t[0][1];
   for (let i = 1; i < t.length; i++) if (x <= t[i][0]) { const [x0, y0] = t[i - 1], [x1, y1] = t[i]; return y0 + (x - x0) * (y1 - y0) / (x1 - x0); }
   return t[t.length - 1][1];
 }
-/** Электрическая мощность из сети: P_эл = P_вал / (η_дв(β)·η_ЧП(β)), β = P_вал / P_ном */
+/** Электрическая мощность из сети: P_эл = P_вал / (η_дв(β)·η_ПЧ(β)), β = P_вал / P_ном; η_дв(β) — разделение потерь (Копылов; norms.ts) */
 export function electricPower(fan: FanCurve, shaftW: number): number {
   if (shaftW <= 0) return 0;
   if (!fan.motorW || !fan.motorEta) return shaftW;
   const beta = shaftW / fan.motorW;
-  return shaftW / (fan.motorEta * tab(MOTOR_REL, beta) * tab(VFD_EFF, beta));
+  return shaftW / (motorEfficiency(beta, fan.motorEta) * tab(VFD_EFF, beta));
 }
 
 export function fanPressure(fan: FanCurve, Q: number, n: number): number {
@@ -110,8 +108,10 @@ export function fanPressure(fan: FanCurve, Q: number, n: number): number {
 export const fanPower = (fan: FanCurve, Q: number, p: number) => Math.max(0, Q * p) / fan.eta; // < 0 физически невозможно для вентилятора: за пределами характеристики мощность 0 [М]
 
 // ---------- Фильтр
-/** Сопротивление фильтра Δp = Δp_ном·(Q/Q_ном)^m·k_загр [М/Д]
- *  m = 1…2 (1 — ламинарная фильтрация через слой, 2 — квадратичный закон); k_загр ≥ 1 — коэффициент загрязнения. */
+/** Сопротивление фильтра Δp = Δp_ном·(Q/Q_ном)^m·k_загр.
+ *  m = 1: сопротивление фильтровальной перегородки и слоя пыли пропорционально скорости фильтрации (закон Дарси) —
+ *  Ужов В.Н., Мягков Б.И. Очистка промышленных газов фильтрами. — М.: Химия, 1970; Штокман Е.А. Очистка воздуха. — М.: АСВ, 1999 [С][П: стр.].
+ *  Δp_ном (чистый) и конечное — по паспорту фильтра; k_загр ≥ 1 — коэффициент загрязнения. */
 export interface FilterSpec { dpNom: number; qNom: number; m: number; fouling: number; }
 export const filterLoss = (f: FilterSpec, Q: number) =>
   f.dpNom * Math.pow(Math.abs(Q) / f.qNom, f.m) * f.fouling * Math.sign(Q);
