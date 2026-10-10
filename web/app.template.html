@@ -56,6 +56,19 @@ input[type=range]{width:100%;accent-color:var(--air)}
 .trend canvas{width:100%;height:120px;display:block}
 .note{font-size:11.5px;color:var(--faint)}
 .alert{color:var(--crit)}
+select,input[type=number]{background:var(--panel-2);border:1px solid var(--line);color:var(--fg);font:13px var(--body);border-radius:6px;padding:4px 6px;min-width:0}
+select{max-width:100%}
+.cfg{display:grid;grid-template-columns:1fr;gap:5px;grid-column:1/-1}
+.cfg label{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.cfg label.wide{grid-template-columns:1fr}
+.src{font-size:11px;color:var(--faint);grid-column:1/-1}
+.subs{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.subs td,.subs th{padding:3px 4px;border-bottom:1px solid var(--line);text-align:right}
+.subs th{color:var(--faint);font-weight:500}
+.subs td:first-child,.subs th:first-child{text-align:left}
+.subs tr.lim td{color:var(--warn)}
+.subs .st{color:var(--faint);font-size:10.5px}
+details summary{cursor:pointer;color:var(--muted);font-size:12px}
 @media (max-width:980px){
   html,body{height:auto}
   .app{height:auto}
@@ -69,7 +82,7 @@ input[type=range]{width:100%;accent-color:var(--air)}
 
 <div class="app">
   <header>
-    <h1>Цифровой двойник вытяжки<small>3 сварочных поста MAG · местная вытяжка + общеобменная вентиляция</small></h1>
+    <h1>Цифровой двойник вытяжки<small>3 поста · процесс на каждом выбирается из библиотеки (российские методики) · местная вытяжка + общеобменная</small></h1>
     <div class="spacer"></div>
     <div><div class="label">Показать в 3D</div>
       <div class="seg" id="viewSeg">
@@ -108,10 +121,10 @@ input[type=range]{width:100%;accent-color:var(--air)}
           <span></span><span class="h">Пром. стандарт</span><span class="h">Предлагаемая</span>
           <span>Вентиляторы, кВт·ч</span><b id="eA">0</b><b id="eB">0</b>
           <span>Нагрев притока, кВт·ч</span><b id="hA">0</b><b id="hB">0</b>
-          <span>Марганец ср., мг/м³</span><b id="mA">0</b><b id="mB">0</b>
+          <span>Худшее Σ C/ПДК, макс.</span><b id="mA">0</b><b id="mB">0</b>
           <div class="save" id="saving">—</div>
         </div>
-        <p class="note">Полная смена на скорости ×300 — около полутора минут. Пром. стандарт: заслонки «открыто/закрыто», постоянное разрежение, общеобменная — проектный расход. Предлагаемая: регулирование расхода каждого поста, сброс давления, общеобменная по току сварки и датчику.</p>
+        <p class="note">Полная смена на скорости ×300 — около полутора минут. Пром. стандарт: заслонки «открыто/закрыто», постоянное разрежение, общеобменная — проектный расход по всем веществам. Предлагаемая: регулирование расхода каждого поста, сброс давления, общеобменная по выделениям процессов + датчики аэрозоля, NO₂ и CO (цель Σ C/ПДК ≤ 0,5).</p>
       </div>
       <div id="posts"></div>
       <div class="card sys">
@@ -129,20 +142,22 @@ input[type=range]{width:100%;accent-color:var(--air)}
         <div class="label">Воздух в цехе</div>
         <div class="kv" style="margin-top:6px">
           <div><b id="lgen">—</b><span>общеобменная, м³/ч</span></div>
-          <div><b id="mn">—</b><span>марганец, мг/м³ (ПДК 0,2)</span></div>
+          <div><b id="mn">—</b><span>худшее Σ C/ПДК</span></div>
           <div><b id="sens">—</b><span>датчик аэрозоля, мг/м³</span></div>
           <div><b id="heat">—</b><span>нагрев притока, кВт</span></div>
         </div>
+        <table class="subs" style="margin-top:8px"><thead><tr><th>Вещество</th><th>C, мг/м³</th><th>ПДК</th><th>C/ПДК</th></tr></thead><tbody id="subsBody"></tbody></table>
+        <p class="note" id="designNote"></p>
       </div>
-      <p class="note">Демонстрационная модель: геометрия сети, характеристика вентилятора и заслонки — условные. Расчёт — блоки 1–4 модели, 19 автотестов.</p>
+      <p class="note">Удельные выделения — методики перечня Минприроды (сварка, резка, мехобработка, покраска, гальваника); ПДК — СанПиН 1.2.3685-21; нормы отсоса — ГОСТ 12.3.003-86 и др. Сеть и вентилятор подбираются автоматически под выбранные посты (геометрия условная). 76 автотестов.</p>
     </aside>
   </main>
 
   <section class="trends">
-    <div class="trend"><div class="t"><span>Расход постов, м³/ч</span><span>— требуется 1500</span></div><canvas id="c1"></canvas></div>
+    <div class="trend"><div class="t"><span>Расход постов, доля уставки</span><span>— 100 %</span></div><canvas id="c1"></canvas></div>
     <div class="trend"><div class="t"><span>Открытие заслонок, %</span><span>последние 15 мин</span></div><canvas id="c2"></canvas></div>
     <div class="trend"><div class="t"><span>Вентилятор, об/мин</span><span id="c3l"></span></div><canvas id="c3"></canvas></div>
-    <div class="trend"><div class="t"><span>Марганец в цехе, мг/м³</span><span>— ПДК 0,2</span></div><canvas id="c4"></canvas></div>
+    <div class="trend"><div class="t"><span>Худшее Σ C/ПДК в цехе</span><span>— ПДК (1) и цель (0,5)</span></div><canvas id="c4"></canvas></div>
   </section>
 </div>
 
@@ -157,52 +172,103 @@ const COL = { post1: '#2a78d6', post2: '#eb6834', post3: '#1baf7a' };
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 // ---------- состояние интерфейса
-const ui = { auto: true, view: 'B', speed: 10, paused: false, posts: Object.fromEntries(IDS.map(id => [id, { on: false, I: 225 }])), fouling: 1 };
-let shift = E.makeShift(IDS, 8 * 3600, 7);
-const isOn = (id, t) => ui.auto ? shift.schedule(id, t % (8 * 3600)) : ui.posts[id].on;
-const curOf = (id, t) => ui.auto ? (shift.current(id)(t % (8 * 3600)) || 225) : ui.posts[id].I;
+const WIN = 900;
+const fmt = (v, d = 0) => (Number.isFinite(v) ? v : 0).toLocaleString('ru-RU', { minimumFractionDigits: d, maximumFractionDigits: d });
+const setPressed = (seg, btn) => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+const cfg = [
+  { id: 'post1', process: 'mag_co2', material: 'sv08g2s', params: { I: 225, d: 1.2 }, hood: 'table', eta: 0.8 },
+  { id: 'post2', process: 'mma', material: 'uoni1345', params: { B: 1.5 }, hood: 'table', eta: 0.8 },
+  { id: 'post3', process: 'gas_cut', material: 'carbon', params: { thick: 10, area: 1 }, hood: 'cut_gas', eta: 0.8 },
+];
+const ui = { auto: true, view: 'B', speed: 10, paused: false, posts: Object.fromEntries(IDS.map(id => [id, { on: false }])), fouling: 1 };
+let shift = E.makeSchedule(IDS, 8 * 3600, 7);
+const isOn = (id, t) => ui.auto ? shift(id, t % (8 * 3600)) : ui.posts[id].on;
 
-// ---------- две модели параллельно: A — пром. стандарт, B — предлагаемая
-const com = E.commissioning();
+// ---------- две модели параллельно: A — пром. стандарт, B — предлагаемая (сеть и вентилятор подбираются под посты)
+let report = null, groups = [];
 function build(kind) {
-  const p = E.shift4(kind === 'B' ? 'fffb' : 'const');
-  p.record = undefined; p.duration = 1e12;
-  p.schedule = isOn;
-  p.posts.forEach(ps => (ps.current = t => curOf(ps.id, t)));
-  if (kind === 'A') { p.mode = 'onoff'; p.nFF = undefined; p.pSet = com.pSet; }
-  const net = E.demoNetwork();
-  return { sim: E.createSimulator(net, p), net, last: null, hist: [] };
+  const pl = E.buildPlant({ posts: cfg, lev: kind === 'B' ? 'adaptive' : 'onoff', gen: kind === 'B' ? 'fffb' : 'const', gasSensors: ['no2', 'co'] });
+  const p = pl.params; p.record = undefined; p.duration = 1e12; p.schedule = isOn;
+  if (kind === 'A') p.nFF = undefined;
+  report = pl.report;
+  const g = new Map(); for (const s of p.substances) if (Number.isFinite(s.pdk)) { const k = s.group ?? s.name; if (!g.has(k)) g.set(k, []); g.get(k).push(s); }
+  groups = [...g.values()];
+  return { sim: E.createSimulator(pl.net, p), net: pl.net, last: null, hist: [], params: p };
 }
+const worstRatio = C => groups.reduce((w, mem) => Math.max(w, mem.reduce((a, s) => a + C[s.name] / s.pdk, 0)), 0);
 let A, B;
-function reset() { A = build('A'); B = build('B'); shift = E.makeShift(IDS, 8 * 3600, 7); applyFouling(); }
+function reset() { A = build('A'); B = build('B'); shift = E.makeSchedule(IDS, 8 * 3600, 7); applyFouling(); renderDesign(); warm(); }
 function applyFouling() { for (const m of [A, B]) m.net.common[0].spec.fouling = ui.fouling; }
-reset();
+function warm() { for (let i = 0; i < 1200; i++) for (const m of [A, B]) { m.last = m.sim.step(); m.hist.push(m.last); if (m.hist.length > WIN) m.hist.shift(); } }
 
-// ---------- карточки постов
+// ---------- карточки постов: выбор процесса, материала, параметров, отсоса
 const postsEl = document.getElementById('posts');
-postsEl.innerHTML = IDS.map((id, i) => `
+const PROCS = E.PROCESSES, procGroups = [...new Set(PROCS.map(p => p.group))];
+const fmtN = v => String(v).replace('.', ',');
+function cardHtml(id, i) {
+  const c = cfg[i], pr = E.processById(c.process);
+  const procOpts = procGroups.map(g => `<optgroup label="${g}">${PROCS.filter(p => p.group === g).map(p => `<option value="${p.id}" ${p.id === c.process ? 'selected' : ''}>${p.name}</option>`).join('')}</optgroup>`).join('');
+  const matOpts = pr.materials.map(m => `<option value="${m.id}" ${m.id === c.material ? 'selected' : ''}>${m.name}${m.status === 'П' ? ' [сверить]' : m.status === 'ввести' ? ' [ввести показатели]' : ''}</option>`).join('');
+  const hoodOpts = pr.hoods.map(h => `<option value="${h.id}" ${h.id === c.hood ? 'selected' : ''}>${h.label}</option>`).join('');
+  const hoodNow = (pr.hoods.find(h => h.id === c.hood) ?? pr.hoods[0]).id;
+  const params = [...pr.params, ...(hoodNow === 'user' ? [E.P_Q] : [])].map(d => `<label>${d.label}, ${d.unit}<input type="number" data-p="${d.id}" min="${d.min}" max="${d.max}" step="${d.step}" value="${c.params?.[d.id] ?? d.def}"></label>`).join('');
+  const mat = pr.materials.find(m => m.id === c.material) ?? pr.materials[0];
+  const facts = mat.status === 'ввести' ? Object.keys(mat.factors).map(k => `<label>${E.SUBSTANCES[k].name}, ${pr.unit}<input type="number" data-f="${k}" min="0" step="0.001" value="${c.factorsOverride?.[k] ?? 0}"></label>`).join('') : '';
+  return `
   <div class="card post" id="card-${id}">
     <h3><i style="background:${COL[id]}"></i>Пост ${i + 1}</h3>
     <span class="pill" id="pill-${id}">простой</span>
-    <div class="row">
-      <button class="btn" id="tog-${id}" aria-pressed="false">Начать сварку</button>
-      <div class="seg" id="cur-${id}">${[175, 225, 270].map(I => `<button data-i="${I}" aria-pressed="${I === 225}">${I} А</button>`).join('')}</div>
+    <div class="cfg">
+      <label class="wide"><select data-k="process" aria-label="Процесс">${procOpts}</select></label>
+      <label class="wide"><select data-k="material" aria-label="Материал">${matOpts}</select></label>
+      ${params}${facts}
+      <label class="wide"><select data-k="hood" aria-label="Местный отсос">${hoodOpts}</select></label>
+      <label>Захват отсоса η (Методика: 0,8)<input type="number" data-k="eta" min="0.3" max="0.99" step="0.01" value="${c.eta ?? 0.8}"></label>
     </div>
+    <div class="src" id="src-${id}"></div>
+    <div class="row"><button class="btn" id="tog-${id}" aria-pressed="false">Включить</button></div>
     <div class="kv">
       <div><b id="q-${id}">—</b><span>расход, м³/ч</span></div>
       <div><b id="o-${id}">—</b><span>открытие, %</span></div>
       <div><b id="a-${id}">—</b><span>угол заслонки</span></div>
     </div>
     <div class="bar"><div id="bar-${id}"></div></div>
-  </div>`).join('');
-const setPressed = (seg, btn) => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
-for (const id of IDS) {
-  document.getElementById(`tog-${id}`).onclick = () => { setAuto(false); ui.posts[id].on = !ui.posts[id].on; };
-  const seg = document.getElementById(`cur-${id}`);
-  seg.onclick = e => { const b = e.target.closest('button'); if (!b) return; setAuto(false); ui.posts[id].I = +b.dataset.i; setPressed(seg, b); };
+  </div>`;
 }
+function renderCards() {
+  postsEl.innerHTML = IDS.map((id, i) => cardHtml(id, i)).join('');
+  IDS.forEach((id, i) => {
+    const card = document.getElementById(`card-${id}`), c = cfg[i];
+    document.getElementById(`tog-${id}`).onclick = () => { setAuto(false); ui.posts[id].on = !ui.posts[id].on; };
+    card.querySelectorAll('select[data-k]').forEach(el => el.onchange = () => {
+      const k = el.dataset.k;
+      if (k === 'process') { const pr = E.processById(el.value); c.process = el.value; c.material = pr.materials[0].id; c.hood = pr.hoods[0].id; c.params = {}; c.factorsOverride = undefined; }
+      else c[k] = el.value;
+      if (k === 'material') c.factorsOverride = undefined;
+      renderCards(); reset();
+    });
+    card.querySelector('input[data-k="eta"]').onchange = e => { c.eta = Math.min(0.99, Math.max(0.3, +e.target.value)); reset(); };
+    card.querySelectorAll('input[data-p]').forEach(el => el.onchange = () => {
+      c.params = { ...(c.params ?? {}), [el.dataset.p]: +el.value };
+      // параметры, от которых зависит норма отсоса (площадь, проём, скорость), требуют пересборки сети; остальные действуют сразу
+      if (['area', 'open', 'v', 'Q'].includes(el.dataset.p)) reset(); else renderDesign();
+    });
+    card.querySelectorAll('input[data-f]').forEach(el => el.onchange = () => { c.factorsOverride = { ...(c.factorsOverride ?? {}), [el.dataset.f]: +el.value }; reset(); });
+  });
+}
+function renderDesign() {
+  const d = E.designReport(cfg);
+  IDS.forEach((id, i) => {
+    const q = E.qminOf(cfg[i]), em = d.em[i], top = Object.entries(em).filter(([k]) => k !== 'aerosol').sort((a, b) => b[1] - a[1]).slice(0, 3);
+    document.getElementById(`src-${id}`).innerHTML = `Уставка отсоса ${fmt(E.qsetOf(cfg[i]))} м³/ч — ${q.source}<br>Выделение: ${top.map(([k, v]) => `${E.SUBSTANCES[k].name.split(' (')[0]} ${fmt(v * 3.6, 2)} г/ч`).join('; ') || 'нет (ввести показатели)'}`;
+  });
+  const lim = report ? report.substances[0] : null;
+  document.getElementById('designNote').innerHTML = report ? `Расчётная общеобменная (все посты, C = ПДК): <b>${fmt(report.Ldesign)} м³/ч</b>, лимитирует: <b>${lim ? lim.name : '—'}</b>${report.mnCategory ? `; доля Mn в аэрозоле цеха ${fmt(report.mnShare * 100, 1)} % → ПДК Mn по категории «${report.mnCategory}»` : ''}. Вещества с пометкой «сверить» — ПДК по ГН, сверить по СанПиН.` : '';
+}
+renderCards();
+reset();
 function setAuto(v) {
-  if (ui.auto && !v) { const t = B.sim.time(); for (const id of IDS) { ui.posts[id].on = isOn(id, t); ui.posts[id].I = curOf(id, t); } }
+  if (ui.auto && !v) { const t = B.sim.time(); for (const id of IDS) ui.posts[id].on = isOn(id, t); }
   ui.auto = v; const seg = document.getElementById('autoSeg'); setPressed(seg, seg.querySelector(`[data-a="${v ? 1 : 0}"]`));
 }
 document.getElementById('autoSeg').onclick = e => { const b = e.target.closest('button'); if (b) setAuto(b.dataset.a === '1'); };
@@ -311,7 +377,6 @@ function resize() { const w = host.clientWidth, h = host.clientHeight; renderer.
 new ResizeObserver(resize).observe(host); resize();
 
 // ---------- тренды (последние 15 минут модельного времени)
-const WIN = 900;
 const charts = ['c1', 'c2', 'c3', 'c4'].map(id => document.getElementById(id));
 function drawChart(cv, series, yMax, lines = []) {
   const dpr = Math.min(devicePixelRatio, 2), w = cv.clientWidth, h = cv.clientHeight;
@@ -330,7 +395,6 @@ function drawChart(cv, series, yMax, lines = []) {
 }
 
 // ---------- цикл
-const fmt = (v, d = 0) => v.toLocaleString('ru-RU', { minimumFractionDigits: d, maximumFractionDigits: d });
 let acc = 0, prev = performance.now(), frame = 0;
 function tick(now) {
   const dtR = Math.min((now - prev) / 1000, 0.1); prev = now;
@@ -348,7 +412,7 @@ function tick(now) {
       placeParticles(id, s.Q[id], dtR * Math.min(ui.speed, 10) / 3);
     }
     rotor.rotation.z -= dtR * s.n / 60 * 2 * Math.PI * 0.05;
-    scene.fog.density = 0.006 + 0.025 * Math.min(s.C.Mn / 0.2, 1.5);
+    scene.fog.density = 0.006 + 0.025 * Math.min(worstRatio(s.C), 1.5);
     if (frame++ % 6 === 0) updatePanel();
   }
   controls.update(); renderer.render(scene, camera);
@@ -358,40 +422,39 @@ function updatePanel() {
   const m = ui.view === 'B' ? B : A, s = m.last, t = s.t;
   const hh = Math.floor(t / 3600), mm = Math.floor(t % 3600 / 60), ss = Math.floor(t % 60);
   document.getElementById('clock').textContent = [hh, mm, ss].map(v => String(v).padStart(2, '0')).join(':');
-  for (const id of IDS) {
-    const on = s.on[id], pill = document.getElementById(`pill-${id}`);
-    pill.textContent = on ? `сварка ${curOf(id, t)} А` : 'простой'; pill.classList.toggle('on', on);
-    document.getElementById(`tog-${id}`).textContent = (ui.auto ? on : ui.posts[id].on) ? 'Остановить' : 'Начать сварку';
+  IDS.forEach((id, i) => {
+    const on = s.on[id], pill = document.getElementById(`pill-${id}`), qs = m.params.posts[i].Qset * 3600;
+    pill.textContent = on ? 'работает' : 'простой'; pill.classList.toggle('on', on);
+    document.getElementById(`tog-${id}`).textContent = (ui.auto ? on : ui.posts[id].on) ? 'Остановить' : 'Включить';
     document.getElementById(`q-${id}`).textContent = fmt(s.Q[id]);
-    const open = 100 - s.alpha[id] / 0.9;
-    document.getElementById(`o-${id}`).textContent = fmt(open);
+    document.getElementById(`o-${id}`).textContent = fmt(100 - s.alpha[id] / 0.9);
     document.getElementById(`a-${id}`).textContent = fmt(s.alpha[id]) + '°';
-    document.getElementById(`bar-${id}`).style.width = Math.min(100, s.Q[id] / 2000 * 100) + '%';
-    { const seg = document.getElementById(`cur-${id}`), I = curOf(id, t); setPressed(seg, seg.querySelector(`[data-i="${I}"]`)); }
-  }
+    document.getElementById(`bar-${id}`).style.width = Math.min(100, s.Q[id] / qs * 75) + '%';
+  });
   document.getElementById('fanN').textContent = fmt(s.n);
   document.getElementById('fanP').textContent = fmt(s.pFan);
   document.getElementById('fanW').textContent = fmt(s.P / 1000, 2);
   document.getElementById('qTot').textContent = fmt(s.Qtot);
   document.getElementById('lgen').textContent = fmt(s.Lgen);
-  const mnEl = document.getElementById('mn'); mnEl.textContent = fmt(s.C.Mn, 3); mnEl.classList.toggle('alert', s.C.Mn > 0.2);
+  const wr = worstRatio(s.C), mnEl = document.getElementById('mn'); mnEl.textContent = fmt(wr, 2); mnEl.classList.toggle('alert', wr > 1);
   document.getElementById('sens').textContent = fmt(s.sensor, 2);
   document.getElementById('heat').textContent = fmt(s.heat, 1);
+  document.getElementById('subsBody').innerHTML = report.substances.map((x, k) => { const c = s.C[x.id] ?? 0, r = c / x.pdk;
+    return `<tr class="${k === 0 ? 'lim' : ''}"><td>${E.SUBSTANCES[x.id].name.split(' (')[0]}${x.status === 'П' ? ' <span class="st">[сверить]</span>' : ''}</td><td>${fmt(c, 3)}</td><td>${fmtN(x.pdk)}</td><td class="${r > 1 ? 'alert' : ''}">${fmt(r, 2)}</td></tr>`; }).join('');
   const rA = A.sim.result(Math.max(A.last.t, 1)), rB = B.sim.result(Math.max(B.last.t, 1));
   document.getElementById('eA').textContent = fmt(rA.fanKWh + rA.genKWh, 2); document.getElementById('eB').textContent = fmt(rB.fanKWh + rB.genKWh, 2);
   document.getElementById('hA').textContent = fmt(rA.heatKWh, 1); document.getElementById('hB').textContent = fmt(rB.heatKWh, 1);
-  document.getElementById('mA').textContent = fmt(rA.avgC.Mn, 3); document.getElementById('mB').textContent = fmt(rB.avgC.Mn, 3);
+  document.getElementById('mA').textContent = fmt(rA.ratioMax, 2); document.getElementById('mB').textContent = fmt(rB.ratioMax, 2);
   const sv = rA.heatKWh > 0 ? 1 - rB.heatKWh / rA.heatKWh : 0, se = (rA.fanKWh + rA.genKWh) > 0 ? 1 - (rB.fanKWh + rB.genKWh) / (rA.fanKWh + rA.genKWh) : 0;
   document.getElementById('saving').textContent = t > 60 ? `Экономия: тепло ${fmt(sv * 100)} %, электроэнергия ${fmt(se * 100)} %` : 'Экономия появится через минуту модельного времени';
   const h = m.hist;
-  drawChart(charts[0], IDS.map(id => ({ c: COL[id], d: h.map(x => x.Q[id]) })), 2400, [[1500, css('--muted')]]);
+  drawChart(charts[0], IDS.map((id, i) => ({ c: COL[id], d: h.map(x => x.on[id] ? x.Q[id] / (m.params.posts[i].Qset * 3600) * 100 : 0) })), 140, [[100, css('--muted')]]);
   drawChart(charts[1], IDS.map(id => ({ c: COL[id], d: h.map(x => 100 - x.alpha[id] / 0.9) })), 100);
   drawChart(charts[2], [{ c: css('--std'), d: A.hist.map(x => x.n) }, { c: css('--ok'), d: B.hist.map(x => x.n) }], 1600);
   document.getElementById('c3l').innerHTML = `<span style="color:var(--std)">стандарт</span> · <span style="color:var(--ok)">предлагаемая</span>`;
-  drawChart(charts[3], [{ c: css('--std'), d: A.hist.map(x => x.C.Mn) }, { c: css('--ok'), d: B.hist.map(x => x.C.Mn) }], 0.25, [[0.2, css('--crit')]]);
+  drawChart(charts[3], [{ c: css('--std'), d: A.hist.map(x => worstRatio(x.C)) }, { c: css('--ok'), d: B.hist.map(x => worstRatio(x.C)) }], 1.2, [[1, css('--crit')], [0.5, css('--muted')]]);
 }
 // старт: прогон первых 20 минут смены, чтобы при открытии были данные
-for (let i = 0; i < 1200; i++) for (const m of [A, B]) { m.last = m.sim.step(); m.hist.push(m.last); if (m.hist.length > WIN) m.hist.shift(); }
 updatePanel();
 requestAnimationFrame(tick);
 </script>

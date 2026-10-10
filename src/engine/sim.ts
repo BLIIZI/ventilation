@@ -16,8 +16,11 @@ export type Mode = 'constant' | 'onoff' | 'adaptive';
 // onoff     — промышленный стандарт: заслонка открыта/закрыта по датчику тока, ЧП держит постоянное разрежение
 // adaptive  — предлагаемая система: ПИ-регулятор расхода в каждой ветви + сброс давления (критическая ветвь открыта)
 
-export interface Substance { name: string; g: number; pdk: number; qIn: number; settles?: boolean; } // g, г/кг; ПДК, q_пр — мг/м³; settles=false — газ (не оседает)
-export interface PostSpec { id: string; B: number; Qset: number; etaNom: number; current?: (t: number) => number; etaReal?: number; }
+export interface Substance { name: string; g: number; pdk: number; qIn: number; settles?: boolean; group?: string; }
+// g, г/кг (если выделение поста задано функцией emis — не используется); ПДК, q_пр — мг/м³; settles=false — газ (не оседает);
+// group — группа суммации однонаправленного действия: Σ C_i/ПДК_i ≤ 1
+export interface PostSpec { id: string; B: number; Qset: number; etaNom: number; current?: (t: number) => number; etaReal?: number;
+  emis?: (t: number) => Record<string, number>; }   // emis — выделение веществ при работе поста, мг/с (из библиотеки процессов)
 // etaReal — фактическая эффективность захвата (если отличается от принятой в расчёте η_ном): проверка устойчивости к ошибке модели
 // B кг/ч (если current не задан), Qset м³/с; current(t) — сварочный ток, А → B по таблице проволоки
 
@@ -33,6 +36,9 @@ export interface GenVent {
   kP: number; kI: number;    // коэффициенты коррекции (доля Ldesign на единицу относительной ошибки; 1/с)
   ffTau?: number;            // сглаживание упреждающего сигнала, с (инерционное звено 1-го порядка)
   antiWindup?: boolean;      // условное интегрирование (по умолчанию включено); false — только для сравнения в исследовании
+  multi?: { frac: number; gasSensors?: string[] };
+  // расчёт по ВСЕМ веществам с группами суммации: Σ C_i/ПДК_i ≤ frac; gasSensors — газы, для которых стоят свои датчики (NO₂, CO…);
+  // аэрозольные компоненты оцениваются по датчику общей массы × доля по наблюдателю; газы без датчика — по наблюдателю (модели цеха)
   dpDesign: number; etaFan: number; ramp: number; // для энергии вентилятора ОВ: P = P_расч·(L/L_расч)^3; время разгона ЧП, с
 }
 export interface SimParams {
@@ -56,6 +62,7 @@ export interface SimParams {
   openAngles?: Record<string, number>; // положение «открыто» после пусконаладочной балансировки (режимы constant/onoff)
   wire?: Array<[number, number]>;  // таблица «ток, А → расход проволоки, кг/ч»
   gen?: GenVent;
+  limiting?: string;   // вещество для оценки зоны дыхания (по умолчанию — лимитирующее ОВ или первое)
   nearField?: { r: number; s: number };
   // ОЦЕНКА концентрации в зоне дыхания. Российского нормативного метода расчёта нет: по нормам РФ концентрацию в зоне дыхания ИЗМЕРЯЮТ
   // (ГОСТ 12.1.005-88; СанПиН 1.2.3685-21). Для оценки — модель «ближняя/дальняя зона» (Nicas, 1996; AIHA, 2009 — зарубежный метод):
@@ -79,6 +86,8 @@ export interface SimResult {
   lowVelShare: number;             // доля времени работы вентилятора, когда хотя бы на одном участке с рабочим потоком w < wMin
   lowVelBySeg: Record<string, number>;
   nonConverged: number;            // число шагов, где решатель сети не сошёлся (должно быть 0)
+  ratioMax: number;                // максимум по времени отношения «Σ C/ПДК» по худшей группе веществ (в цехе)
+  groupRatioAvg: Record<string, number>;  // среднесменное Σ C/ПДК по группам
 }
 
 // Теплота на нагрев приточного воздуха Q = ρ·c·L·(t_в − t_н), кВт — уравнение теплового баланса (Богословский В.Н. и др. Отопление и вентиляция. Ч. 2.
@@ -106,7 +115,15 @@ export function createSimulator(net: Network, p: SimParams) {
   const segHoods = new Map<string, string[]>();
   for (const h of ids) { let sg = net.segments.find(x => x.id === h); while (sg) { if (!segHoods.has(sg.id)) segHoods.set(sg.id, []); segHoods.get(sg.id)!.push(h); sg = sg.parent ? net.segments.find(x => x.id === sg!.parent) : undefined; } }
   const segD = (els: any[]) => els.filter(e => e.kind === 'duct').map(e => e.d as number);
-  const limName = p.gen?.limiting ?? p.substances[0].name;
+  const limName = p.limiting ?? p.gen?.limiting ?? p.substances[0].name;
+  // группы суммации (вещества без группы — каждое само по себе); вещества без ПДК (сумма аэрозоля для датчика) не нормируются
+  const groups = new Map<string, Substance[]>();
+  for (const s of p.substances) if (Number.isFinite(s.pdk)) { const k = s.group ?? s.name; if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(s); }
+  const genOf = (ps: PostSpec, s: Substance, t: number) => ps.emis ? (ps.emis(t)[s.name] ?? 0) : s.g * 1000 * Bof(ps, t) / 3600;   // мг/с
+  // наблюдатель состава: внутренняя модель цеха по известным выделениям и измеренным расходам (η — расчётная);
+  // даёт доли компонентов в воздухе цеха, датчик общей массы аэрозоля уточняет количество
+  const Chat: Record<string, number> = {}; p.substances.forEach(x => (Chat[x.name] = x.qIn));
+  let ffGasF = 0, ratioMax = 0; const gasS: Record<string, number> = {}; p.substances.forEach(x => (gasS[x.name] = x.qIn));
   const bzSum: Record<string, number> = {}, bzMax: Record<string, number> = {}; ids.forEach(id => { bzSum[id] = 0; bzMax[id] = 0; });
   // скользящее 15-минутное среднее (максимально разовая ПДК сравнивается со средним за время отбора пробы) [Н: МУ/ГОСТ 12.1.005]
   const W = Math.max(1, Math.round(900 / p.dt));
@@ -194,12 +211,33 @@ export function createSimulator(net: Network, p: SimParams) {
       if (g.mode === 'posts') Lt = g.Lmin + (g.Ldesign - g.Lmin) * nOn / ids.length;
       if (g.mode === 'ff' || g.mode === 'fffb') {
         // упреждение: L = Σ(1−η_ном)·g·B(I) / (C_уст − q_пр) — формула блока 1 для целевой концентрации
-        let G = 0; for (const ps of p.posts) if (on[ps.id]) G += (1 - ps.etaNom) * lim.g * 1000 * Bof(ps, t) / 3600;
-        const ffRaw = G / (g.Cset - lim.qIn);
+        let ffRaw: number, ffGasRaw = 0, e = 0;
+        if (g.multi) {
+          // по всем веществам: L ≥ Σ(G_i/ПДК_i) / (frac − Σ q_пр,i/ПДК_i) для каждой группы суммации, берётся максимум
+          const esc: Record<string, number> = {};
+          for (const s of p.substances) { esc[s.name] = 0; for (const ps of p.posts) if (on[ps.id]) esc[s.name] += (1 - ps.etaNom) * genOf(ps, s, t); }
+          ffRaw = 0;
+          for (const [, mem] of groups) {
+            const need = mem.reduce((a, s) => a + esc[s.name] / s.pdk, 0) / (g.multi.frac - mem.reduce((a, s) => a + s.qIn / s.pdk, 0));
+            ffRaw = Math.max(ffRaw, need);
+            if (mem.every(s => s.settles === false)) ffGasRaw = Math.max(ffGasRaw, need);   // группы только из газов — датчик аэрозоля их не видит
+          }
+          // оценка концентраций: аэрозоль — C_датч·Ĉ_i/Ĉ_аэр; газ с датчиком — показание; газ без датчика — наблюдатель Ĉ_i
+          const cA = Chat[g.sensor.of] ?? 0, meas = new Set(g.multi.gasSensors ?? []);
+          const est = (x: Substance) => x.settles !== false ? (cA > 1e-9 ? sensorC * (Chat[x.name] - x.qIn) / cA + x.qIn : x.qIn)
+            : meas.has(x.name) ? gasS[x.name] : Chat[x.name];
+          let worst = -1, seen = false;
+          for (const [, mem] of groups) { seen = true; worst = Math.max(worst, mem.reduce((a, x) => a + est(x) / x.pdk, 0) / g.multi.frac - 1); }
+          e = seen ? worst : 0;
+        } else {
+          let G = 0; for (const ps of p.posts) if (on[ps.id]) G += (1 - ps.etaNom) * genOf(ps, lim, t);
+          ffRaw = G / (g.Cset - lim.qIn);
+        }
         ffF += g.ffTau ? (ffRaw - ffF) * p.dt / g.ffTau : ffRaw - ffF;
+        ffGasF += g.ffTau ? (ffGasRaw - ffGasF) * p.dt / g.ffTau : ffGasRaw - ffGasF;
         Lt = ffF;
         if (g.mode === 'fffb') {
-          const est = sensorC * g.sensor.ratio, e = (est - g.Cset) / g.Cset;   // оценка Mn по датчику общей массы
+          if (!g.multi) { const est = sensorC * g.sensor.ratio; e = (est - g.Cset) / g.Cset; }   // оценка лимитирующего вещества по датчику общей массы
           // anti-windup (условное интегрирование): интеграл не копится, если выход упёрся в ограничение в ту же сторону
           const uFree = Lt + g.kP * e * g.Ldesign + fbInt;
           const satHi = uFree >= g.Lmax && e > 0, satLo = uFree <= g.Lmin && e < 0;
@@ -219,10 +257,14 @@ export function createSimulator(net: Network, p: SimParams) {
       let Groom = 0; // мг/с
       for (const ps of p.posts) if (on[ps.id]) {
         const eta = (ps.etaReal ?? ps.etaNom) * Math.min(1, Q(ps.id) / ps.Qset);
-        Groom += (1 - eta) * s.g * 1000 * Bof(ps, t) / 3600 * (s.settles === false ? 1 : (p.room.kSettle ?? 1));
+        Groom += (1 - eta) * genOf(ps, s, t) * (s.settles === false ? 1 : (p.room.kSettle ?? 1));
       }
       C[s.name] += p.dt * (Groom - Lout * (C[s.name] - s.qIn)) / p.room.V;
       maxC[s.name] = Math.max(maxC[s.name], C[s.name]); sumC[s.name] += C[s.name] * p.dt;
+    }
+    if (p.gen?.multi) for (const s of p.substances) {
+      let Gh = 0; for (const ps of p.posts) if (on[ps.id]) Gh += (1 - ps.etaNom * Math.min(1, Q(ps.id) / ps.Qset)) * genOf(ps, s, t);
+      Chat[s.name] += p.dt * (Gh - Lout * (Chat[s.name] - s.qIn)) / p.room.V;
     }
     // ---- зона дыхания сварщика (ближняя зона)
     const lim = p.substances.find(x => x.name === limName)!;
@@ -231,7 +273,7 @@ export function createSimulator(net: Network, p: SimParams) {
       let c = C[lim.name];
       if (p.nearField && on[ps.id]) {
         const eta = (ps.etaReal ?? ps.etaNom) * Math.min(1, Q(ps.id) / ps.Qset);
-        const Gesc = (1 - eta) * lim.g * 1000 * Bof(ps, t) / 3600;           // мг/с, ушло мимо отсоса
+        const Gesc = (1 - eta) * genOf(ps, lim, t);                          // мг/с, ушло мимо отсоса
         const beta = 0.5 * 2 * Math.PI * p.nearField.r ** 2 * p.nearField.s; // м³/с
         c += Gesc / beta;
       }
@@ -240,11 +282,15 @@ export function createSimulator(net: Network, p: SimParams) {
     push('__room', C[lim.name]);
     if (p.gen) {
       const g = p.gen, lim = p.substances.find(x => x.name === g.limiting)!;
-      if (C[lim.name] > lim.pdk) overPdk += p.dt;
+      if (!g.multi && C[lim.name] > lim.pdk) overPdk += p.dt;
       // датчик: инерционное звено 1-го порядка + шум (доля от показания) [Д]
       const meas = C[g.sensor.of] * (1 + g.sensor.noise * noise());
       sensorC += (meas - sensorC) * p.dt / g.sensor.tau;
+      for (const gs of g.multi?.gasSensors ?? []) { const m = C[gs] * (1 + g.sensor.noise * noise()); gasS[gs] += (m - gasS[gs]) * p.dt / g.sensor.tau; }   // газоанализаторы [Д]: τ и шум как у датчика аэрозоля
     }
+    // ---- отношение к ПДК по группам суммации (в цехе)
+    { let worst = 0; for (const [, mem] of groups) worst = Math.max(worst, mem.reduce((a, s) => a + C[s.name] / s.pdk, 0));
+      ratioMax = Math.max(ratioMax, worst); if (p.gen?.multi && worst > 1) overPdk += p.dt; }
     // ---- энергия и качество регулирования
     const heat = HEAT_COEF * Lout * p.room.dT; // кВт
     fanJ += P * p.dt; heatJ += heat * 1000 * p.dt; flowInt += Qtot * p.dt;
@@ -267,7 +313,8 @@ export function createSimulator(net: Network, p: SimParams) {
       bzTWA: Object.fromEntries(ids.map(id => [id, bzSum[id] / d])), bzMax: { ...bzMax }, bz15max: { ...bz15 },
       lowVelShare: fanOnTime ? lowAny / fanOnTime : 0,
       lowVelBySeg: Object.fromEntries(Object.entries(lowSeg).map(([k, v]) => [k, fanOnTime ? v / fanOnTime : 0])),
-      nonConverged: nonConv };
+      nonConverged: nonConv, ratioMax,
+      groupRatioAvg: Object.fromEntries([...groups].map(([k, mem]) => [k, mem.reduce((a, s) => a + avgC[s.name] / s.pdk, 0)])) };
   }
   return { step, result, net, params: p, time: () => t };
 }

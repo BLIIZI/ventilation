@@ -63,3 +63,30 @@ export function pickMotor(maxShaftW: number) {
   const m = IE3_4P.find(([w]) => w >= maxShaftW) ?? IE3_4P[IE3_4P.length - 1];
   return { motorW: m[0], motorEta: m[1] };
 }
+
+/** Сеть под произвольные расходы постов (м³/ч): диаметры — на ≈ 12 м/с, вентилятор — демо-характеристика × k (k подбирается в plant.ts). [Д] */
+export function makeNetworkFor(Qposts: number[], fanScale = 1, wDesign = 12): Network {
+  const dFor = (Qm3h: number) => Math.max(0.1, Math.round(Math.sqrt(4 * (Qm3h / 3600) / (Math.PI * wDesign)) * 1000 / 5) * 5 / 1000);
+  const N = Qposts.length, segs: Network['segments'] = [];
+  let cum = 0;
+  for (let i = 1; i <= N; i++) {
+    const q = Math.max(Qposts[i - 1], 50); cum += q;
+    segs.push({ id: `post${i}`, parent: `c${i}`, elements: [
+      { kind: 'duct', id: `hood${i}`, d: dFor(q), l: 6, zeta: 1.5 },
+      { kind: 'damper', id: `damper${i}`, d: dFor(q), alpha: 0 },
+    ] });
+    segs.push({ id: `c${i}`, parent: i < N ? `c${i + 1}` : null, elements: [
+      { kind: 'duct', id: `c${i}`, d: dFor(cum), l: i < N ? 5 : 10, zeta: i < N ? 0.2 : 0.5 },
+    ] });
+  }
+  const total = Qposts.reduce((a, b) => a + Math.max(b, 50), 0), s = total / 4500 * fanScale, ps = fanScale;   // запас по расходу и давлению
+  return {
+    segments: segs, hoods: Array.from({ length: N }, (_, i) => `post${i + 1}`),
+    common: [
+      { kind: 'filter', id: 'filter', spec: { dpNom: 400, qNom: total / 3600, m: 1, fouling: 1 } },
+      { kind: 'duct', id: 'discharge', d: dFor(total), l: 5, zeta: 1.0 },
+    ],
+    fan: { n0: 1500, eta: 0.65, points: ([[0, 1400], [2000, 1300], [4000, 1050], [5000, 850], [6000, 550], [7000, 150]] as Array<[number, number]>).map(([q, p]) => [q * s, p * ps] as [number, number]), ...pickMotor(1900 * s * ps) },
+    fanSpeed: 1500,
+  };
+}
