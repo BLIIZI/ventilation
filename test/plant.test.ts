@@ -137,3 +137,17 @@ test('Сборка цеха: расчётная ОВ = (весь потребн�
   assert.ok(Math.abs(d.Ld - Math.max(0, d.Ltotal - d.Llev)) < 1e-12);
   assert.ok(Math.abs(d.Llev * 3600 - (1500 + 1500 + 1500 + 1000)) < 1e-6);
 });
+
+test('Схема диплома: переносной агрегат с возвратом воздуха (электрофильтр) — L_wz = 0, вся вентиляция общеобменная; проскок фильтра добавляется; газы возвращаются полностью', () => {
+  const base = { id: 'post1', process: 'mag_co2', material: 'sv08g2s', params: { I: 225, d: 1.2 }, hood: 'table', eta: 0.8 };
+  const central = designReport([base]), rec1 = designReport([{ ...base, recircEta: 1 }]), rec95 = designReport([{ ...base, recircEta: 0.95 }]);
+  // центральная вытяжка с выбросом наружу: L_оо = L − 1500; агрегат с идеальным фильтром: весь тот же воздух — общеобменный
+  assert.ok(Math.abs(central.Ltotal - rec1.Ltotal) < 1e-9 && rec1.Llev === 0 && Math.abs(rec1.Ld - rec1.Ltotal) < 1e-12);
+  assert.ok(Math.abs(central.Ld - (central.Ltotal - 1500 / 3600)) < 1e-9);
+  // проскок 5 %: m = (1 − 0,8 + 0,8·0,05)·G = 0,24·G → в 1,2 раза больше воздуха
+  assert.ok(Math.abs(rec95.Ltotal / rec1.Ltotal - 1.2) < 1e-9);
+  // газ (электроды УОНИ: HF, CO, NO₂) через электрофильтр проходит: m_газ = G целиком при любом η
+  const u = { id: 'post1', process: 'mma', material: 'uoni1345', hood: 'table', eta: 0.8 };
+  const uc = designReport([u]), ur = designReport([{ ...u, recircEta: 1 }]);
+  assert.ok(Math.abs(ur.esc.co / uc.esc.co - 1 / 0.2) < 1e-9 && Math.abs(ur.esc.mn - uc.esc.mn) < 1e-12);
+});

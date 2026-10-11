@@ -185,7 +185,10 @@ export const ENABLED_GROUPS = ['Сварка'];
 export const activeProcesses = () => PROCESSES.filter(p => ENABLED_GROUPS.includes(p.group));
 
 /** Настройка поста: процесс, материал, параметры, тип отсоса; factorsOverride — свои удельные показатели (ввод пользователя) */
-export interface PostConfig { id: string; process: string; material: string; params?: Record<string, number>; hood?: string; Qset?: number; factorsOverride?: Record<string, number>; eta?: number }
+export interface PostConfig { id: string; process: string; material: string; params?: Record<string, number>; hood?: string; Qset?: number; factorsOverride?: Record<string, number>; eta?: number;
+  /** Переносной фильтровентиляционный агрегат с ВОЗВРАТОМ очищенного воздуха в цех (как в дипломе — электрофильтр): степень очистки аэрозоля, 0…1 [Д: паспорт].
+   *  Газы (CO, NO₂, HF) электрофильтр не задерживает — они возвращаются полностью. Воздух такого отсоса из цеха НЕ удаляется (L_wz = 0 в СП 60). */
+  recircEta?: number }
 
 export function paramsOf(cfg: PostConfig): Record<string, number> {
   const pr = processById(cfg.process), out: Record<string, number> = {};

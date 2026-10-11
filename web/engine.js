@@ -1225,7 +1225,10 @@ const ENABLED_GROUPS = ['Сварка'];
 const activeProcesses = () => PROCESSES.filter(p => ENABLED_GROUPS.includes(p.group));
 
 /** Настройка поста: процесс, материал, параметры, тип отсоса; factorsOverride — свои удельные показатели (ввод пользователя) */
-                                                                                                                                                                                                    
+                                                                                                                                                                                                   
+                                                                                                                                                                
+                                                                                                                                                    
+                      
 
 function paramsOf(cfg            )                         {
   const pr = processById(cfg.process), out                         = {};
@@ -1284,7 +1287,9 @@ function designReport(posts              ) {
   });
   const etaOf = (p            ) => p.eta ?? ETA_LEV_DEFAULT;
   const esc                         = {};
-  for (const s of subs) esc[s.name] = posts.reduce((a, p, k) => a + (1 - etaOf(p)) * (em[k][s.name] ?? 0), 0);   // мг/с в цех
+  // мг/с в цех: не уловленное отсосом (1 − η)·G; у агрегата с возвратом воздуха — ещё проскок фильтра η·(1 − η_ф)·G (газы: η_ф = 0)
+  const slip = (p            , s           ) => p.recircEta === undefined ? 0 : etaOf(p) * (1 - (s.settles !== false ? p.recircEta : 0));
+  for (const s of subs) esc[s.name] = posts.reduce((a, p, k) => a + (1 - etaOf(p) + slip(p, s)) * (em[k][s.name] ?? 0), 0);
   const groups = new Map                     ();
   for (const s of subs) if (Number.isFinite(s.pdk)) { const k = s.group ?? s.name; if (!groups.has(k)) groups.set(k, []); groups.get(k) .push(s); }
   let Ld = 0, limiting = '';
@@ -1295,7 +1300,7 @@ function designReport(posts              ) {
     if (L > Ld) { Ld = L; limiting = k; }
   }
   // СП 60: L = L_wz + (m − L_wz(q_wz − q_in))/(q_l − q_in) → при q_l = q_wz общеобменная L_оо = L − L_wz, L_wz — местные отсосы
-  const Llev = posts.reduce((a, p) => a + qsetOf(p), 0) / 3600, Ltotal = Ld;
+  const Llev = posts.reduce((a, p) => a + (p.recircEta === undefined ? qsetOf(p) : 0), 0) / 3600, Ltotal = Ld;   // агрегат с возвратом воздуха воздух из цеха не удаляет
   Ld = Math.max(0, Ltotal - Llev);
   return { em, subs, esc, need, Ld, Ltotal, Llev, limiting, mnCat, groups, mnShare: aerEsc > 0 ? mnEsc / aerEsc : 0, postMnCats };
 }
