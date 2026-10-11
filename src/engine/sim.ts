@@ -210,15 +210,15 @@ export function createSimulator(net: Network, p: SimParams) {
       let Lt = g.Ldesign;
       if (g.mode === 'posts') Lt = g.Lmin + (g.Ldesign - g.Lmin) * nOn / ids.length;
       if (g.mode === 'ff' || g.mode === 'fffb') {
-        // упреждение: L = Σ(1−η_ном)·g·B(I) / (C_уст − q_пр) — формула блока 1 для целевой концентрации
+        // упреждение по СП 60: нужный ВЕСЬ удаляемый воздух L = Σ(1−η_ном)·g·B(I)/(C_уст − q_пр); общеобменная = L − (расход местных отсосов, измерен)
         let ffRaw: number, ffGasRaw = 0, e = 0;
         if (g.multi) {
-          // по всем веществам: L ≥ Σ(G_i/ПДК_i) / (frac − Σ q_пр,i/ПДК_i) для каждой группы суммации, берётся максимум
+          // по всем веществам (СП 60): для группы суммации L = Σ G_i/(frac·ПДК_i − q_пр,i) — расходы по веществам складываются; берётся максимум по группам
           const esc: Record<string, number> = {};
           for (const s of p.substances) { esc[s.name] = 0; for (const ps of p.posts) if (on[ps.id]) esc[s.name] += (1 - ps.etaNom) * genOf(ps, s, t); }
           ffRaw = 0;
           for (const [, mem] of groups) {
-            const need = mem.reduce((a, s) => a + esc[s.name] / s.pdk, 0) / (g.multi.frac - mem.reduce((a, s) => a + s.qIn / s.pdk, 0));
+            const need = mem.reduce((a, s) => a + esc[s.name] / (g.multi!.frac * s.pdk - s.qIn), 0);
             ffRaw = Math.max(ffRaw, need);
             if (mem.every(s => s.settles === false)) ffGasRaw = Math.max(ffGasRaw, need);   // группы только из газов — датчик аэрозоля их не видит
           }
@@ -233,6 +233,7 @@ export function createSimulator(net: Network, p: SimParams) {
           let G = 0; for (const ps of p.posts) if (on[ps.id]) G += (1 - ps.etaNom) * genOf(ps, lim, t);
           ffRaw = G / (g.Cset - lim.qIn);
         }
+        ffRaw = Math.max(0, ffRaw - Qtot); ffGasRaw = Math.max(0, ffGasRaw - Qtot);   // минус воздух местных отсосов (L_wz в СП 60)
         ffF += g.ffTau ? (ffRaw - ffF) * p.dt / g.ffTau : ffRaw - ffF;
         ffGasF += g.ffTau ? (ffGasRaw - ffGasF) * p.dt / g.ffTau : ffGasRaw - ffGasF;
         Lt = ffF;
@@ -248,7 +249,10 @@ export function createSimulator(net: Network, p: SimParams) {
       Lt = Math.min(g.Lmax, Math.max(g.Lmin, Lt));
       const dL = g.Lmax / g.ramp * p.dt; LgenNow += Math.max(-dL, Math.min(dL, Lt - LgenNow));
       Lgen = LgenNow;
-      const Pg = g.Ldesign * g.dpDesign / g.etaFan * Math.pow(Lgen / g.Ldesign, 3);
+      // вентилятор ОВ подбирается на свой максимальный расход: dpDesign — давление сети ОВ при L_ref; при меньшем расходе p ∝ L², N ∝ L³ (ГОСТ 10921-2017, разд. 14) [Д]
+      // L_ref: для постоянного режима и «по числу постов» — L_расч (больше не бывает), для регулирования по выделениям — L_макс
+      const Lref = g.mode === 'ff' || g.mode === 'fffb' ? Math.max(g.Ldesign, g.Lmax) : g.Ldesign;
+      const Pg = Lref * g.dpDesign / g.etaFan * Math.pow(Lgen / Lref, 3);
       genJ += Pg * p.dt;
     }
     genInt += Lgen * p.dt;

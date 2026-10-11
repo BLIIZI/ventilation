@@ -3,14 +3,16 @@ import type { SimParams, Mode } from './sim.ts';
 import { m3h } from './physics.ts';
 import { balance } from './balance.ts';
 import { demoNetwork } from './demo-network.ts';
-import { ETA_LEV_DEFAULT, Q_POST_MIN_M3H, SV08G2S, PDK_MN_WELD_LE20, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, wireRate } from './norms.ts';
+import { ETA_LEV_DEFAULT, Q_POST_MIN_M3H, SV08G2S, PDK_MN_WELD_LE20, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, wireRate, sp60General } from './norms.ts';
 
 /** Базовый режим сварки блока 3: ток 225 А, проволока Св-08Г2С Ø1,2 мм, вылет 15 мм → B = α_р·I (norms.ts) */
 export const I_BASE = 225;
 export const B_BASE = wireRate(I_BASE);
-/** Общеобменная вентиляция по блоку 1 (СП 60.13330.2020, прил. И): L = Σ(1−η)·g·B / (ПДК − q_пр), 3 поста, η по Методике */
-export function genVentByFormula(n = 3, eta = ETA_LEV_DEFAULT, B = B_BASE) {
-  return n * (1 - eta) * SV08G2S.mn * 1000 * B / 3600 / (PDK_MN_WELD_LE20.ss - MN_ATM_SS);   // м³/с
+/** Общеобменная вентиляция по СП 60.13330.2020: L_оо = L − L_wz, L = L_wz + (m − L_wz(q_wz − q_in))/(q_l − q_in);
+ *  m = n·(1−η)·g_Mn·B — марганец, попавший в цех; L_wz = n·1500 м³/ч — местные отсосы (они тоже разбавляют воздух цеха) */
+export function genVentByFormula(n = 3, eta = ETA_LEV_DEFAULT, B = B_BASE, QpostM3h = Q_POST_MIN_M3H) {
+  const m = n * (1 - eta) * SV08G2S.mn * 1000 * B / 3600;   // мг/с
+  return sp60General(m, n * QpostM3h / 3600, PDK_MN_WELD_LE20.ss, MN_ATM_SS);   // м³/с
 }
 
 /** Таблица упреждения: расчётная частота вентилятора для каждого набора работающих постов (по установившемуся режиму блока 2) */

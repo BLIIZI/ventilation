@@ -75,7 +75,7 @@ test('Недостижимый расход — понятное предупр�
 });
 
 // ---------- местные сопротивления (Идельчик, 1992) и энергетический баланс сети
-import { bendZeta, suddenExpansionZeta, diffuserZeta, teeSideZeta, teeStraightZeta } from '../src/engine/fittings.ts';
+import { bendZeta, suddenExpansionZeta, diffuserZeta, teeSideZeta, teeStraightZeta, teeA } from '../src/engine/fittings.ts';
 import { lossBreakdown, solve as solveNet } from '../src/engine/network.ts';
 import { lambdaAltshul as lam } from '../src/engine/physics.ts';
 test('Отвод: ζ(90°, R/D = 1) = 0,21; ζ(90°, R/D = 1,5) = 0,21/√1,5 = 0,171; 45° ≈ 0,62·B₁; ζ растёт с углом и падает с R/D', () => {
@@ -93,6 +93,15 @@ test('Тройник на слияние: проход ζ = 1,55r − r² (r = Q
   assert.equal(teeStraightZeta(0, 1), 0); assert.ok(Math.abs(teeStraightZeta(0.5, 1) - 0.525) < 1e-12);
   assert.ok(teeSideZeta(1e-9, 1, 0.2, 0.2) < 0);
   let prev = -Infinity; for (let r = 0; r <= 1; r += 0.05) { const z = teeSideZeta(r, 1, 0.2, 0.315); assert.ok(z > prev); prev = z; }
+});
+test('Тройник: коэффициент A по Идельчику (диагр. 7-1): F_б/F_с ≤ 0,35 → 1; иначе max(0,9(1 − r); 0,55) — непрерывно; ручной пример', () => {
+  assert.equal(teeA(0.25, 0.5), 1); assert.ok(Math.abs(teeA(0.4, 0.2) - 0.72) < 1e-12); assert.equal(teeA(0.4, 0.5), 0.55);
+  // пример: d_б = 0,2, d_с = 0,315 (F_б/F_с = 0,403), r = 0,5 → ζ = 0,55·[1 + (0,5·2,4806)² − 2·0,25] = 0,55·2,0384 = 1,1211
+  const fr = (0.315 / 0.2) ** 2; assert.ok(Math.abs(teeSideZeta(0.5, 1, 0.2, 0.315) - 0.55 * (1 + (0.5 * fr) ** 2 - 0.5)) < 1e-12);
+  assert.ok(Math.abs(0.55 * (1 + (0.5 * fr) ** 2 - 0.5) - 1.1211) < 1e-3);
+  // A непрерывна (табличный скачок 0,54 → 0,55 при r = 0,4 сглажен max(…)) — иначе у сети может не быть точного решения
+  for (let r = 0.3; r < 0.5; r += 0.001) assert.ok(Math.abs(teeA(0.4, r) - teeA(0.4, r + 1e-7)) < 1e-6);
+  assert.ok(Math.abs(teeA(0.4, 0.4) - 0.55) < 1e-12 && Math.abs(teeA(0.4, 0.38) - 0.558) < 1e-12);
 });
 test('Трение: λ непрерывна на границах режимов (Re = 2000 и 4000)', () => {
   const nu = 15.06e-6, d = 0.2, w = (Re: number) => Re * nu / d;

@@ -14,11 +14,12 @@ test('Расход проволоки по коэффициенту распла
   assert.equal(wireRate(0), 0);
 });
 
-test('Упреждение: при постоянном токе расход ОВ = формуле блока 1 для C_уст', () => {
+test('Упреждение: при постоянном токе расход ОВ = формуле СП 60 для C_уст (весь воздух минус местные отсосы)', () => {
   const p = shift4('ff'); p.duration = 300; p.schedule = () => true; p.gen!.ffTau = undefined;
   p.posts.forEach(ps => (ps.current = () => 175)); p.record = 1;   // 175 А: расход ниже L_max
   const r = simulate(demoNetwork(), p); const last = r.series[r.series.length - 1];
-  const expected = 3 * (1 - p.posts[0].etaNom) * MN.g * 1000 * wireRate(175) / 3600 / (p.gen!.Cset - MN.qIn) * 3600; // м³/ч
+  // СП 60: весь удаляемый воздух L = G/(C_уст − q_пр); общеобменная = L − расход местных отсосов (L_wz)
+  const expected = 3 * (1 - p.posts[0].etaNom) * MN.g * 1000 * wireRate(175) / 3600 / (p.gen!.Cset - MN.qIn) * 3600 - last.Qtot; // м³/ч
   assert.ok(Math.abs(last.Lgen - expected) / expected < 0.01, `${last.Lgen.toFixed(0)} vs ${expected.toFixed(0)}`);
 });
 

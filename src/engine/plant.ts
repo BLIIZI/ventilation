@@ -29,7 +29,8 @@ export interface PlantConfig {
 export interface PlantReport {
   posts: Array<{ id: string; process: string; material: string; emission: Record<string, number>; qset: number; qmin: number; qminSource: string; hood: string; eta: number }>;
   substances: Array<{ id: string; name: string; pdk: number; cls: number; status: string; group?: string; Lneed: number; note?: string }>;
-  Ldesign: number;            // м³/ч, все посты работают, C = ПДК
+  Ldesign: number;            // м³/ч — общеобменная сверх местных отсосов, все посты работают, C = ПДК (СП 60)
+  Ltotal: number; Llev: number;   // м³/ч — весь потребный удаляемый воздух и воздух местных отсосов
   limiting: string;           // вещество (группа), требующее наибольшего воздухообмена
   mnCategory?: string; mnShare?: number; postMnCategory?: Array<string | undefined>;
   fanScale: number; fanFeasible: boolean; commissioning: { n: number; angles: Record<string, number>; pSet: number };
@@ -57,11 +58,14 @@ export function designReport(posts: PostConfig[]) {
   let Ld = 0, limiting = '';
   const need: Record<string, number> = {};
   for (const [k, mem] of groups) {
-    const L = mem.reduce((a, s) => a + esc[s.name] / s.pdk, 0) / (1 - mem.reduce((a, s) => a + s.qIn / s.pdk, 0));   // м³/с
+    const L = mem.reduce((a, s) => a + esc[s.name] / (s.pdk - s.qIn), 0);   // м³/с: весь удаляемый воздух; СП 60 — расходы по веществам группы суммируются
     for (const s of mem) need[s.name] = L;
     if (L > Ld) { Ld = L; limiting = k; }
   }
-  return { em, subs, esc, need, Ld, limiting, mnCat, groups, mnShare: aerEsc > 0 ? mnEsc / aerEsc : 0, postMnCats };
+  // СП 60: L = L_wz + (m − L_wz(q_wz − q_in))/(q_l − q_in) → при q_l = q_wz общеобменная L_оо = L − L_wz, L_wz — местные отсосы
+  const Llev = posts.reduce((a, p) => a + qsetOf(p), 0) / 3600, Ltotal = Ld;
+  Ld = Math.max(0, Ltotal - Llev);
+  return { em, subs, esc, need, Ld, Ltotal, Llev, limiting, mnCat, groups, mnShare: aerEsc > 0 ? mnEsc / aerEsc : 0, postMnCats };
 }
 
 export function buildPlant(cfg: PlantConfig): { net: Network; params: SimParams; report: PlantReport; makeNet: () => Network } {
@@ -89,7 +93,8 @@ export function buildPlant(cfg: PlantConfig): { net: Network; params: SimParams;
   const limSub = [...d.groups.get(d.limiting) ?? []].sort((a, c) => d.esc[c.name] / c.pdk - d.esc[a.name] / a.pdk)[0]?.name ?? 'mn';
   const Ld = Math.max(d.Ld, m3h(500));
   const gen: GenVent | undefined = cfg.gen ? {
-    mode: cfg.gen, Ldesign: Ld, Lmin: 0.2 * Ld, Lmax: 1.5 * Ld, limiting: limSub, Cset: frac, multi: { frac, gasSensors: cfg.gasSensors },
+    // L_макс — производительность вентилятора ОВ: не меньше 1,5·L_расч и не меньше нужной для цели регулятора при всех работающих постах [А]
+    mode: cfg.gen, Ldesign: Ld, Lmin: 0.2 * Ld, Lmax: Math.max(1.5 * Ld, 1.1 * (d.Ltotal / frac - d.Llev)), limiting: limSub, Cset: frac, multi: { frac, gasSensors: cfg.gasSensors },
     sensor: { of: 'aerosol', ratio: 0, tau: 30, noise: 0.1 }, kP: 0.5, kI: 0.005, ffTau: 600, dpDesign: 600, etaFan: 0.6, ramp: 20,
   } : undefined;
   const params: SimParams = {
@@ -106,7 +111,7 @@ export function buildPlant(cfg: PlantConfig): { net: Network; params: SimParams;
       emission: d.em[k], qset: qsets[k], qmin: q.q, qminSource: q.source, hood: q.label, eta: p.eta ?? ETA_LEV_DEFAULT }; }),
     substances: d.subs.filter(s => Number.isFinite(s.pdk)).map(s => ({ id: s.name, name: SUBSTANCES[s.name].name, pdk: s.pdk, cls: SUBSTANCES[s.name].cls, status: SUBSTANCES[s.name].status, group: s.group, Lneed: (d.need[s.name] ?? 0) * 3600, note: SUBSTANCES[s.name].note }))
       .sort((a, c) => c.Lneed - a.Lneed),
-    Ldesign: Ld * 3600, limiting: d.limiting, mnCategory: d.mnCat?.label, mnShare: d.mnShare, postMnCategory: d.postMnCats, fanScale, fanFeasible: feasible, commissioning: com,
+    Ldesign: Ld * 3600, Ltotal: d.Ltotal * 3600, Llev: d.Llev * 3600, limiting: d.limiting, mnCategory: d.mnCat?.label, mnShare: d.mnShare, postMnCategory: d.postMnCats, fanScale, fanFeasible: feasible, commissioning: com,
   };
   return { net, params, report, makeNet };
 }

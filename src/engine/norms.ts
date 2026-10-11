@@ -83,3 +83,18 @@ export function motorEfficiency(beta: number, etaNom: number, k = MOTOR_LOSS_RAT
   const loss = lossNom * (k + beta * beta) / (1 + k);   // потери при нагрузке β
   return beta / (beta + loss);
 }
+
+// ---------- Воздухообмен по массе вредных веществ
+/** СП 60.13330.2020 (та же формула — СНиП 2.04.05-91*, прил. 17, ф. 2):
+ *    L = L_wz + (m_po − L_wz·(q_wz − q_in)) / (q_l − q_in),  м³/ч
+ *  L — расход ПРИТОЧНОГО воздуха (= всего удаляемого: местные отсосы + общеобменная);
+ *  L_wz — расход воздуха, удаляемого из рабочей зоны МЕСТНЫМИ ОТСОСАМИ и на технологические нужды, м³/ч;
+ *  m_po — вредное вещество, поступающее в ВОЗДУХ ПОМЕЩЕНИЯ, мг/ч (то, что отсос не поймал: (1 − η)·G);
+ *  q_wz — концентрация в рабочей зоне (не выше ПДК), q_l — в воздухе, удаляемом выше рабочей зоны, q_in — в приточном воздухе, мг/м³.
+ *  При полном перемешивании q_l = q_wz [Д — запас: сварочный аэрозоль поднимается, реально q_l ≥ q_wz], и формула даёт L = m_po/(q_wz − q_in).
+ *  Тогда общеобменная (сверх местных отсосов) L_оо = L − L_wz. [Н] */
+export function sp60Supply(m: number, Lwz: number, qwz: number, qin: number, ql = qwz): number {
+  return Lwz + (m - Lwz * (qwz - qin)) / (ql - qin);
+}
+/** Общеобменная вытяжка сверх местных отсосов, не меньше 0 */
+export const sp60General = (m: number, Lwz: number, qwz: number, qin: number, ql = qwz) => Math.max(0, sp60Supply(m, Lwz, qwz, qin, ql) - Lwz);

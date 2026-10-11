@@ -2,7 +2,7 @@
 import type { SimParams, GenVent } from './sim.ts';
 import { m3h } from './physics.ts';
 import { shiftParams } from './scenario.ts';
-import { ETA_LEV_DEFAULT, SV08G2S, PDK_MN_WELD_LE20, MN_ATM_SS, wireRate } from './norms.ts';
+import { ETA_LEV_DEFAULT, SV08G2S, PDK_MN_WELD_LE20, MN_ATM_SS, wireRate, sp60General, Q_POST_MIN_M3H } from './norms.ts';
 
 /** Расход проволоки Св-08Г2С Ø1,2 мм от тока: B = α_р(I)·I, α_р = 9,05 + 3,1·10⁻⁴·I·l/d², l = 15 мм (norms.ts; Соколов и др., ВолгГТУ, 2016).
  *  Таблица с шагом 5 А для интерполяции: 175 А — 1,68; 225 А — 2,20; 270 А — 2,68 кг/ч. */
@@ -29,7 +29,7 @@ export const AER = { name: 'aerosol', g: SV08G2S.aerosol, pdk: 1e9, qIn: 0 };   
 /** Расчётный (проектный) расход ОВ: все 3 поста одновременно на максимальном режиме 270 А, C = ПДК (блок 1) */
 export function designLgen(eta = ETA_LEV_DEFAULT, n = 3) {
   const G = n * (1 - eta) * MN.g * 1000 * wireRate(270) / 3600; // мг/с
-  return G / (MN.pdk - MN.qIn);
+  return sp60General(G, n * Q_POST_MIN_M3H / 3600, MN.pdk, MN.qIn);   // СП 60: местные отсосы тоже разбавляют воздух цеха
 }
 
 export function shift4(mode: GenVent['mode'], opts: { Cset?: number; etaReal?: number } = {}): SimParams {
@@ -42,7 +42,8 @@ export function shift4(mode: GenVent['mode'], opts: { Cset?: number; etaReal?: n
     posts: ids.map(id => ({ id, B: 0, Qset: m3h(1500), etaNom: ETA_LEV_DEFAULT, etaReal: opts.etaReal, current: sh.current(id) })),
     substances: [MN, AER],
     gen: {
-      mode, Ldesign: Ld, Lmin: 0.2 * Ld, Lmax: 1.5 * Ld, limiting: 'Mn', Cset: opts.Cset ?? 0.5 * MN.pdk,
+      // L_макс: не меньше 1,5·L_расч и не меньше нужной для уставки при всех постах на 270 А (весь воздух L = G/(C_уст − q_пр) минус отсосы) [А]
+      mode, Ldesign: Ld, Lmin: 0.2 * Ld, Lmax: Math.max(1.5 * Ld, 1.1 * (3 * (1 - ETA_LEV_DEFAULT) * MN.g * 1000 * wireRate(270) / 3600 / ((opts.Cset ?? 0.5 * MN.pdk) - MN.qIn) - 3 * Q_POST_MIN_M3H / 3600)), limiting: 'Mn', Cset: opts.Cset ?? 0.5 * MN.pdk,
       sensor: { of: 'aerosol', ratio: MN.g / AER.g, tau: 30, noise: 0.1 },   // [Д] датчик: τ = 30 с, шум ±10 %
       kP: 0.5, kI: 0.005, ffTau: 600, dpDesign: 600, etaFan: 0.6, ramp: 20,  // [Д]; ffTau, kI подобраны на модели (таблица настройки в блоке 4)
     },

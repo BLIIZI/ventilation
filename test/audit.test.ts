@@ -58,7 +58,7 @@ function residuals(net: Network, Q: Record<string, number>) {
       case 'filter': return e.spec.dpNom * Math.pow(q / e.spec.qNom, e.spec.m) * e.spec.fouling;
       case 'local': return e.zeta * pd(q, e.d);
       case 'diffuser': { const n = (1 - (e.d1 / e.d2) ** 2) ** 2; return Math.min(n, 3.2 * Math.tan(15 / 2 * Math.PI / 180) ** 1.25 * n) * pd(q, e.d1); }
-      case 'teeSide': { const r = q / qp; return (1 + (r * (e.dc / e.db) ** 2) ** 2 - 2 * (1 - r) ** 2) * pd(qp, e.dc); }
+      case 'teeSide': { const r = q / qp, fb = (e.db / e.dc) ** 2, A = fb <= 0.35 ? 1 : Math.max(0.9 * (1 - r), 0.55); return A * (1 + (r * (e.dc / e.db) ** 2) ** 2 - 2 * (1 - r) ** 2) * pd(qp, e.dc); }
       case 'teeStraight': { const r = sideQ / qp; return (1.55 * r - r * r) * pd(qp, e.dc); }
     }
     throw new Error('неизвестный элемент ' + e.kind);
@@ -242,7 +242,7 @@ test('Подбор двигателя IE3: ближайший стандартн
 });
 
 // ---------- общеобменная: anti-windup
-test('Anti-windup ОВ: на смене снижает пик Mn и при верной модели, и при ошибке захвата (η 0,8)', () => {
+test('Anti-windup ОВ: на смене снижает пик Mn и при верной модели, и при ошибке захвата (η 0,7)', () => {
   for (const etaReal of [undefined, 0.7]) {
     const on = simulate(demoNetwork(), shift4('fffb', { etaReal }));
     const pOff = shift4('fffb', { etaReal }); pOff.gen!.antiWindup = false;

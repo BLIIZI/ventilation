@@ -24,7 +24,9 @@ def eloss(e, q, qp, f):
     if k == 'local': return e['zeta']*pd(q, e['d'])
     if k == 'diffuser':
         n = (1-(e['d1']/e['d2'])**2)**2; return min(n, 3.2*math.tan(math.radians(7.5))**1.25*n)*pd(q, e['d1'])
-    if k == 'teeSide': r = q/qp; return (1+(r*(e['dc']/e['db'])**2)**2-2*(1-r)**2)*pd(qp, e['dc'])
+    if k == 'teeSide':
+        r = q/qp; fb = (e['db']/e['dc'])**2; Ak = 1 if fb <= 0.35 else max(0.9*(1-r), 0.55)  # Идельчик, диагр. 7-1
+        return Ak*(1+(r*(e['dc']/e['db'])**2)**2-2*(1-r)**2)*pd(qp, e['dc'])
     if k == 'teeStraight': r = f[e['side']]/qp; return (1.55*r-r*r)*pd(qp, e['dc'])
     raise ValueError(k)
 def fanp(fan, Q, n):

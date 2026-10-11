@@ -85,7 +85,7 @@ test('ОВ по потребности (все вещества): держит �
   const run = (er: number) => { const { net, params } = buildPlant({ posts: MIXED_EXAMPLE, gen: 'fffb', gasSensors: ['no2', 'co'] }); params.posts.forEach(p => (p.etaReal = er)); return simulate(net, params); };
   const a = run(0.7), b = run(0.8), c = run(0.9);
   assert.ok(a.avgLgen > b.avgLgen && b.avgLgen > c.avgLgen, `${a.avgLgen.toFixed(0)} > ${b.avgLgen.toFixed(0)} > ${c.avgLgen.toFixed(0)}`);
-  assert.ok(b.ratioMax < 0.6 && a.ratioMax < 0.65, `max ${b.ratioMax.toFixed(3)} / ${a.ratioMax.toFixed(3)}`);
+  assert.ok(b.ratioMax < 0.6 && a.ratioMax < 1, `max ${b.ratioMax.toFixed(3)} / ${a.ratioMax.toFixed(3)}`);   // цель 0,5; при ошибке захвата — не выше ПДК
   const pst = (() => { const { net, params } = buildPlant({ posts: MIXED_EXAMPLE, gen: 'posts' }); params.posts.forEach(p => (p.etaReal = 0.7)); return simulate(net, params); })();
   assert.ok(pst.ratioMax > a.ratioMax, 'по числу постов при ошибке захвата превышает цель сильнее');
 });
@@ -117,4 +117,23 @@ test('Сейчас в интерфейсе — только сварка; ост
   assert.deepEqual(activeProcesses().map(p => p.id).sort(), ['contact', 'gas_weld', 'mag_co2', 'mma', 'saw']);
   assert.ok(PROCESSES.length > activeProcesses().length);
   assert.ok(MIXED_EXAMPLE.every(p => processById(p.process).group === 'Сварка'));
+});
+
+test('СП 60: L = L_wz + (m − L_wz(q_wz − q_in))/(q_l − q_in); при q_l = q_wz общеобменная = m/(q − q_in) − L_wz; если отсосов хватает — 0', async () => {
+  const { sp60Supply, sp60General } = await import('../src/engine/norms.ts');
+  // пример: m = 1000 мг/ч, ПДК 0,2, q_in 0,001, отсосы 3000 м³/ч → весь воздух 1000/0,199 = 5025 м³/ч, ОВ = 2025 м³/ч
+  assert.ok(Math.abs(sp60Supply(1000, 3000, 0.2, 0.001) - 1000 / 0.199) < 1e-9);
+  assert.ok(Math.abs(sp60General(1000, 3000, 0.2, 0.001) - (1000 / 0.199 - 3000)) < 1e-9);
+  assert.equal(sp60General(100, 3000, 0.2, 0.001), 0);
+  // q_l > q_wz (вещество поднимается вверх и удаляется из верхней зоны с большей концентрацией) — воздуха нужно меньше
+  assert.ok(sp60Supply(1000, 3000, 0.2, 0.001, 0.3) < sp60Supply(1000, 3000, 0.2, 0.001));
+  // общий вид совпадает с прямым балансом массы: m = (L − L_wz)(q_l − q_in) + L_wz(q_wz − q_in)
+  const L = sp60Supply(1000, 3000, 0.2, 0.001, 0.3);
+  assert.ok(Math.abs((L - 3000) * (0.3 - 0.001) + 3000 * (0.2 - 0.001) - 1000) < 1e-9);
+});
+
+test('Сборка цеха: расчётная ОВ = (весь потребный воздух) − (местные отсосы), как в СП 60', () => {
+  const d = designReport(MIXED_EXAMPLE);
+  assert.ok(Math.abs(d.Ld - Math.max(0, d.Ltotal - d.Llev)) < 1e-12);
+  assert.ok(Math.abs(d.Llev * 3600 - (1500 + 1500 + 1500 + 1000)) < 1e-6);
 });

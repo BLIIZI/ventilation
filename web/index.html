@@ -257,6 +257,21 @@ function motorEfficiency(beta        , etaNom        , k = MOTOR_LOSS_RATIO) {
   return beta / (beta + loss);
 }
 
+// ---------- Воздухообмен по массе вредных веществ
+/** СП 60.13330.2020 (та же формула — СНиП 2.04.05-91*, прил. 17, ф. 2):
+ *    L = L_wz + (m_po − L_wz·(q_wz − q_in)) / (q_l − q_in),  м³/ч
+ *  L — расход ПРИТОЧНОГО воздуха (= всего удаляемого: местные отсосы + общеобменная);
+ *  L_wz — расход воздуха, удаляемого из рабочей зоны МЕСТНЫМИ ОТСОСАМИ и на технологические нужды, м³/ч;
+ *  m_po — вредное вещество, поступающее в ВОЗДУХ ПОМЕЩЕНИЯ, мг/ч (то, что отсос не поймал: (1 − η)·G);
+ *  q_wz — концентрация в рабочей зоне (не выше ПДК), q_l — в воздухе, удаляемом выше рабочей зоны, q_in — в приточном воздухе, мг/м³.
+ *  При полном перемешивании q_l = q_wz [Д — запас: сварочный аэрозоль поднимается, реально q_l ≥ q_wz], и формула даёт L = m_po/(q_wz − q_in).
+ *  Тогда общеобменная (сверх местных отсосов) L_оо = L − L_wz. [Н] */
+function sp60Supply(m        , Lwz        , qwz        , qin        , ql = qwz)         {
+  return Lwz + (m - Lwz * (qwz - qin)) / (ql - qin);
+}
+/** Общеобменная вытяжка сверх местных отсосов, не меньше 0 */
+const sp60General = (m        , Lwz        , qwz        , qin        , ql = qwz) => Math.max(0, sp60Supply(m, Lwz, qwz, qin, ql) - Lwz);
+
 
 // ---- physics.ts
 // Физические зависимости. Внутри — СИ: м, м³/с, Па, кг/м³.
@@ -419,13 +434,23 @@ const EXIT_ZETA = 1.0;
 
 /** Тройник вытяжной (слияние потоков) 90°, F_п = F_с (разд. 7, слияние потоков) [П: диаграмма и коэффициент A сверить по книге].
  *  Коэффициенты отнесены к скорости в ОБЩЕМ (сборном) канале w_с:
- *   боковое ответвление: ζ_с.б = A·[1 + (Q_б/Q_с · F_с/F_б)² − 2·(1 − Q_б/Q_с)²],  A = 1 [П];
+ *   боковое ответвление: ζ_с.б = A·[1 + (Q_б/Q_с · F_с/F_б)² − 2·(1 − Q_б/Q_с)²],  A — по teeA() [П];
  *   проход:              ζ_с.п = 1,55·(Q_б/Q_с) − (Q_б/Q_с)².
  *  Коэффициенты могут быть отрицательными (эжекция) — это физический эффект. */
-function teeSideZeta(qb        , qc        , db        , dc        , A = 1)         {
+function teeSideZeta(qb        , qc        , db        , dc        , A         )         {
   if (qc <= 0) return 0;
   const r = Math.min(1, Math.max(0, qb / qc)), fcfb = (dc / db) ** 2;
-  return A * (1 + (r * fcfb) ** 2 - 2 * (1 - r) ** 2);
+  return (A ?? teeA(1 / fcfb, r)) * (1 + (r * fcfb) ** 2 - 2 * (1 - r) ** 2);
+}
+/** Поправочный коэффициент A к боковому ответвлению тройника на слияние (F_п = F_с):
+ *  F_б/F_с ≤ 0,35 → A = 1; F_б/F_с > 0,35: Q_б/Q_с ≤ 0,4 → A = 0,9·(1 − Q_б/Q_с); Q_б/Q_с > 0,4 → A = 0,55.
+ *  Идельчик И.Е., 1992, разд. 7, диагр. 7-1 [П: сверить таблицу по книге; те же значения — в реализации Altair Activate «ConvergingTee»
+ *  со ссылкой на Idelchik, 4th ed., 2007, Diagram 7.4]. До 11.10.2026 в модели было A = 1 — завышало потери бокового входа в 1,8 раза при F_б/F_с > 0,35. */
+function teeA(fbfc        , r        )         {
+  if (fbfc <= 0.35) return 1;
+  // по таблице на границе r = 0,4 скачок 0,54 → 0,55; берётся max(…), чтобы характеристика была непрерывной (иначе у сети нет точного решения
+  // при r ≈ 0,4 — найдено автотестом на 4 постах). Отличие от таблицы — только при 0,389 < r ≤ 0,4 и не более 0,01 (1,8 %) [М]
+  return Math.max(0.9 * (1 - r), 0.55);
 }
 function teeStraightZeta(qb        , qc        )         {
   if (qc <= 0) return 0;
@@ -571,10 +596,11 @@ function setDamper(net         , segId        , alpha        ) {
 
 const ALPHA_OPEN = 0, ALPHA_CLOSED = 90;
 
-function anglesForSpeed(net         , req                        , n        ) {
+function anglesForSpeed(net         , req                        , n        , warm = false) {
   net.fanSpeed = n;
   const dampers = net.hoods.map(h => net.segments.find(s => s.id === h) .elements.find(e => e.kind === 'damper')       );
-  net.hoods.forEach((h, i) => { dampers[i].alpha = req[h] > 0 ? 20 : ALPHA_CLOSED; });
+  // начальные углы: 20° (или, при warm, углы предыдущего шага бисекции — ускоряет подбор в 2–3 раза, результат тот же в пределах допуска 0,05 %)
+  net.hoods.forEach((h, i) => { dampers[i].alpha = req[h] > 0 ? (warm && dampers[i].alpha < 70 ? dampers[i].alpha : 20) : ALPHA_CLOSED; });
   let sol = solve(net);
   for (let it = 0; it < 200; it++) {
     let maxErr = 0;
@@ -606,11 +632,11 @@ function balance(net         , req                        , nMin = 300, nMax = 1
   }
   // бисекция по частоте: минимальная частота, при которой все посты получают требуемый расход
   let lo = nMin, hi = nMax, best = top;
-  for (let i = 0; i < 25; i++) {
-    const mid = (lo + hi) / 2, r = anglesForSpeed(net, req, mid);
+  for (let i = 0; i < 25 && hi - lo > 0.5; i++) {   // точность частоты 0,5 об/мин
+    const mid = (lo + hi) / 2, r = anglesForSpeed(net, req, mid, true);
     if (r.short.length === 0) { hi = mid; best = r; } else lo = mid;
   }
-  anglesForSpeed(net, req, hi); // привести сеть в найденное состояние
+  anglesForSpeed(net, req, hi, true); // привести сеть в найденное состояние
   return { feasible: true, fanSpeed: hi, angles: best.angles, sol: best.sol,
     message: `Критическая ветвь открыта на ${(100 - best.minAlpha / 0.9).toFixed(0)} %` };
 }
@@ -826,15 +852,15 @@ function createSimulator(net         , p           ) {
       let Lt = g.Ldesign;
       if (g.mode === 'posts') Lt = g.Lmin + (g.Ldesign - g.Lmin) * nOn / ids.length;
       if (g.mode === 'ff' || g.mode === 'fffb') {
-        // упреждение: L = Σ(1−η_ном)·g·B(I) / (C_уст − q_пр) — формула блока 1 для целевой концентрации
+        // упреждение по СП 60: нужный ВЕСЬ удаляемый воздух L = Σ(1−η_ном)·g·B(I)/(C_уст − q_пр); общеобменная = L − (расход местных отсосов, измерен)
         let ffRaw        , ffGasRaw = 0, e = 0;
         if (g.multi) {
-          // по всем веществам: L ≥ Σ(G_i/ПДК_i) / (frac − Σ q_пр,i/ПДК_i) для каждой группы суммации, берётся максимум
+          // по всем веществам (СП 60): для группы суммации L = Σ G_i/(frac·ПДК_i − q_пр,i) — расходы по веществам складываются; берётся максимум по группам
           const esc                         = {};
           for (const s of p.substances) { esc[s.name] = 0; for (const ps of p.posts) if (on[ps.id]) esc[s.name] += (1 - ps.etaNom) * genOf(ps, s, t); }
           ffRaw = 0;
           for (const [, mem] of groups) {
-            const need = mem.reduce((a, s) => a + esc[s.name] / s.pdk, 0) / (g.multi.frac - mem.reduce((a, s) => a + s.qIn / s.pdk, 0));
+            const need = mem.reduce((a, s) => a + esc[s.name] / (g.multi .frac * s.pdk - s.qIn), 0);
             ffRaw = Math.max(ffRaw, need);
             if (mem.every(s => s.settles === false)) ffGasRaw = Math.max(ffGasRaw, need);   // группы только из газов — датчик аэрозоля их не видит
           }
@@ -849,6 +875,7 @@ function createSimulator(net         , p           ) {
           let G = 0; for (const ps of p.posts) if (on[ps.id]) G += (1 - ps.etaNom) * genOf(ps, lim, t);
           ffRaw = G / (g.Cset - lim.qIn);
         }
+        ffRaw = Math.max(0, ffRaw - Qtot); ffGasRaw = Math.max(0, ffGasRaw - Qtot);   // минус воздух местных отсосов (L_wz в СП 60)
         ffF += g.ffTau ? (ffRaw - ffF) * p.dt / g.ffTau : ffRaw - ffF;
         ffGasF += g.ffTau ? (ffGasRaw - ffGasF) * p.dt / g.ffTau : ffGasRaw - ffGasF;
         Lt = ffF;
@@ -864,7 +891,10 @@ function createSimulator(net         , p           ) {
       Lt = Math.min(g.Lmax, Math.max(g.Lmin, Lt));
       const dL = g.Lmax / g.ramp * p.dt; LgenNow += Math.max(-dL, Math.min(dL, Lt - LgenNow));
       Lgen = LgenNow;
-      const Pg = g.Ldesign * g.dpDesign / g.etaFan * Math.pow(Lgen / g.Ldesign, 3);
+      // вентилятор ОВ подбирается на свой максимальный расход: dpDesign — давление сети ОВ при L_ref; при меньшем расходе p ∝ L², N ∝ L³ (ГОСТ 10921-2017, разд. 14) [Д]
+      // L_ref: для постоянного режима и «по числу постов» — L_расч (больше не бывает), для регулирования по выделениям — L_макс
+      const Lref = g.mode === 'ff' || g.mode === 'fffb' ? Math.max(g.Ldesign, g.Lmax) : g.Ldesign;
+      const Pg = Lref * g.dpDesign / g.etaFan * Math.pow(Lgen / Lref, 3);
       genJ += Pg * p.dt;
     }
     genInt += Lgen * p.dt;
@@ -1034,9 +1064,11 @@ function makeNetworkFor(Qposts          , fanScale = 1, wDesign = 12)          {
 /** Базовый режим сварки блока 3: ток 225 А, проволока Св-08Г2С Ø1,2 мм, вылет 15 мм → B = α_р·I (norms.ts) */
 const I_BASE = 225;
 const B_BASE = wireRate(I_BASE);
-/** Общеобменная вентиляция по блоку 1 (СП 60.13330.2020, прил. И): L = Σ(1−η)·g·B / (ПДК − q_пр), 3 поста, η по Методике */
-function genVentByFormula(n = 3, eta = ETA_LEV_DEFAULT, B = B_BASE) {
-  return n * (1 - eta) * SV08G2S.mn * 1000 * B / 3600 / (PDK_MN_WELD_LE20.ss - MN_ATM_SS);   // м³/с
+/** Общеобменная вентиляция по СП 60.13330.2020: L_оо = L − L_wz, L = L_wz + (m − L_wz(q_wz − q_in))/(q_l − q_in);
+ *  m = n·(1−η)·g_Mn·B — марганец, попавший в цех; L_wz = n·1500 м³/ч — местные отсосы (они тоже разбавляют воздух цеха) */
+function genVentByFormula(n = 3, eta = ETA_LEV_DEFAULT, B = B_BASE, QpostM3h = Q_POST_MIN_M3H) {
+  const m = n * (1 - eta) * SV08G2S.mn * 1000 * B / 3600;   // мг/с
+  return sp60General(m, n * QpostM3h / 3600, PDK_MN_WELD_LE20.ss, MN_ATM_SS);   // м³/с
 }
 
 /** Таблица упреждения: расчётная частота вентилятора для каждого набора работающих постов (по установившемуся режиму блока 2) */
@@ -1121,7 +1153,7 @@ const AER = { name: 'aerosol', g: SV08G2S.aerosol, pdk: 1e9, qIn: 0 };   // св
 /** Расчётный (проектный) расход ОВ: все 3 поста одновременно на максимальном режиме 270 А, C = ПДК (блок 1) */
 function designLgen(eta = ETA_LEV_DEFAULT, n = 3) {
   const G = n * (1 - eta) * MN.g * 1000 * wireRate(270) / 3600; // мг/с
-  return G / (MN.pdk - MN.qIn);
+  return sp60General(G, n * Q_POST_MIN_M3H / 3600, MN.pdk, MN.qIn);   // СП 60: местные отсосы тоже разбавляют воздух цеха
 }
 
 function shift4(mode                 , opts                                      = {})            {
@@ -1134,7 +1166,8 @@ function shift4(mode                 , opts                                     
     posts: ids.map(id => ({ id, B: 0, Qset: m3h(1500), etaNom: ETA_LEV_DEFAULT, etaReal: opts.etaReal, current: sh.current(id) })),
     substances: [MN, AER],
     gen: {
-      mode, Ldesign: Ld, Lmin: 0.2 * Ld, Lmax: 1.5 * Ld, limiting: 'Mn', Cset: opts.Cset ?? 0.5 * MN.pdk,
+      // L_макс: не меньше 1,5·L_расч и не меньше нужной для уставки при всех постах на 270 А (весь воздух L = G/(C_уст − q_пр) минус отсосы) [А]
+      mode, Ldesign: Ld, Lmin: 0.2 * Ld, Lmax: Math.max(1.5 * Ld, 1.1 * (3 * (1 - ETA_LEV_DEFAULT) * MN.g * 1000 * wireRate(270) / 3600 / ((opts.Cset ?? 0.5 * MN.pdk) - MN.qIn) - 3 * Q_POST_MIN_M3H / 3600)), limiting: 'Mn', Cset: opts.Cset ?? 0.5 * MN.pdk,
       sensor: { of: 'aerosol', ratio: MN.g / AER.g, tau: 30, noise: 0.1 },   // [Д] датчик: τ = 30 с, шум ±10 %
       kP: 0.5, kI: 0.005, ffTau: 600, dpDesign: 600, etaFan: 0.6, ramp: 20,  // [Д]; ffTau, kI подобраны на модели (таблица настройки в блоке 4)
     },
@@ -1425,11 +1458,14 @@ function designReport(posts              ) {
   let Ld = 0, limiting = '';
   const need                         = {};
   for (const [k, mem] of groups) {
-    const L = mem.reduce((a, s) => a + esc[s.name] / s.pdk, 0) / (1 - mem.reduce((a, s) => a + s.qIn / s.pdk, 0));   // м³/с
+    const L = mem.reduce((a, s) => a + esc[s.name] / (s.pdk - s.qIn), 0);   // м³/с: весь удаляемый воздух; СП 60 — расходы по веществам группы суммируются
     for (const s of mem) need[s.name] = L;
     if (L > Ld) { Ld = L; limiting = k; }
   }
-  return { em, subs, esc, need, Ld, limiting, mnCat, groups, mnShare: aerEsc > 0 ? mnEsc / aerEsc : 0, postMnCats };
+  // СП 60: L = L_wz + (m − L_wz(q_wz − q_in))/(q_l − q_in) → при q_l = q_wz общеобменная L_оо = L − L_wz, L_wz — местные отсосы
+  const Llev = posts.reduce((a, p) => a + qsetOf(p), 0) / 3600, Ltotal = Ld;
+  Ld = Math.max(0, Ltotal - Llev);
+  return { em, subs, esc, need, Ld, Ltotal, Llev, limiting, mnCat, groups, mnShare: aerEsc > 0 ? mnEsc / aerEsc : 0, postMnCats };
 }
 
 function buildPlant(cfg             )                                                                                   {
@@ -1457,7 +1493,8 @@ function buildPlant(cfg             )                                           
   const limSub = [...d.groups.get(d.limiting) ?? []].sort((a, c) => d.esc[c.name] / c.pdk - d.esc[a.name] / a.pdk)[0]?.name ?? 'mn';
   const Ld = Math.max(d.Ld, m3h(500));
   const gen                      = cfg.gen ? {
-    mode: cfg.gen, Ldesign: Ld, Lmin: 0.2 * Ld, Lmax: 1.5 * Ld, limiting: limSub, Cset: frac, multi: { frac, gasSensors: cfg.gasSensors },
+    // L_макс — производительность вентилятора ОВ: не меньше 1,5·L_расч и не меньше нужной для цели регулятора при всех работающих постах [А]
+    mode: cfg.gen, Ldesign: Ld, Lmin: 0.2 * Ld, Lmax: Math.max(1.5 * Ld, 1.1 * (d.Ltotal / frac - d.Llev)), limiting: limSub, Cset: frac, multi: { frac, gasSensors: cfg.gasSensors },
     sensor: { of: 'aerosol', ratio: 0, tau: 30, noise: 0.1 }, kP: 0.5, kI: 0.005, ffTau: 600, dpDesign: 600, etaFan: 0.6, ramp: 20,
   } : undefined;
   const params            = {
@@ -1474,7 +1511,7 @@ function buildPlant(cfg             )                                           
       emission: d.em[k], qset: qsets[k], qmin: q.q, qminSource: q.source, hood: q.label, eta: p.eta ?? ETA_LEV_DEFAULT }; }),
     substances: d.subs.filter(s => Number.isFinite(s.pdk)).map(s => ({ id: s.name, name: SUBSTANCES[s.name].name, pdk: s.pdk, cls: SUBSTANCES[s.name].cls, status: SUBSTANCES[s.name].status, group: s.group, Lneed: (d.need[s.name] ?? 0) * 3600, note: SUBSTANCES[s.name].note }))
       .sort((a, c) => c.Lneed - a.Lneed),
-    Ldesign: Ld * 3600, limiting: d.limiting, mnCategory: d.mnCat?.label, mnShare: d.mnShare, postMnCategory: d.postMnCats, fanScale, fanFeasible: feasible, commissioning: com,
+    Ldesign: Ld * 3600, Ltotal: d.Ltotal * 3600, Llev: d.Llev * 3600, limiting: d.limiting, mnCategory: d.mnCat?.label, mnShare: d.mnShare, postMnCategory: d.postMnCats, fanScale, fanFeasible: feasible, commissioning: com,
   };
   return { net, params, report, makeNet };
 }
@@ -1488,7 +1525,7 @@ const MIXED_EXAMPLE               = [
 ];
 
 
-window.Engine = { RHO_AIR, NU_AIR, C_AIR, KE_STEEL, W_MIN_WELDING, Q_POST_MIN_M3H, ETA_LEV_DEFAULT, K_SETTLE, SV08G2S, FC12, PDK_MN_WELD_LE20, PDK_MN_WELD_20_30, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, alphaMelt, wireRate, ACTUATOR_TIMES_GOST7192, IE3_4P_GOST, MOTOR_LOSS_RATIO, motorEfficiency, AIR, m3h, toM3h, area, velocity, dynPressure, lambdaAltshul, ductLoss, BUTTERFLY_ROUND, damperZeta, damperAngleForZeta, VFD_EFF, electricPower, fanPressure, fanPower, filterLoss, bendZeta, suddenExpansionZeta, diffuserZeta, suddenContractionZeta, HOOD_CONE_ZETA, SHARP_ENTRY_ZETA, EXIT_ZETA, teeSideZeta, teeStraightZeta, elemLoss, lossBreakdown, solve, setDamper, balance, interp, createSimulator, simulate, chainNetwork, demoNetwork, DEMO_FAN, makeNetwork, IE3_4P, pickMotor, makeNetworkFor, I_BASE, B_BASE, genVentByFormula, feedforwardTable, makeSchedule, commissioning, shiftParams, WIRE_12, makeShift, MN, AER, designLgen, shift4, pdkOf, SUBSTANCES, mnCategory, P_Q, PROCESSES, processById, ENABLED_GROUPS, activeProcesses, paramsOf, emissionOf, qminOf, qsetOf, designReport, buildPlant, MIXED_EXAMPLE };
+window.Engine = { RHO_AIR, NU_AIR, C_AIR, KE_STEEL, W_MIN_WELDING, Q_POST_MIN_M3H, ETA_LEV_DEFAULT, K_SETTLE, SV08G2S, FC12, PDK_MN_WELD_LE20, PDK_MN_WELD_20_30, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, alphaMelt, wireRate, ACTUATOR_TIMES_GOST7192, IE3_4P_GOST, MOTOR_LOSS_RATIO, motorEfficiency, sp60Supply, sp60General, AIR, m3h, toM3h, area, velocity, dynPressure, lambdaAltshul, ductLoss, BUTTERFLY_ROUND, damperZeta, damperAngleForZeta, VFD_EFF, electricPower, fanPressure, fanPower, filterLoss, bendZeta, suddenExpansionZeta, diffuserZeta, suddenContractionZeta, HOOD_CONE_ZETA, SHARP_ENTRY_ZETA, EXIT_ZETA, teeSideZeta, teeA, teeStraightZeta, elemLoss, lossBreakdown, solve, setDamper, balance, interp, createSimulator, simulate, chainNetwork, demoNetwork, DEMO_FAN, makeNetwork, IE3_4P, pickMotor, makeNetworkFor, I_BASE, B_BASE, genVentByFormula, feedforwardTable, makeSchedule, commissioning, shiftParams, WIRE_12, makeShift, MN, AER, designLgen, shift4, pdkOf, SUBSTANCES, mnCategory, P_Q, PROCESSES, processById, ENABLED_GROUPS, activeProcesses, paramsOf, emissionOf, qminOf, qsetOf, designReport, buildPlant, MIXED_EXAMPLE };
 })();
 </script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
@@ -1624,7 +1661,7 @@ function renderDesign() {
     document.getElementById(`src-${id}`).innerHTML = `Уставка отсоса ${fmt(E.qsetOf(cfg[i]))} м³/ч — ${q.source}<br>Выделение: ${top.map(([k, v]) => `${E.SUBSTANCES[k].name.split(' (')[0]} ${fmt(v * 3.6, 2)} г/ч`).join('; ') || 'нет (ввести показатели)'}`;
   });
   const lim = report ? report.substances[0] : null;
-  document.getElementById('designNote').innerHTML = report ? `Расчётная общеобменная (все посты, C = ПДК): <b>${fmt(report.Ldesign)} м³/ч</b>, лимитирует: <b>${lim ? lim.name : '—'}</b>${report.mnCategory ? `; доля Mn в аэрозоле цеха ${fmt(report.mnShare * 100, 1)} % → ПДК Mn по категории «${report.mnCategory}»` : ''}. Вещества с пометкой «сверить» — ПДК по ГН, сверить по СанПиН.` : '';
+  document.getElementById('designNote').innerHTML = report ? `По СП 60.13330.2020 (все посты, C = ПДК): весь воздух <b>${fmt(report.Ltotal)} м³/ч</b> − местные отсосы ${fmt(report.Llev)} = общеобменная <b>${fmt(report.Ldesign)} м³/ч</b>, лимитирует: <b>${lim ? lim.name : '—'}</b>${report.mnCategory ? `; доля Mn в аэрозоле цеха ${fmt(report.mnShare * 100, 1)} % → ПДК Mn по категории «${report.mnCategory}»` : ''}. Вещества с пометкой «сверить» — ПДК по ГН, сверить по СанПиН.` : '';
 }
 renderCards();
 reset();

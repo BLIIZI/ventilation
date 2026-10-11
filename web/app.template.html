@@ -300,7 +300,7 @@ function renderDesign() {
     document.getElementById(`src-${id}`).innerHTML = `Уставка отсоса ${fmt(E.qsetOf(cfg[i]))} м³/ч — ${q.source}<br>Выделение: ${top.map(([k, v]) => `${E.SUBSTANCES[k].name.split(' (')[0]} ${fmt(v * 3.6, 2)} г/ч`).join('; ') || 'нет (ввести показатели)'}`;
   });
   const lim = report ? report.substances[0] : null;
-  document.getElementById('designNote').innerHTML = report ? `Расчётная общеобменная (все посты, C = ПДК): <b>${fmt(report.Ldesign)} м³/ч</b>, лимитирует: <b>${lim ? lim.name : '—'}</b>${report.mnCategory ? `; доля Mn в аэрозоле цеха ${fmt(report.mnShare * 100, 1)} % → ПДК Mn по категории «${report.mnCategory}»` : ''}. Вещества с пометкой «сверить» — ПДК по ГН, сверить по СанПиН.` : '';
+  document.getElementById('designNote').innerHTML = report ? `По СП 60.13330.2020 (все посты, C = ПДК): весь воздух <b>${fmt(report.Ltotal)} м³/ч</b> − местные отсосы ${fmt(report.Llev)} = общеобменная <b>${fmt(report.Ldesign)} м³/ч</b>, лимитирует: <b>${lim ? lim.name : '—'}</b>${report.mnCategory ? `; доля Mn в аэрозоле цеха ${fmt(report.mnShare * 100, 1)} % → ПДК Mn по категории «${report.mnCategory}»` : ''}. Вещества с пометкой «сверить» — ПДК по ГН, сверить по СанПиН.` : '';
 }
 renderCards();
 reset();

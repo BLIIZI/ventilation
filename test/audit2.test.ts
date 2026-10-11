@@ -56,8 +56,12 @@ test('Зона дыхания: C_дых = C_цеха + G_ут/β, β = ½·2πr�
   for (const id of full) assert.ok(Math.abs(last.Cbz[id] - last.C.Mn - Gesc / beta) < 1e-6, id);
   const p1 = { ...p, posts: p.posts.map(x => ({ ...x, etaReal: 1 })) };
   const l1 = simulate(demoNetwork(), p1).series.at(-1)!;
-  for (const id of ['post1', 'post2', 'post3'].filter(x => l1.Q[x] >= 1500)) assert.ok(Math.abs(l1.Cbz[id] - l1.C.Mn) < 1e-12, id);
-  assert.ok(['post1', 'post2', 'post3'].some(x => l1.Q[x] >= 1500));
+  // захват 100 %: в зону дыхания уходит только недобор расхода (η = 1·min(1, Q/1500)); при Q ≥ 1500 C_дых = C_цеха ровно
+  for (const id of ['post1', 'post2', 'post3']) {
+    const esc = (1 - Math.min(1, l1.Q[id] / 1500)) * g * 1000 * B / 3600 / beta;
+    assert.ok(Math.abs(l1.Cbz[id] - l1.C.Mn - esc) < 1e-9, id);
+    assert.ok(esc < 0.01, id);   // пусконаладка даёт расход в пределах 0,1 % от 1500 → добавка < 0,01 мг/м³
+  }
 });
 
 test('Зона дыхания: при выключенном посте C_дых = C_цеха; среднесменная ≤ максимальной', () => {
