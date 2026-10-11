@@ -55,7 +55,7 @@ export function shiftParams(mode: Mode, pSet?: number, balanced = true): SimPara
     posts: ids.map(id => ({ id, B: B_BASE, Qset: m3h(Q_POST_MIN_M3H), etaNom: ETA_LEV_DEFAULT })),  // 1500 м³/ч — ГОСТ 12.3.003-86 п. 2.11.1; η = 0,8 — Методика 1997
     substances: [
       { name: 'Mn', g: SV08G2S.mn, pdk: PDK_MN_WELD_LE20.ss, qIn: MN_ATM_SS },   // Методика 1997 табл. 1; СанПиН 1.2.3685-21 табл. 2.1, 1.1
-      { name: 'Fe2O3', g: SV08G2S.fe, pdk: 6, qIn: 0.04 },                          // ПДК — [П] сверить строку «Железа оксид» СанПиН табл. 2.1
+      { name: 'Fe2O3', g: SV08G2S.fe, pdk: 6, qIn: 0.04 },                          // СанПиН 1.2.3685-21, табл. 2.1, стр. 1031: -/6 (с.с.), Ф, 4 кл. — сверено
     ],
     room: { V: 48 * 24 * 14.4, Lgen: genVentByFormula(), dT: T_IN_WINTER - MOSCOW_HEATING.tAvg },
     // объём цеха — из диплома; Δt = 18 − (−1,7) = 19,7 °C (СанПиН 1.2.3685-21; СП 131.13330.2025)
