@@ -123,5 +123,5 @@ export const MIXED_EXAMPLE: PostConfig[] = [
   { id: 'post1', process: 'mag_co2', material: 'sv08g2s', params: { I: 225 } },
   { id: 'post2', process: 'mma', material: 'uoni1345', params: { B: 1.5 } },
   { id: 'post3', process: 'saw', material: 'fc12', params: { B: 6 }, hood: 'table' },
-  { id: 'post4', process: 'contact', material: 'butt', params: { P: 1 } },
+  { id: 'post4', process: 'contact', material: 'butt', params: { N: 75 } },
 ];
