@@ -3,8 +3,9 @@
 // «вход отсоса → ... → вентилятор → выброс»: Σ Δp(участков пути) = p_вент(Q_общ).
 // Неизвестные — расходы отсосов Q_1..Q_N; решается методом Ньютона (якобиан численный).
 // Расход на любом участке = сумма расходов отсосов, проходящих через него (закон сохранения массы).
-import { ductLoss, damperZeta, fanPressure, filterLoss, m3h, fanPower, electricPower, area, dynPressure } from './physics.ts';
-import { diffuserZeta, teeSideZeta, teeStraightZeta } from './fittings.ts';
+import { ductLoss, damperZeta, fanPressure, filterLoss, m3h, fanPower, electricPower, area, dynPressure, lambdaAltshul, AIR } from './physics.ts';
+import { KE_STEEL } from './norms.ts';
+import { diffuserZeta, teeSideZeta, teeStraightZeta, bendZetaRough } from './fittings.ts';
 import type { FanCurve, FilterSpec } from './physics.ts';
 
 export type Element =
@@ -12,7 +13,8 @@ export type Element =
   | { kind: 'damper'; id: string; d: number; alpha: number; table?: Array<[number, number]> } // заслонка: угол, ° (0 — открыта); table — фактическая характеристика ζ(α), если отличается от справочной
   | { kind: 'filter'; id: string; spec: FilterSpec }
   | { kind: 'local'; id: string; d: number; zeta: number; label?: string }          // местное сопротивление с постоянным ζ (зонт, отвод, выход), к скорости в d
-  | { kind: 'diffuser'; id: string; d1: number; d2: number; alpha?: number }       // переход на больший диаметр, ζ к скорости в d1
+  | { kind: 'diffuser'; id: string; d1: number; d2: number; alpha?: number }       // переход на больший диаметр, ζ к скорости в d1 (зависит от Re)
+  | { kind: 'bend'; id: string; d: number; delta: number; rd: number; label?: string } // отвод: угол δ, °; R₀/D₀; ζ зависит от Re и шероховатости (Идельчик, диагр. 6-1)
   | { kind: 'teeSide'; id: string; db: number; dc: number }                         // тройник на слияние, боковой вход в родительский участок
   | { kind: 'teeStraight'; id: string; dc: number; side: string };                  // тройник на слияние, проход; side — участок бокового входа
 
@@ -45,7 +47,8 @@ export function elemLoss(e: Element, Q: number, ctx?: { Qp: number; f: Record<st
     case 'damper': return ductLoss(Q, e.d, 0, damperZeta(e.alpha, e.table));
     case 'filter': return filterLoss(e.spec, Q);
     case 'local': return ductLoss(Q, e.d, 0, e.zeta);
-    case 'diffuser': return ductLoss(Q, e.d1, 0, diffuserZeta(e.d1, e.d2, e.alpha ?? 15));
+    case 'diffuser': { const w = Math.abs(Q) / area(e.d1), Re = w * e.d1 / AIR.nu; return ductLoss(Q, e.d1, 0, diffuserZeta(e.d1, e.d2, e.alpha ?? 15, Re, lambdaAltshul(w, e.d1))); }
+    case 'bend': { const w = Math.abs(Q) / area(e.d), Re = w * e.d / AIR.nu; return ductLoss(Q, e.d, 0, bendZetaRough(e.delta, e.rd, Re, lambdaAltshul(w, e.d), KE_STEEL / e.d)); }
     case 'teeSide': { const qc = ctx?.Qp ?? Q; return teeSideZeta(Q, qc, e.db, e.dc) * dynPressure(qc / area(e.dc)); }
     case 'teeStraight': { const qc = ctx?.Qp ?? Q, qb = ctx?.f[e.side] ?? 0; return teeStraightZeta(qb, qc) * dynPressure(qc / area(e.dc)); }
   }
@@ -54,10 +57,10 @@ const segLossFn = (s: { elements: Element[]; parent?: string | null }, Q: number
   s.elements.reduce((a, e) => a + elemLoss(e, Q, f ? { Qp: s.parent ? f[s.parent] : Q, f } : undefined), 0);
 
 /** Разбивка потерь давления по элементам при найденном решении (для отчёта и проверки энергетического баланса) */
-export function lossBreakdown(net: Network, sol: Solution): Array<{ seg: string; id: string; kind: string; dp: number }> {
-  const out: Array<{ seg: string; id: string; kind: string; dp: number }> = [];
-  for (const s of net.segments) for (const e of s.elements) out.push({ seg: s.id, id: e.id, kind: e.kind, dp: elemLoss(e, sol.Q[s.id], { Qp: s.parent ? sol.Q[s.parent] : sol.Q[s.id], f: sol.Q }) });
-  for (const e of net.common) out.push({ seg: 'common', id: e.id, kind: e.kind, dp: elemLoss(e, sol.Qtotal) });
+export function lossBreakdown(net: Network, sol: Solution): Array<{ seg: string; id: string; kind: string; dp: number; q: number }> {
+  const out: Array<{ seg: string; id: string; kind: string; dp: number; q: number }> = [];
+  for (const s of net.segments) for (const e of s.elements) out.push({ seg: s.id, id: e.id, kind: e.kind, q: sol.Q[s.id], dp: elemLoss(e, sol.Q[s.id], { Qp: s.parent ? sol.Q[s.parent] : sol.Q[s.id], f: sol.Q }) });
+  for (const e of net.common) out.push({ seg: 'common', id: e.id, kind: e.kind, q: sol.Qtotal, dp: elemLoss(e, sol.Qtotal) });
   return out;
 }
 

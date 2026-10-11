@@ -2,7 +2,7 @@
 // ВНИМАНИЕ: геометрия и характеристика вентилятора — [Д] условные, для проверки ядра.
 import type { Network, Element } from './network.ts';
 import { IE3_4P_GOST } from './norms.ts';
-import { bendZeta, HOOD_CONE_ZETA, EXIT_ZETA } from './fittings.ts';
+import { HOOD_CONE_ZETA, EXIT_ZETA } from './fittings.ts';
 
 /** Сборка сети «посты вдоль коллектора» с поэлементным учётом местных сопротивлений (Идельчик, 1992):
  *  ветвь поста: зонт (вход) → трение по длине → отвод 90° (R/D = 1,5) → отвод 45° → заслонка → вход в коллектор
@@ -11,27 +11,26 @@ import { bendZeta, HOOD_CONE_ZETA, EXIT_ZETA } from './fittings.ts';
  *  общий тракт: фильтр → трение → отвод 90° → выход в атмосферу (ζ = 1). [Д] — геометрия демонстрационная. */
 export function chainNetwork(dPost: number[], dColl: number[], lBranch = 6, lColl = 5, lMain = 10, dOut = dColl[dColl.length - 1]): Pick<Network, 'segments' | 'hoods'> & { commonTail: Element[] } {
   const N = dPost.length, segs: Network['segments'] = [];
-  const B90 = bendZeta(90, 1.5), B45 = bendZeta(45, 1.5), B90r1 = bendZeta(90, 1.0);
   for (let i = 1; i <= N; i++) {
     const db = dPost[i - 1], dc = dColl[i - 1];
     const el: Element[] = [
       { kind: 'local', id: `hood${i}`, d: db, zeta: HOOD_CONE_ZETA, label: 'вход через зонт' },
       { kind: 'duct', id: `branch${i}`, d: db, l: lBranch, zeta: 0 },
-      { kind: 'local', id: `bend90_${i}`, d: db, zeta: B90, label: 'отвод 90°, R/D = 1,5' },
-      { kind: 'local', id: `bend45_${i}`, d: db, zeta: B45, label: 'отвод 45°, R/D = 1,5' },
+      { kind: 'bend', id: `bend90_${i}`, d: db, delta: 90, rd: 1.5, label: 'отвод 90°, R/D = 1,5' },
+      { kind: 'bend', id: `bend45_${i}`, d: db, delta: 45, rd: 1.5, label: 'отвод 45°, R/D = 1,5' },
       { kind: 'damper', id: `damper${i}`, d: db, alpha: 0 },
     ];
-    if (i === 1) { el.push({ kind: 'local', id: 'bend_end', d: db, zeta: B90r1, label: 'отвод 90° в торец коллектора' });
+    if (i === 1) { el.push({ kind: 'bend', id: 'bend_end', d: db, delta: 90, rd: 1.0, label: 'отвод 90° в торец коллектора' });
       if (dc > db) el.push({ kind: 'diffuser', id: 'trans1', d1: db, d2: dc }); }
     else el.push({ kind: 'teeSide', id: `tee${i}`, db, dc });
     segs.push({ id: `post${i}`, parent: `c${i}`, elements: el });
     const ce: Element[] = [{ kind: 'duct', id: `c${i}`, d: dc, l: i < N ? lColl : lMain, zeta: 0 }];
     if (i < N) { const dn = dColl[i]; if (dn > dc) ce.push({ kind: 'diffuser', id: `trans_c${i}`, d1: dc, d2: dn }); ce.push({ kind: 'teeStraight', id: `teeP${i + 1}`, dc: dn, side: `post${i + 1}` }); }
-    else ce.push({ kind: 'local', id: 'bend_main', d: dc, zeta: B90, label: 'отвод 90° к фильтру' });
+    else ce.push({ kind: 'bend', id: 'bend_main', d: dc, delta: 90, rd: 1.5, label: 'отвод 90° к фильтру' });
     segs.push({ id: `c${i}`, parent: i < N ? `c${i + 1}` : null, elements: ce });
   }
   return { segments: segs, hoods: Array.from({ length: N }, (_, i) => `post${i + 1}`),
-    commonTail: [{ kind: 'duct', id: 'discharge', d: dOut, l: 5, zeta: 0 }, { kind: 'local', id: 'bend_out', d: dOut, zeta: B90, label: 'отвод 90°' }, { kind: 'local', id: 'exit', d: dOut, zeta: EXIT_ZETA, label: 'выход в атмосферу' }] };
+    commonTail: [{ kind: 'duct', id: 'discharge', d: dOut, l: 5, zeta: 0 }, { kind: 'bend', id: 'bend_out', d: dOut, delta: 90, rd: 1.5, label: 'отвод 90°' }, { kind: 'local', id: 'exit', d: dOut, zeta: EXIT_ZETA, label: 'выход в атмосферу' }] };
 }
 
 export function demoNetwork(): Network {

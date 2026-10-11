@@ -122,6 +122,6 @@ export function buildPlant(cfg: PlantConfig): { net: Network; params: SimParams;
 export const MIXED_EXAMPLE: PostConfig[] = [
   { id: 'post1', process: 'mag_co2', material: 'sv08g2s', params: { I: 225 } },
   { id: 'post2', process: 'mma', material: 'uoni1345', params: { B: 1.5 } },
-  { id: 'post3', process: 'saw', material: 'fc12', params: { B: 6 }, hood: 'table' },
+  { id: 'post3', process: 'saw', material: 'an348a', params: { B: 6 }, hood: 'table' },   // флюс АН-348-А (ГОСТ Р 52222-2004: широкого применения); B — расход флюса, кг/ч
   { id: 'post4', process: 'contact', material: 'butt', params: { N: 75 } },
 ];

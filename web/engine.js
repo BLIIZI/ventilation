@@ -144,12 +144,13 @@ function ductLoss(Q        , d        , l        , sumZeta        , ke = KE_STEE
 }
 
 // ---------- Заслонка
-/** Характеристика дроссель-клапана в круглом воздуховоде: угол α (0° — открыта, 90° — закрыта) → ζ.
- *  [П] Значения по справочнику Идельчика (дроссель-клапан, круглая труба) — ТРЕБУЮТ СВЕРКИ по первоисточнику.
- *  Участок 70–90° — [Д]: закрытая заслонка моделируется утечкой (ζ = 1e4 при 90°). */
+/** Характеристика дроссель-клапана (плоский дисковый затвор) в трубе круглого сечения: угол α (0° — открыт, 90° — закрыт) → ζ, к скорости в трубе.
+ *  Идельчик И.Е., 1992, диагр. 9-17, с. 452–453, кривая 2 (D̄ = D_д/D₀ = 1,0), значения ζ_кв: 10° — 0,52; 20° — 1,54; 30° — 4,50; 40° — 11,0;
+ *  50° — 29,0; 60° — 105; 70° — 625 [С] (сверено по книге 11.10.2026). Слагаемое 120·A/Re диаграммы при Re > 10⁴ < 1 % — не учитывается.
+ *  0° — для кривой 2 в таблице нет значения: принято 0,2 [Д] (тонкий диск вдоль потока; уточнить по паспорту заслонки).
+ *  90° — [Д]: закрытая заслонка моделируется утечкой (ζ = 10⁴). До 11.10.2026 в модели была другая таблица (30° — 3,91; 60° — 118; 70° — 751). */
 const BUTTERFLY_ROUND                          = [
-  [0, 0.2], [5, 0.24], [10, 0.52], [15, 0.9], [20, 1.54], [25, 2.51], [30, 3.91], [35, 6.22],
-  [40, 10.8], [45, 18.7], [50, 32.6], [55, 58.8], [60, 118], [65, 256], [70, 751], [90, 1e4],
+  [0, 0.2], [10, 0.52], [20, 1.54], [30, 4.50], [40, 11.0], [50, 29.0], [60, 105], [70, 625], [90, 1e4],
 ];
 
 /** ζ(α) — интерполяция ln ζ по углу (ζ растёт почти экспоненциально) [М] */
@@ -234,39 +235,92 @@ const filterLoss = (f            , Q        ) =>
 // Каждый коэффициент ζ отнесён к динамическому давлению в указанном сечении. Потери Δp = ζ·ρw²/2.
 // [П] — формула приведена по справочнику, номер диаграммы и коэффициенты сверить по книге (Саша пришлёт фото страниц).
 
-/** Отвод (колено) круглого сечения с плавным поворотом: ζ_м = A₁·B₁ (разд. 6-1, диагр. 6-1); отнесено к скорости в отводе.
- *  A₁ — от угла поворота δ: аппроксимация диаграммы A = 1,634831·10⁻⁷δ³ − 8,1581126·10⁻⁵δ² + 1,714184·10⁻²δ (δ в градусах; A(90°) = 1,00)
- *  (та же аппроксимация — в справке SimInTech, «Местное сопротивление по Идельчику», со ссылкой на разд. 6-1, с. 260, диагр. 6-1, с. 277);
- *  B₁ — от относительного радиуса R₀/D₀: 0,21/(R₀/D₀)^2,5 при R₀/D₀ < 1; 0,21/(R₀/D₀)^0,5 при R₀/D₀ ≥ 1.
- *  Сопротивление трения по длине отвода добавляется отдельно (длина дуги в длине участка). */
-function bendZeta(deltaDeg        , rOverD        )         {
-  const d = deltaDeg;
-  const A1 = 1.634831e-7 * d ** 3 - 8.1581126e-5 * d ** 2 + 1.714184e-2 * d;
-  const B1 = rOverD < 1 ? 0.21 / rOverD ** 2.5 : 0.21 / rOverD ** 0.5;
-  return A1 * B1;
+/** Отвод круглого сечения с плавным поворотом, R₀/D₀ < 3 — Идельчик И.Е., 1992, разд. 6, диагр. 6-1, с. 277–278 [С] (сверено по книге 11.10.2026).
+ *  ζ_м = A₁·B₁·C₁ (C₁ = 1 для круглого сечения), отнесено к скорости в отводе.
+ *  A₁(δ) — таблица на с. 278: 0°—0; 20°—0,31; 30°—0,45; 45°—0,60; 60°—0,78; 75°—0,90; 90°—1,00; 110°—1,13; 130°—1,20; 150°—1,28; 180°—1,40.
+ *  B₁ = 0,21·(R₀/D₀)^−2,5 при R₀/D₀ = 0,5…1,0; 0,21·(R₀/D₀)^−0,5 при R₀/D₀ > 1,0.
+ *  Шероховатые стенки (воздуховоды из стали, Δ > 0), Re ≥ 10⁴: ζ = k_Δ·k_Re·ζ_м + ζ_тр (п. 2 диаграммы); ζ_тр — трение по длине дуги, считается в длине участка.
+ *  k_Re (с. 277): R₀/D₀ > 0,70 → 1,3 − 0,29·ln(Re·10⁻⁵); 0,55…0,70 → 5,45/Re^0,131; 0,50…0,55 → 1 + 4400/Re.
+ *  k_Δ (с. 278, R₀/D₀ > 0,55, Δ̄ ≤ 0,001): Re 3·10³…4·10⁴ → 1,0; 4·10⁴…2·10⁵ → λ_Δ/λ_гл; > 2·10⁵ → 1 + Δ̄·10³.
+ *  [М] На границах диапазонов Re таблица k_Δ даёт скачки (при Δ̄ = 0,0005 на Re = 2·10⁵: 1,16 → 1,5). Чтобы у сети было решение при любом расходе,
+ *  k_Δ сглажен линейно по ln Re в пределах ×/÷ 1,25 от границ (3,2·10⁴…5·10⁴ и 1,6·10⁵…2,5·10⁵); Re < 10⁴ (только утечки через закрытые заслонки) — k_Re по Re = 10⁴. */
+const A1_TAB                          = [[0, 0], [20, 0.31], [30, 0.45], [45, 0.60], [60, 0.78], [75, 0.90], [90, 1.00], [110, 1.13], [130, 1.20], [150, 1.28], [180, 1.40]];
+const lin = (t                         , x        ) => {
+  if (x <= t[0][0]) return t[0][1];
+  for (let i = 1; i < t.length; i++) if (x <= t[i][0]) { const [x0, y0] = t[i - 1], [x1, y1] = t[i]; return y0 + (x - x0) * (y1 - y0) / (x1 - x0); }
+  return t[t.length - 1][1];
+};
+const bendA1 = (deltaDeg        ) => lin(A1_TAB, deltaDeg);
+const bendB1 = (rOverD        ) => rOverD <= 1 ? 0.21 / rOverD ** 2.5 : 0.21 / rOverD ** 0.5;
+/** ζ_м = A₁·B₁ — местное сопротивление отвода с гладкими стенками при Re > 2·10⁵ */
+function bendZeta(deltaDeg        , rOverD        )         { return bendA1(deltaDeg) * bendB1(rOverD); }
+/** λ технически гладких труб (Идельчик, диагр. 2-1; формула Филоненко–Альтшуля): λ = 1/(1,8·lg Re − 1,64)², Re ≥ 4000 */
+const lambdaSmooth = (Re        ) => 1 / (1.8 * Math.log10(Math.max(Re, 4000)) - 1.64) ** 2;
+function bendKRe(Re        , rOverD        )         {
+  const R = Math.max(Re, 1e4);
+  if (rOverD > 0.70) return 1.3 - 0.29 * Math.log(R * 1e-5);
+  if (rOverD > 0.55) return 5.45 / R ** 0.131;
+  return 1 + 4400 / R;
+}
+/** k_Δ; lamRough — λ шероховатой трубы при этом Re (Альтшуль), relRough = Δ/D */
+function bendKDelta(Re        , lamRough        , relRough        )         {
+  const mid = lamRough / lambdaSmooth(Re), hi = 1 + Math.min(relRough, 0.001) * 1e3;
+  const blend = (x        , x0        , x1        , y0        , y1        ) => { const t = (Math.log(x) - Math.log(x0)) / (Math.log(x1) - Math.log(x0)); return y0 + Math.min(1, Math.max(0, t)) * (y1 - y0); };
+  if (Re <= 3.2e4) return 1;
+  if (Re < 5e4) return blend(Re, 3.2e4, 5e4, 1, mid);  // от 1,0 к λ_Δ/λ_гл (непрерывно)
+  if (Re <= 1.6e5) return mid;
+  if (Re < 2.5e5) return blend(Re, 1.6e5, 2.5e5, mid, hi);
+  return hi;
+}
+/** Полный местный коэффициент отвода в стальном воздуховоде при данном Re */
+function bendZetaRough(deltaDeg        , rOverD        , Re        , lamRough        , relRough        )         {
+  return bendKDelta(Re, lamRough, relRough) * bendKRe(Re, rOverD) * bendZeta(deltaDeg, rOverD);
 }
 
 /** Внезапное расширение (формула Борда–Карно): ζ = (1 − F₁/F₂)², отнесено к скорости в узком сечении F₁ (разд. 4-1, диагр. 4-1) */
 const suddenExpansionZeta = (d1        , d2        ) => (1 - (d1 / d2) ** 2) ** 2;
 
-/** Конический диффузор (плавное расширение), угол раскрытия α ≤ 40°: ζ = 3,2·tg(α/2)^1,25·(1 − F₁/F₂)², к скорости в узком сечении
- *  (разд. 5, диффузоры, формула для расчёта при малых углах) [П]. При α > 40° — не меньше Борда–Карно. */
-function diffuserZeta(d1        , d2        , alphaDeg = 15)         {
-  const n = (1 - (d1 / d2) ** 2) ** 2;
-  if (alphaDeg > 40) return n;
-  return Math.min(n, 3.2 * Math.tan(alphaDeg / 2 * Math.PI / 180) ** 1.25 * n);
+/** Конический диффузор в сети, угол раскрытия α, F₁/F₀ = n — Идельчик, 1992, разд. 5, диагр. 5-2, с. 211 (табл. ζ_д при n = 2, l₀/D₀ = 0) и
+ *  формулы (5-6), (5-7), с. 192–193 (сверено по книге 11.10.2026). ζ к скорости в узком сечении, включает трение.
+ *  Таблица дана для n ≥ 2; у переходов в сети n ≈ 1,5–2, поэтому [М]: ζ(n) = [ζ_табл(α, Re; n = 2) − ζ_тр(2)]·((1 − 1/n)/0,5)^1,92 + ζ_тр(n),
+ *  где 1,92 — показатель m для конических диффузоров в (5-7), ζ_тр = λ/(8·sin(α/2))·(1 − 1/n²) — формула (5-6).
+ *  Re < 0,5·10⁵ и > 4·10⁵ — значения на границе таблицы. При α > 40° — не меньше Борда–Карно (1 − 1/n)². */
+const DIFF_A = [3, 4, 6, 8, 10, 12, 14, 16, 20, 30, 45, 60, 90, 120, 180];
+const DIFF_RE = [0.5e5, 1e5, 2e5, 4e5];
+const DIFF_N2 = [
+  [0.148, 0.135, 0.121, 0.112, 0.107, 0.109, 0.120, 0.141, 0.191, 0.315, 0.331, 0.326, 0.315, 0.308, 0.298],
+  [0.120, 0.106, 0.090, 0.083, 0.080, 0.088, 0.102, 0.122, 0.196, 0.298, 0.297, 0.286, 0.283, 0.279, 0.276],
+  [0.093, 0.082, 0.070, 0.068, 0.062, 0.062, 0.063, 0.073, 0.120, 0.229, 0.279, 0.268, 0.268, 0.265, 0.263],
+  [0.079, 0.068, 0.056, 0.048, 0.048, 0.048, 0.051, 0.051, 0.068, 0.120, 0.271, 0.272, 0.272, 0.268, 0.268],
+];
+function diffuserZetaN2(alphaDeg        , Re        )         {
+  const a = Math.min(Math.max(alphaDeg, 3), 180), r = Math.min(Math.max(Re, DIFF_RE[0]), DIFF_RE[3]);
+  let j = 1; while (j < DIFF_A.length - 1 && a > DIFF_A[j]) j++;
+  let i = 1; while (i < DIFF_RE.length - 1 && r > DIFF_RE[i]) i++;
+  const ta = (a - DIFF_A[j - 1]) / (DIFF_A[j] - DIFF_A[j - 1]), tr = (Math.log(r) - Math.log(DIFF_RE[i - 1])) / (Math.log(DIFF_RE[i]) - Math.log(DIFF_RE[i - 1]));
+  const v = (ii        ) => DIFF_N2[ii][j - 1] + ta * (DIFF_N2[ii][j] - DIFF_N2[ii][j - 1]);
+  return v(i - 1) + tr * (v(i) - v(i - 1));
+}
+function diffuserZeta(d1        , d2        , alphaDeg = 15, Re = 2e5, lam = 0.018)         {
+  const n = (d2 / d1) ** 2;
+  if (n <= 1) return 0;
+  const bc = (1 - 1 / n) ** 2;
+  const fr = (nn        ) => lam / (8 * Math.sin(alphaDeg / 2 * Math.PI / 180)) * (1 - 1 / nn ** 2);
+  const z = Math.max(0, diffuserZetaN2(alphaDeg, Re) - fr(2)) * ((1 - 1 / n) / 0.5) ** 1.92 + fr(n);
+  return alphaDeg > 40 ? Math.max(z, bc) : z;
 }
 
 /** Внезапное сужение: ζ = 0,5·(1 − F₂/F₁)^0,75, к скорости в узком сечении F₂ (разд. 4, диагр. 4-9) [П] */
 const suddenContractionZeta = (d1        , d2        ) => 0.5 * (1 - (d2 / d1) ** 2) ** 0.75;
 
-/** Вход в трубу через конический коллектор (зонт) с углом 60°: ζ ≈ 0,2 (разд. 3, входные участки) [П: по диаграмме для угла и l/D];
+/** Вход в трубу через конический коллектор (раструб без торцевой стенки) — Идельчик, 1992, диагр. 3-6, с. 127 (сверено): при α = 60°
+ *  ζ = 0,25 (l/D = 0,15), 0,17 (l/D = 0,25); принято 0,2 [Д: геометрия зонта l/D ≈ 0,2];
  *  острая кромка без коллектора — 0,5. Выход в атмосферу (потеря динамического давления) — ζ = 1,0. */
 const HOOD_CONE_ZETA = 0.2;
 const SHARP_ENTRY_ZETA = 0.5;
 const EXIT_ZETA = 1.0;
 
-/** Тройник вытяжной (слияние потоков) 90°, F_п = F_с (разд. 7, слияние потоков) [П: диаграмма и коэффициент A сверить по книге].
+/** Тройник вытяжной (слияние потоков) 90°, F_п + F_б > F_с, F_п = F_с — Идельчик, 1992, разд. 7, **диагр. 7-4, с. 346**; A — **табл. 7-1, с. 335** [С] (сверено по книге 11.10.2026).
  *  Коэффициенты отнесены к скорости в ОБЩЕМ (сборном) канале w_с:
  *   боковое ответвление: ζ_с.б = A·[1 + (Q_б/Q_с · F_с/F_б)² − 2·(1 − Q_б/Q_с)²],  A — по teeA() [П];
  *   проход:              ζ_с.п = 1,55·(Q_б/Q_с) − (Q_б/Q_с)².
@@ -278,8 +332,7 @@ function teeSideZeta(qb        , qc        , db        , dc        , A         )
 }
 /** Поправочный коэффициент A к боковому ответвлению тройника на слияние (F_п = F_с):
  *  F_б/F_с ≤ 0,35 → A = 1; F_б/F_с > 0,35: Q_б/Q_с ≤ 0,4 → A = 0,9·(1 − Q_б/Q_с); Q_б/Q_с > 0,4 → A = 0,55.
- *  Идельчик И.Е., 1992, разд. 7, диагр. 7-1 [П: сверить таблицу по книге; те же значения — в реализации Altair Activate «ConvergingTee»
- *  со ссылкой на Idelchik, 4th ed., 2007, Diagram 7.4]. До 11.10.2026 в модели было A = 1 — завышало потери бокового входа в 1,8 раза при F_б/F_с > 0,35. */
+ *  Идельчик И.Е., 1992, табл. 7-1, с. 335 (сверено). До 11.10.2026 в модели было A = 1 — завышало потери бокового входа до 1,8 раза при F_б/F_с > 0,35. */
 function teeA(fbfc        , r        )         {
   if (fbfc <= 0.35) return 1;
   // по таблице на границе r = 0,4 скачок 0,54 → 0,55; берётся max(…), чтобы характеристика была непрерывной (иначе у сети нет точного решения
@@ -299,6 +352,7 @@ function teeStraightZeta(qb        , qc        )         {
 // «вход отсоса → ... → вентилятор → выброс»: Σ Δp(участков пути) = p_вент(Q_общ).
 // Неизвестные — расходы отсосов Q_1..Q_N; решается методом Ньютона (якобиан численный).
 // Расход на любом участке = сумма расходов отсосов, проходящих через него (закон сохранения массы).
+
 
 
                                                                                     // тройник на слияние, проход; side — участок бокового входа
@@ -332,7 +386,8 @@ function elemLoss(e         , Q        , ctx                                    
     case 'damper': return ductLoss(Q, e.d, 0, damperZeta(e.alpha, e.table));
     case 'filter': return filterLoss(e.spec, Q);
     case 'local': return ductLoss(Q, e.d, 0, e.zeta);
-    case 'diffuser': return ductLoss(Q, e.d1, 0, diffuserZeta(e.d1, e.d2, e.alpha ?? 15));
+    case 'diffuser': { const w = Math.abs(Q) / area(e.d1), Re = w * e.d1 / AIR.nu; return ductLoss(Q, e.d1, 0, diffuserZeta(e.d1, e.d2, e.alpha ?? 15, Re, lambdaAltshul(w, e.d1))); }
+    case 'bend': { const w = Math.abs(Q) / area(e.d), Re = w * e.d / AIR.nu; return ductLoss(Q, e.d, 0, bendZetaRough(e.delta, e.rd, Re, lambdaAltshul(w, e.d), KE_STEEL / e.d)); }
     case 'teeSide': { const qc = ctx?.Qp ?? Q; return teeSideZeta(Q, qc, e.db, e.dc) * dynPressure(qc / area(e.dc)); }
     case 'teeStraight': { const qc = ctx?.Qp ?? Q, qb = ctx?.f[e.side] ?? 0; return teeStraightZeta(qb, qc) * dynPressure(qc / area(e.dc)); }
   }
@@ -341,10 +396,10 @@ const segLossFn = (s                                                 , Q        
   s.elements.reduce((a, e) => a + elemLoss(e, Q, f ? { Qp: s.parent ? f[s.parent] : Q, f } : undefined), 0);
 
 /** Разбивка потерь давления по элементам при найденном решении (для отчёта и проверки энергетического баланса) */
-function lossBreakdown(net         , sol          )                                                               {
-  const out                                                               = [];
-  for (const s of net.segments) for (const e of s.elements) out.push({ seg: s.id, id: e.id, kind: e.kind, dp: elemLoss(e, sol.Q[s.id], { Qp: s.parent ? sol.Q[s.parent] : sol.Q[s.id], f: sol.Q }) });
-  for (const e of net.common) out.push({ seg: 'common', id: e.id, kind: e.kind, dp: elemLoss(e, sol.Qtotal) });
+function lossBreakdown(net         , sol          )                                                                          {
+  const out                                                                          = [];
+  for (const s of net.segments) for (const e of s.elements) out.push({ seg: s.id, id: e.id, kind: e.kind, q: sol.Q[s.id], dp: elemLoss(e, sol.Q[s.id], { Qp: s.parent ? sol.Q[s.parent] : sol.Q[s.id], f: sol.Q }) });
+  for (const e of net.common) out.push({ seg: 'common', id: e.id, kind: e.kind, q: sol.Qtotal, dp: elemLoss(e, sol.Qtotal) });
   return out;
 }
 
@@ -818,27 +873,26 @@ function simulate(net         , p           )            {
  *  общий тракт: фильтр → трение → отвод 90° → выход в атмосферу (ζ = 1). [Д] — геометрия демонстрационная. */
 function chainNetwork(dPost          , dColl          , lBranch = 6, lColl = 5, lMain = 10, dOut = dColl[dColl.length - 1])                                                                  {
   const N = dPost.length, segs                      = [];
-  const B90 = bendZeta(90, 1.5), B45 = bendZeta(45, 1.5), B90r1 = bendZeta(90, 1.0);
   for (let i = 1; i <= N; i++) {
     const db = dPost[i - 1], dc = dColl[i - 1];
     const el            = [
       { kind: 'local', id: `hood${i}`, d: db, zeta: HOOD_CONE_ZETA, label: 'вход через зонт' },
       { kind: 'duct', id: `branch${i}`, d: db, l: lBranch, zeta: 0 },
-      { kind: 'local', id: `bend90_${i}`, d: db, zeta: B90, label: 'отвод 90°, R/D = 1,5' },
-      { kind: 'local', id: `bend45_${i}`, d: db, zeta: B45, label: 'отвод 45°, R/D = 1,5' },
+      { kind: 'bend', id: `bend90_${i}`, d: db, delta: 90, rd: 1.5, label: 'отвод 90°, R/D = 1,5' },
+      { kind: 'bend', id: `bend45_${i}`, d: db, delta: 45, rd: 1.5, label: 'отвод 45°, R/D = 1,5' },
       { kind: 'damper', id: `damper${i}`, d: db, alpha: 0 },
     ];
-    if (i === 1) { el.push({ kind: 'local', id: 'bend_end', d: db, zeta: B90r1, label: 'отвод 90° в торец коллектора' });
+    if (i === 1) { el.push({ kind: 'bend', id: 'bend_end', d: db, delta: 90, rd: 1.0, label: 'отвод 90° в торец коллектора' });
       if (dc > db) el.push({ kind: 'diffuser', id: 'trans1', d1: db, d2: dc }); }
     else el.push({ kind: 'teeSide', id: `tee${i}`, db, dc });
     segs.push({ id: `post${i}`, parent: `c${i}`, elements: el });
     const ce            = [{ kind: 'duct', id: `c${i}`, d: dc, l: i < N ? lColl : lMain, zeta: 0 }];
     if (i < N) { const dn = dColl[i]; if (dn > dc) ce.push({ kind: 'diffuser', id: `trans_c${i}`, d1: dc, d2: dn }); ce.push({ kind: 'teeStraight', id: `teeP${i + 1}`, dc: dn, side: `post${i + 1}` }); }
-    else ce.push({ kind: 'local', id: 'bend_main', d: dc, zeta: B90, label: 'отвод 90° к фильтру' });
+    else ce.push({ kind: 'bend', id: 'bend_main', d: dc, delta: 90, rd: 1.5, label: 'отвод 90° к фильтру' });
     segs.push({ id: `c${i}`, parent: i < N ? `c${i + 1}` : null, elements: ce });
   }
   return { segments: segs, hoods: Array.from({ length: N }, (_, i) => `post${i + 1}`),
-    commonTail: [{ kind: 'duct', id: 'discharge', d: dOut, l: 5, zeta: 0 }, { kind: 'local', id: 'bend_out', d: dOut, zeta: B90, label: 'отвод 90°' }, { kind: 'local', id: 'exit', d: dOut, zeta: EXIT_ZETA, label: 'выход в атмосферу' }] };
+    commonTail: [{ kind: 'duct', id: 'discharge', d: dOut, l: 5, zeta: 0 }, { kind: 'bend', id: 'bend_out', d: dOut, delta: 90, rd: 1.5, label: 'отвод 90°' }, { kind: 'local', id: 'exit', d: dOut, zeta: EXIT_ZETA, label: 'выход в атмосферу' }] };
 }
 
 function demoNetwork()          {
@@ -1107,7 +1161,7 @@ const PROCESSES            = [
     id: 'mag_co2', group: 'Сварка', name: 'Полуавтоматическая сварка в CO₂ проволокой', unit: 'г/кг проволоки',
     activity: p => wireRate(p.I, p.d ?? 1.2, p.l ?? 15), activityLabel: 'расход проволоки B = α_р·I, кг/ч',
     params: [P_I, P_D], source: MET_WELD + ', табл. 1; α_р — Соколов Г.Н. и др., ВолгГТУ, 2016, ф. (3.22)',
-    hoods: [H_TABLE, H_TORCH_CO2, H_USER],
+    hoods: [H_TABLE, H_USER],   // в диссертации — только стационарные отсосы (решение 11.10.2026); H_TORCH_CO2 оставлен в библиотеке
     materials: [
       { id: 'sv08g2s', name: 'Св-08Г2С', factors: { aerosol: 10.0, fe: 7.67, mn: 1.90, sio2: 0.43 }, source: 'табл. 1', status: 'сверено' },
     ],
@@ -1127,10 +1181,10 @@ const PROCESSES            = [
   {
     id: 'saw', group: 'Сварка', name: 'Автоматическая сварка под флюсом', unit: 'г/кг флюса',
     activity: p => p.B, activityLabel: 'расход флюса, кг/ч', params: [P_B(6, 'Расход флюса')],
-    source: MET_WELD + ', табл. 1; отсос не дальше 40 мм от дуги — Правила 884н, п. 67', hoods: [H_TORCH_AUTO, H_TABLE, H_USER],
+    source: MET_WELD + ', табл. 1; отсос не дальше 40 мм от дуги — Правила 884н, п. 67', hoods: [H_TABLE, H_USER],   // стационарный отсос; H_TORCH_AUTO (встроенный в автомат) оставлен в библиотеке
     materials: [
+      { id: 'an348a', name: 'АН-348-А', factors: { aerosol: 0.20, fe: 0.06, mn: 0.02, sio2: 0.05, fluor: 0.07, hf: 0.06, no2: 0.001, co: 0.71 }, source: 'ГОСТ, табл. 1 = Методика изд. 2021, табл. 1 (фториды, HF, NO₂, CO). Флюс широкого применения для углеродистых и низколегированных сталей — ГОСТ Р 52222-2004, прил. А; принят по умолчанию', status: 'сверено' },
       { id: 'osc45', name: 'ОСЦ-45', factors: { aerosol: 0.28, fe: 0.2, mn: 0.02, sio2: 0.05, fluor: 0.01, hf: 0.15, no2: 0.006, co: 1.285 }, source: 'ГОСТ, табл. 1 = Методика изд. 2021, табл. 1 (фториды, HF, NO₂, CO)', status: 'сверено' },
-      { id: 'an348a', name: 'АН-348-А', factors: { aerosol: 0.20, fe: 0.06, mn: 0.02, sio2: 0.05, fluor: 0.07, hf: 0.06, no2: 0.001, co: 0.71 }, source: 'ГОСТ, табл. 1 = Методика изд. 2021, табл. 1 (фториды, HF, NO₂, CO)', status: 'сверено' },
       { id: 'fc12', name: 'ФЦ-12', factors: { aerosol: 0.09, fe: 0.06, mn: 0.03, hf: 0.02 }, source: 'табл. 1', status: 'сверено' },
     ],
   },
@@ -1362,10 +1416,10 @@ function buildPlant(cfg             )                                           
 const MIXED_EXAMPLE               = [
   { id: 'post1', process: 'mag_co2', material: 'sv08g2s', params: { I: 225 } },
   { id: 'post2', process: 'mma', material: 'uoni1345', params: { B: 1.5 } },
-  { id: 'post3', process: 'saw', material: 'fc12', params: { B: 6 }, hood: 'table' },
+  { id: 'post3', process: 'saw', material: 'an348a', params: { B: 6 }, hood: 'table' },   // флюс АН-348-А (ГОСТ Р 52222-2004: широкого применения); B — расход флюса, кг/ч
   { id: 'post4', process: 'contact', material: 'butt', params: { N: 75 } },
 ];
 
 
-window.Engine = { RHO_AIR, NU_AIR, C_AIR, KE_STEEL, W_MIN_WELDING, Q_POST_MIN_M3H, ETA_LEV_DEFAULT, K_SETTLE, SV08G2S, FC12, PDK_MN_WELD_LE20, PDK_MN_WELD_20_30, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, alphaMelt, wireRate, ACTUATOR_TIMES_GOST7192, IE3_4P_GOST, MOTOR_LOSS_RATIO, motorEfficiency, sp60Supply, sp60General, AIR, m3h, toM3h, area, velocity, dynPressure, lambdaAltshul, ductLoss, BUTTERFLY_ROUND, damperZeta, damperAngleForZeta, VFD_EFF, electricPower, fanPressure, fanPower, filterLoss, bendZeta, suddenExpansionZeta, diffuserZeta, suddenContractionZeta, HOOD_CONE_ZETA, SHARP_ENTRY_ZETA, EXIT_ZETA, teeSideZeta, teeA, teeStraightZeta, elemLoss, lossBreakdown, solve, setDamper, balance, interp, createSimulator, simulate, chainNetwork, demoNetwork, DEMO_FAN, makeNetwork, IE3_4P, pickMotor, makeNetworkFor, I_BASE, B_BASE, genVentByFormula, feedforwardTable, makeSchedule, commissioning, shiftParams, WIRE_12, makeShift, MN, AER, designLgen, shift4, pdkOf, SUBSTANCES, mnCategory, P_Q, PROCESSES, processById, ENABLED_GROUPS, activeProcesses, paramsOf, emissionOf, qminOf, qsetOf, designReport, buildPlant, MIXED_EXAMPLE };
+window.Engine = { RHO_AIR, NU_AIR, C_AIR, KE_STEEL, W_MIN_WELDING, Q_POST_MIN_M3H, ETA_LEV_DEFAULT, K_SETTLE, SV08G2S, FC12, PDK_MN_WELD_LE20, PDK_MN_WELD_20_30, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, alphaMelt, wireRate, ACTUATOR_TIMES_GOST7192, IE3_4P_GOST, MOTOR_LOSS_RATIO, motorEfficiency, sp60Supply, sp60General, AIR, m3h, toM3h, area, velocity, dynPressure, lambdaAltshul, ductLoss, BUTTERFLY_ROUND, damperZeta, damperAngleForZeta, VFD_EFF, electricPower, fanPressure, fanPower, filterLoss, bendA1, bendB1, bendZeta, lambdaSmooth, bendKRe, bendKDelta, bendZetaRough, suddenExpansionZeta, diffuserZetaN2, diffuserZeta, suddenContractionZeta, HOOD_CONE_ZETA, SHARP_ENTRY_ZETA, EXIT_ZETA, teeSideZeta, teeA, teeStraightZeta, elemLoss, lossBreakdown, solve, setDamper, balance, interp, createSimulator, simulate, chainNetwork, demoNetwork, DEMO_FAN, makeNetwork, IE3_4P, pickMotor, makeNetworkFor, I_BASE, B_BASE, genVentByFormula, feedforwardTable, makeSchedule, commissioning, shiftParams, WIRE_12, makeShift, MN, AER, designLgen, shift4, pdkOf, SUBSTANCES, mnCategory, P_Q, PROCESSES, processById, ENABLED_GROUPS, activeProcesses, paramsOf, emissionOf, qminOf, qsetOf, designReport, buildPlant, MIXED_EXAMPLE };
 })();

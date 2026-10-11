@@ -46,6 +46,12 @@ test('Характеристика вентилятора монотонно п�
 });
 
 // ---------- решатель сети: фаззинг
+// независимые вспомогательные функции для проверки: λ по Альтшулю с переходной зоной, линейная интерполяция, таблица диффузора n = 2 (Идельчик, с. 211)
+const lamI = (w: number, d: number) => { const Re = Math.max(w * d / 15.06e-6, 1), t = (r: number) => 0.11 * Math.pow(1e-4 / d + 68 / r, 0.25); return Re <= 2000 ? 64 / Re : Re >= 4000 ? t(Re) : (1 - (Re - 2000) / 2000) * 0.032 + (Re - 2000) / 2000 * t(4000); };
+const interpI = (t: number[][], x: number) => { if (x <= t[0][0]) return t[0][1]; for (let i = 1; i < t.length; i++) if (x <= t[i][0]) return t[i - 1][1] + (x - t[i - 1][0]) * (t[i][1] - t[i - 1][1]) / (t[i][0] - t[i - 1][0]); return t[t.length - 1][1]; };
+const TA = [3, 4, 6, 8, 10, 12, 14, 16, 20, 30, 45, 60, 90, 120, 180], TR = [0.5e5, 1e5, 2e5, 4e5];
+const TZ = [[0.148, 0.135, 0.121, 0.112, 0.107, 0.109, 0.120, 0.141, 0.191, 0.315, 0.331, 0.326, 0.315, 0.308, 0.298], [0.120, 0.106, 0.090, 0.083, 0.080, 0.088, 0.102, 0.122, 0.196, 0.298, 0.297, 0.286, 0.283, 0.279, 0.276], [0.093, 0.082, 0.070, 0.068, 0.062, 0.062, 0.063, 0.073, 0.120, 0.229, 0.279, 0.268, 0.268, 0.265, 0.263], [0.079, 0.068, 0.056, 0.048, 0.048, 0.048, 0.051, 0.051, 0.068, 0.120, 0.271, 0.272, 0.272, 0.268, 0.268]];
+const tab2 = (a: number, Re: number) => { const r = Math.min(Math.max(Re, 0.5e5), 4e5), lr = Math.log(r); const rows = TZ.map(row => interpI(TA.map((x, i) => [x, row[i]]), a)); return interpI(TR.map((x, i) => [Math.log(x), rows[i]]), lr); };
 function residuals(net: Network, Q: Record<string, number>) {
   // независимая проверка баланса давлений по каждому пути отсос → вентилятор
   const byId = new Map(net.segments.map(s => [s.id, s]));
@@ -57,7 +63,19 @@ function residuals(net: Network, Q: Record<string, number>) {
       case 'damper': return ductLoss(q, e.d, 0, damperZeta(e.alpha));
       case 'filter': return e.spec.dpNom * Math.pow(q / e.spec.qNom, e.spec.m) * e.spec.fouling;
       case 'local': return e.zeta * pd(q, e.d);
-      case 'diffuser': { const n = (1 - (e.d1 / e.d2) ** 2) ** 2; return Math.min(n, 3.2 * Math.tan(15 / 2 * Math.PI / 180) ** 1.25 * n) * pd(q, e.d1); }
+      case 'diffuser': { // Идельчик, диагр. 5-2 (n = 2) + пересчёт по (5-6), (5-7) — независимая запись
+        const w = q / (Math.PI * e.d1 ** 2 / 4), Re = w * e.d1 / 15.06e-6, n = (e.d2 / e.d1) ** 2, a = e.alpha ?? 15, lm = lamI(w, e.d1);
+        const fr = (nn: number) => lm / (8 * Math.sin(a / 2 * Math.PI / 180)) * (1 - 1 / nn / nn);
+        return (Math.max(0, tab2(a, Re) - fr(2)) * Math.pow((1 - 1 / n) / 0.5, 1.92) + fr(n)) * pd(q, e.d1); }
+      case 'bend': { // Идельчик, диагр. 6-1: ζ = k_Δ·k_Re·A₁·B₁
+        const w = q / (Math.PI * e.d ** 2 / 4), Re = w * e.d / 15.06e-6, lr = lamI(w, e.d), rel = 1e-4 / e.d;
+        const A1 = interpI([[0, 0], [20, 0.31], [30, 0.45], [45, 0.60], [60, 0.78], [75, 0.90], [90, 1.00], [110, 1.13], [130, 1.20], [150, 1.28], [180, 1.40]], e.delta);
+        const B1 = e.rd <= 1 ? 0.21 * Math.pow(e.rd, -2.5) : 0.21 * Math.pow(e.rd, -0.5);
+        const R = Math.max(Re, 1e4), kRe = e.rd > 0.7 ? 1.3 - 0.29 * Math.log(R / 1e5) : e.rd > 0.55 ? 5.45 * Math.pow(R, -0.131) : 1 + 4400 / R;
+        const mid = lr * Math.pow(1.8 * Math.log10(Math.max(Re, 4000)) - 1.64, 2), hi = 1 + Math.min(rel, 1e-3) * 1000;
+        const bl = (x0: number, x1: number, y0: number, y1: number) => y0 + Math.min(1, Math.max(0, Math.log(Re / x0) / Math.log(x1 / x0))) * (y1 - y0);
+        const kD = Re <= 3.2e4 ? 1 : Re < 5e4 ? bl(3.2e4, 5e4, 1, mid) : Re <= 1.6e5 ? mid : Re < 2.5e5 ? bl(1.6e5, 2.5e5, mid, hi) : hi;
+        return kD * kRe * A1 * B1 * pd(q, e.d); }
       case 'teeSide': { const r = q / qp, fb = (e.db / e.dc) ** 2, A = fb <= 0.35 ? 1 : Math.max(0.9 * (1 - r), 0.55); return A * (1 + (r * (e.dc / e.db) ** 2) ** 2 - 2 * (1 - r) ** 2) * pd(qp, e.dc); }
       case 'teeStraight': { const r = sideQ / qp; return (1.55 * r - r * r) * pd(qp, e.dc); }
     }

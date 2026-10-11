@@ -126,6 +126,13 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px}
         </div>
         <p class="note">Полная смена на скорости ×300 — около полутора минут. Пром. стандарт: заслонки «открыто/закрыто», постоянное разрежение, общеобменная — проектный расход по всем веществам. Предлагаемая: регулирование расхода каждого поста, сброс давления, общеобменная по выделениям процессов + датчики аэрозоля, NO₂ и CO (цель Σ C/ПДК ≤ 0,5).</p>
       </div>
+      <div class="card cfg" id="roomCard">
+        <div class="label">Помещение (цех)</div>
+        <label>Длина, м<input type="number" id="roomL" min="3" max="500" step="1" value="48"></label>
+        <label>Ширина, м<input type="number" id="roomW" min="3" max="300" step="1" value="24"></label>
+        <label>Высота, м<input type="number" id="roomH" min="2.5" max="40" step="0.1" value="14.4"></label>
+        <p class="note" id="roomNote"></p>
+      </div>
       <div id="posts"></div>
       <div class="card sys">
         <div class="label">Вентилятор и фильтр</div>
@@ -154,7 +161,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px}
         <table class="subs" style="margin-top:8px"><thead><tr><th>Вещество</th><th>C, мг/м³</th><th>ПДК</th><th>C/ПДК</th></tr></thead><tbody id="subsBody"></tbody></table>
         <p class="note" id="designNote"></p>
       </div>
-      <p class="note">Удельные выделения — Методика 1997 по сварочным работам (перечень Минприроды, п. 18); ПДК — СанПиН 1.2.3685-21; нормы отсоса — ГОСТ 12.3.003-86 и др. Сеть и вентилятор подбираются автоматически под выбранные посты (геометрия условная). 78 автотестов.</p>
+      <p class="note">Удельные выделения — ГОСТ Р 56164-2014 (= Методика 1997, перечень Минприроды, п. 18); ПДК — СанПиН 1.2.3685-21 (ред. 2025); воздухообмен — СП 60.13330.2020 (ред. с изм. 1–6); местные сопротивления — Идельчик, 1992; нормы отсоса — ГОСТ 12.3.003-86. Отсосы — стационарные. Сеть и вентилятор подбираются автоматически под выбранные посты (геометрия условная). 88 автотестов.</p>
     </aside>
   </main>
 
@@ -185,7 +192,7 @@ const setPressed = (seg, btn) => seg.querySelectorAll('button').forEach(b => b.s
 const cfg = [
   { id: 'post1', process: 'mag_co2', material: 'sv08g2s', params: { I: 225, d: 1.2 }, hood: 'table', eta: 0.8 },
   { id: 'post2', process: 'mma', material: 'uoni1345', params: { B: 1.5 }, hood: 'table', eta: 0.8 },
-  { id: 'post3', process: 'saw', material: 'fc12', params: { B: 6 }, hood: 'table', eta: 0.8 },
+  { id: 'post3', process: 'saw', material: 'an348a', params: { B: 6 }, hood: 'table', eta: 0.8 },
 ];
 const ui = { auto: true, view: 'B', speed: 10, paused: false, posts: {}, fouling: 1 };
 /** номера постов идут подряд; цвет — по номеру */
@@ -200,7 +207,7 @@ const isOn = (id, t) => ui.auto ? shift(id, t % (8 * 3600)) : ui.posts[id].on;
 // ---------- две модели параллельно: A — пром. стандарт, B — предлагаемая (сеть и вентилятор подбираются под посты)
 let report = null, groups = [];
 function build(kind) {
-  const pl = E.buildPlant({ posts: cfg, lev: kind === 'B' ? 'adaptive' : 'onoff', gen: kind === 'B' ? 'fffb' : 'const', gasSensors: ['no2', 'co'] });
+  const pl = E.buildPlant({ posts: cfg, V: roomV(), lev: kind === 'B' ? 'adaptive' : 'onoff', gen: kind === 'B' ? 'fffb' : 'const', gasSensors: ['no2', 'co'] });
   const p = pl.params; p.record = undefined; p.duration = 1e12; p.schedule = isOn;
   if (kind === 'A') p.nFF = undefined;
   report = pl.report;
@@ -219,6 +226,9 @@ function warm() { for (let i = 0; i < 1200; i++) for (const m of [A, B]) { m.las
 
 // ---------- карточки постов: выбор процесса, материала, параметров, отсоса
 const postsEl = document.getElementById('posts');
+// размеры цеха: воздухообмен по вредным веществам от них НЕ зависит (СП 60, прил. Г, ф. Г.2); объём определяет скорость роста концентрации
+function roomV() { const v = id => Math.max(0.1, +document.getElementById(id).value || 0); return v('roomL') * v('roomW') * v('roomH'); }
+['roomL', 'roomW', 'roomH'].forEach(id => document.getElementById(id).onchange = () => reset());
 const PROCS = E.activeProcesses(), procGroups = [...new Set(PROCS.map(p => p.group))];
 const fmtN = v => String(v).replace('.', ',');
 function cardHtml(id, i) {
@@ -288,8 +298,8 @@ function renderLoss(m) {
   path.push('common');
   const elOf = r => (r.seg === 'common' ? m.net.common : m.net.segments.find(x => x.id === r.seg).elements).find(e => e.id === r.id);
   const rows = br.filter(r => path.includes(r.seg)).map(r => { const e = elOf(r);
-    const name = e.kind === 'local' ? e.label : e.kind === 'damper' ? `заслонка, ${fmt(e.alpha)}°` : KIND_RU[e.kind] + (e.kind === 'duct' ? `, ${fmtN(e.l)} м` : '');
-    return `<tr><td>${name}</td><td>${e.kind === 'local' ? fmt(e.zeta, 2) : e.kind === 'damper' ? fmt(E.damperZeta(e.alpha), 2) : ''}</td><td>${fmt(r.dp, 1)}</td></tr>`; });
+    const name = (e.kind === 'local' || e.kind === 'bend') ? e.label : e.kind === 'damper' ? `заслонка, ${fmt(e.alpha)}°` : KIND_RU[e.kind] + (e.kind === 'duct' ? `, ${fmtN(e.l)} м` : '');
+    return `<tr><td>${name}</td><td>${e.kind === 'local' ? fmt(e.zeta, 2) : e.kind === 'bend' ? fmt(r.dp / Math.max(1e-9, 0.6 * (r.q / (Math.PI * e.d * e.d / 4)) ** 2), 2) : e.kind === 'damper' ? fmt(E.damperZeta(e.alpha), 2) : ''}</td><td>${fmt(r.dp, 1)}</td></tr>`; });
   const sum = br.filter(r => path.includes(r.seg)).reduce((a, r) => a + r.dp, 0);
   document.getElementById('lossBody').innerHTML = rows.join('') + `<tr class="lim"><td>Итого по пути</td><td></td><td>${fmt(sum, 1)}</td></tr><tr><td>Давление вентилятора</td><td></td><td>${fmt(sol.pFan, 1)}</td></tr>`;
 }
@@ -300,6 +310,8 @@ function renderDesign() {
     document.getElementById(`src-${id}`).innerHTML = `Уставка отсоса ${fmt(E.qsetOf(cfg[i]))} м³/ч — ${q.source}<br>Выделение: ${top.map(([k, v]) => `${E.SUBSTANCES[k].name.split(' (')[0]} ${fmt(v * 3.6, 2)} г/ч`).join('; ') || 'нет (ввести показатели)'}`;
   });
   const lim = report ? report.substances[0] : null;
+  if (report) { const V = roomV(), L = report.Ltotal + 1e-9, tau = V / L * 60, perW = L / Math.max(1, IDS.length);
+    document.getElementById('roomNote').innerHTML = `Объём ${fmt(V)} м³. Воздухообмен по вредным веществам от объёма не зависит (СП 60.13330.2020, прил. Г, ф. Г.2; расчёт по кратности для рабочей зоны не допускается — п. 7.4.1). Объём задаёт инерцию цеха: постоянная времени V/L ≈ <b>${fmt(tau)} мин</b> — за это время концентрация проходит ≈ 63 % пути к новому значению после включения/выключения постов. Наружного воздуха на одного работающего: ${fmt(perW)} м³/ч (минимум 30–60 по СП 60, прил. В) — ${perW >= 60 ? 'выполняется' : 'проверить'}.`; }
   document.getElementById('designNote').innerHTML = report ? `По СП 60.13330.2020 (все посты, C = ПДК): весь воздух <b>${fmt(report.Ltotal)} м³/ч</b> − местные отсосы ${fmt(report.Llev)} = общеобменная <b>${fmt(report.Ldesign)} м³/ч</b>, лимитирует: <b>${lim ? lim.name : '—'}</b>${report.mnCategory ? `; доля Mn в аэрозоле цеха ${fmt(report.mnShare * 100, 1)} % → ПДК Mn по категории «${report.mnCategory}»` : ''}. Вещества с пометкой «сверить» — ПДК по ГН, сверить по СанПиН.` : '';
 }
 renderCards();

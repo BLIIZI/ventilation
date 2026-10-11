@@ -75,26 +75,39 @@ test('Недостижимый расход — понятное предупр�
 });
 
 // ---------- местные сопротивления (Идельчик, 1992) и энергетический баланс сети
-import { bendZeta, suddenExpansionZeta, diffuserZeta, teeSideZeta, teeStraightZeta, teeA } from '../src/engine/fittings.ts';
+import { bendZeta, bendKRe, bendKDelta, bendZetaRough, lambdaSmooth, suddenExpansionZeta, diffuserZeta, diffuserZetaN2, teeSideZeta, teeStraightZeta, teeA } from '../src/engine/fittings.ts';
 import { lossBreakdown, solve as solveNet } from '../src/engine/network.ts';
 import { lambdaAltshul as lam } from '../src/engine/physics.ts';
-test('Отвод: ζ(90°, R/D = 1) = 0,21; ζ(90°, R/D = 1,5) = 0,21/√1,5 = 0,171; 45° ≈ 0,62·B₁; ζ растёт с углом и падает с R/D', () => {
-  assert.ok(Math.abs(bendZeta(90, 1) - 0.21) < 0.001);
-  assert.ok(Math.abs(bendZeta(90, 1.5) - 0.21 / Math.sqrt(1.5)) < 0.001);
-  assert.ok(Math.abs(bendZeta(45, 1) / bendZeta(90, 1) - 0.62) < 0.01);
+test('Отвод по Идельчику (диагр. 6-1): ζ_м = A₁·B₁; A₁ из таблицы (45° → 0,60; 90° → 1,00); B₁ = 0,21/(R/D)^0,5 при R/D > 1', () => {
+  assert.ok(Math.abs(bendZeta(90, 1) - 0.21) < 1e-12);
+  assert.ok(Math.abs(bendZeta(90, 1.5) - 0.21 / Math.sqrt(1.5)) < 1e-12);
+  assert.ok(Math.abs(bendZeta(45, 1) / bendZeta(90, 1) - 0.60) < 1e-12);
   assert.ok(bendZeta(30, 1) < bendZeta(60, 1) && bendZeta(60, 1) < bendZeta(90, 1));
   assert.ok(bendZeta(90, 0.5) > bendZeta(90, 1) && bendZeta(90, 1) > bendZeta(90, 3));
 });
-test('Расширение: Борда–Карно (1 − F₁/F₂)²; диффузор 15° — меньше внезапного; одинаковые сечения — 0', () => {
+test('Отвод в стальном воздуховоде: поправки k_Re и k_Δ (п. 2 диагр. 6-1); ручной пример d 200 мм, w 13,26 м/с; непрерывность по Re', () => {
+  // Re = 13,26·0,2/15,06e-6 = 176 100; k_Re = 1,3 − 0,29·ln(1,761) = 1,1359
+  const Re = 13.26 * 0.2 / 15.06e-6, kRe = 1.3 - 0.29 * Math.log(Re * 1e-5);
+  assert.ok(Math.abs(bendKRe(Re, 1.5) - kRe) < 1e-12 && Math.abs(kRe - 1.136) < 0.001);
+  // λ_гл = 1/(1,8 lg Re − 1,64)² = 0,01643; λ_Δ (Альтшуль) = 0,01898 → k_Δ в зоне сглаживания 1,6e5…2,5e5 между 1,155 и 1,5
+  const lr = lam(13.26, 0.2), kd = bendKDelta(Re, lr, 0.0005);
+  assert.ok(Math.abs(lambdaSmooth(Re) - 0.01643) < 2e-4 && kd > lr / lambdaSmooth(Re) - 1e-9 && kd < 1.5);
+  for (const R of [3.2e4, 5e4, 1.6e5, 2.5e5]) for (const k of [0.9999, 1.0001]) assert.ok(Math.abs(bendKDelta(R * k, 0.02, 0.0005) - bendKDelta(R, 0.02, 0.0005)) < 0.01, `Re ${R}`);
+  assert.ok(bendZetaRough(90, 1.5, Re, lr, 0.0005) > bendZeta(90, 1.5));
+});
+test('Диффузор по Идельчику (диагр. 5-2, ф. 5-6, 5-7): при n = 2 — табличное значение; меньше внезапного расширения; одинаковые сечения — 0', () => {
   assert.ok(Math.abs(suddenExpansionZeta(0.2, 0.4) - (1 - 0.25) ** 2) < 1e-12);
   assert.ok(diffuserZeta(0.2, 0.4) < suddenExpansionZeta(0.2, 0.4) && diffuserZeta(0.3, 0.3) === 0);
+  // n = 2 (d₂/d₁ = √2), α = 14°, Re = 1e5 → табл. с. 211: 0,102 (и при любом λ, т.к. ζ_тр(2) вычитается и прибавляется)
+  assert.ok(Math.abs(diffuserZeta(0.2, 0.2 * Math.SQRT2, 14, 1e5, 0.02) - 0.102) < 1e-9);
+  assert.ok(Math.abs(diffuserZetaN2(16, 2e5) - 0.073) < 1e-12 && Math.abs(diffuserZetaN2(15, 1e5) - 0.112) < 1e-12);
 });
 test('Тройник на слияние: проход ζ = 1,55r − r² (r = Q_б/Q_с); бок при r → 0 отрицателен (эжекция), растёт с r', () => {
   assert.equal(teeStraightZeta(0, 1), 0); assert.ok(Math.abs(teeStraightZeta(0.5, 1) - 0.525) < 1e-12);
   assert.ok(teeSideZeta(1e-9, 1, 0.2, 0.2) < 0);
   let prev = -Infinity; for (let r = 0; r <= 1; r += 0.05) { const z = teeSideZeta(r, 1, 0.2, 0.315); assert.ok(z > prev); prev = z; }
 });
-test('Тройник: коэффициент A по Идельчику (диагр. 7-1): F_б/F_с ≤ 0,35 → 1; иначе max(0,9(1 − r); 0,55) — непрерывно; ручной пример', () => {
+test('Тройник: коэффициент A по Идельчику (диагр. 7-4, табл. 7-1): F_б/F_с ≤ 0,35 → 1; иначе max(0,9(1 − r); 0,55) — непрерывно; ручной пример', () => {
   assert.equal(teeA(0.25, 0.5), 1); assert.ok(Math.abs(teeA(0.4, 0.2) - 0.72) < 1e-12); assert.equal(teeA(0.4, 0.5), 0.55);
   // пример: d_б = 0,2, d_с = 0,315 (F_б/F_с = 0,403), r = 0,5 → ζ = 0,55·[1 + (0,5·2,4806)² − 2·0,25] = 0,55·2,0384 = 1,1211
   const fr = (0.315 / 0.2) ** 2; assert.ok(Math.abs(teeSideZeta(0.5, 1, 0.2, 0.315) - 0.55 * (1 + (0.5 * fr) ** 2 - 0.5)) < 1e-12);

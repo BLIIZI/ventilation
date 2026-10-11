@@ -65,7 +65,7 @@ export const PROCESSES: Process[] = [
     id: 'mag_co2', group: 'Сварка', name: 'Полуавтоматическая сварка в CO₂ проволокой', unit: 'г/кг проволоки',
     activity: p => wireRate(p.I, p.d ?? 1.2, p.l ?? 15), activityLabel: 'расход проволоки B = α_р·I, кг/ч',
     params: [P_I, P_D], source: MET_WELD + ', табл. 1; α_р — Соколов Г.Н. и др., ВолгГТУ, 2016, ф. (3.22)',
-    hoods: [H_TABLE, H_TORCH_CO2, H_USER],
+    hoods: [H_TABLE, H_USER],   // в диссертации — только стационарные отсосы (решение 11.10.2026); H_TORCH_CO2 оставлен в библиотеке
     materials: [
       { id: 'sv08g2s', name: 'Св-08Г2С', factors: { aerosol: 10.0, fe: 7.67, mn: 1.90, sio2: 0.43 }, source: 'табл. 1', status: 'сверено' },
     ],
@@ -85,10 +85,10 @@ export const PROCESSES: Process[] = [
   {
     id: 'saw', group: 'Сварка', name: 'Автоматическая сварка под флюсом', unit: 'г/кг флюса',
     activity: p => p.B, activityLabel: 'расход флюса, кг/ч', params: [P_B(6, 'Расход флюса')],
-    source: MET_WELD + ', табл. 1; отсос не дальше 40 мм от дуги — Правила 884н, п. 67', hoods: [H_TORCH_AUTO, H_TABLE, H_USER],
+    source: MET_WELD + ', табл. 1; отсос не дальше 40 мм от дуги — Правила 884н, п. 67', hoods: [H_TABLE, H_USER],   // стационарный отсос; H_TORCH_AUTO (встроенный в автомат) оставлен в библиотеке
     materials: [
+      { id: 'an348a', name: 'АН-348-А', factors: { aerosol: 0.20, fe: 0.06, mn: 0.02, sio2: 0.05, fluor: 0.07, hf: 0.06, no2: 0.001, co: 0.71 }, source: 'ГОСТ, табл. 1 = Методика изд. 2021, табл. 1 (фториды, HF, NO₂, CO). Флюс широкого применения для углеродистых и низколегированных сталей — ГОСТ Р 52222-2004, прил. А; принят по умолчанию', status: 'сверено' },
       { id: 'osc45', name: 'ОСЦ-45', factors: { aerosol: 0.28, fe: 0.2, mn: 0.02, sio2: 0.05, fluor: 0.01, hf: 0.15, no2: 0.006, co: 1.285 }, source: 'ГОСТ, табл. 1 = Методика изд. 2021, табл. 1 (фториды, HF, NO₂, CO)', status: 'сверено' },
-      { id: 'an348a', name: 'АН-348-А', factors: { aerosol: 0.20, fe: 0.06, mn: 0.02, sio2: 0.05, fluor: 0.07, hf: 0.06, no2: 0.001, co: 0.71 }, source: 'ГОСТ, табл. 1 = Методика изд. 2021, табл. 1 (фториды, HF, NO₂, CO)', status: 'сверено' },
       { id: 'fc12', name: 'ФЦ-12', factors: { aerosol: 0.09, fe: 0.06, mn: 0.03, hf: 0.02 }, source: 'табл. 1', status: 'сверено' },
     ],
   },
