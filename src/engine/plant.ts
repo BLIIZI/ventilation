@@ -18,7 +18,7 @@ import { makeSchedule } from './scenario.ts';
 export interface PlantConfig {
   posts: PostConfig[];
   V?: number;                 // объём цеха, м³ (по умолчанию — цех из диплома)
-  frac?: number;              // целевая доля ПДК для ОВ по потребности (по умолчанию 0,5)
+  frac?: number;              // целевая доля ПДК для ОВ по потребности (по умолчанию 0,8 — запас 20 % на погрешность датчика ±20 %)
   lev?: Mode;                 // режим местных отсосов
   gen?: GenVent['mode'];      // режим общеобменной
   gasSensors?: string[];      // газоанализаторы в цехе (например ['no2','co'])
@@ -91,7 +91,7 @@ export function buildPlant(cfg: PlantConfig): { net: Network; params: SimParams;
   // ---- вещества и расчётная ОВ
   const d = designReport(posts);
   const duration = cfg.duration ?? 8 * 3600;
-  const frac = cfg.frac ?? 0.5;
+  const frac = cfg.frac ?? 0.8;
   const limSub = [...d.groups.get(d.limiting) ?? []].sort((a, c) => d.esc[c.name] / c.pdk - d.esc[a.name] / a.pdk)[0]?.name ?? 'mn';
   const Ld = Math.max(d.Ld, m3h(500));
   const gen: GenVent | undefined = cfg.gen ? {

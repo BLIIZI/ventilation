@@ -81,11 +81,11 @@ test('Сборка смешанного цеха: вентилятор подо�
   for (const s of r.series) assert.ok(Object.values(s.C).every(c => Number.isFinite(c) && c >= 0));
 });
 
-test('ОВ по потребности (все вещества): держит Σ C/ПДК у цели 0,5 и адаптируется к реальному захвату (0,7 → больше воздуха, 0,9 → меньше)', () => {
+test('ОВ по потребности (все вещества): держит Σ C/ПДК у цели 0,8 и адаптируется к реальному захвату (0,7 → больше воздуха, 0,9 → меньше)', () => {
   const run = (er: number) => { const { net, params } = buildPlant({ posts: MIXED_EXAMPLE, gen: 'fffb', gasSensors: ['no2', 'co'] }); params.posts.forEach(p => (p.etaReal = er)); return simulate(net, params); };
   const a = run(0.7), b = run(0.8), c = run(0.9);
   assert.ok(a.avgLgen > b.avgLgen && b.avgLgen > c.avgLgen, `${a.avgLgen.toFixed(0)} > ${b.avgLgen.toFixed(0)} > ${c.avgLgen.toFixed(0)}`);
-  assert.ok(b.ratioMax < 0.6 && a.ratioMax < 1, `max ${b.ratioMax.toFixed(3)} / ${a.ratioMax.toFixed(3)}`);   // цель 0,5; при ошибке захвата — не выше ПДК
+  assert.ok(b.ratioMax < 0.9 && a.ratioMax < 1, `max ${b.ratioMax.toFixed(3)} / ${a.ratioMax.toFixed(3)}`);   // цель 0,8; при ошибке захвата (η 0,7 вместо 0,8) — всё равно не выше ПДК
   const pst = (() => { const { net, params } = buildPlant({ posts: MIXED_EXAMPLE, gen: 'posts' }); params.posts.forEach(p => (p.etaReal = 0.7)); return simulate(net, params); })();
   assert.ok(pst.ratioMax > a.ratioMax, 'по числу постов при ошибке захвата превышает цель сильнее');
 });
