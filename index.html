@@ -1,0 +1,1971 @@
+<title>Цифровой двойник вытяжки</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Пульт диспетчера цеха: тёмная панель, 3D-сцена слева, карточки постов справа, ленты трендов снизу. Единая тёмная тема (как SCADA) — выбрана сознательно. */
+:root{
+  --bg:#0f1418; --panel:#161d23; --panel-2:#1c252c; --line:#2a353e; --fg:#e6ebee; --muted:#93a1ab; --faint:#5f6e78;
+  --arc:#f2a93b; --air:#63b8db; --ok:#5cc28a; --warn:#e3b341; --crit:#e5625c;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --std:#a48be8;
+  --display:"Golos Text",system-ui,sans-serif; --body:"Golos Text",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--body);margin:0}
+.app{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100%;gap:10px;padding:10px 16px;box-sizing:border-box}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
+h1{font:600 17px/1.2 var(--display);margin:0;letter-spacing:.01em;text-wrap:balance}
+h1 small{display:block;font:400 12px var(--body);color:var(--muted);letter-spacing:0}
+.spacer{flex:1}
+.seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:2px}
+.seg button{background:none;border:0;color:var(--muted);font:500 12.5px var(--body);padding:6px 10px;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}
+.seg button:focus-visible,.btn:focus-visible{outline:2px solid var(--air);outline-offset:1px}
+.btn{background:var(--panel-2);border:1px solid var(--line);color:var(--fg);font:500 12.5px var(--body);padding:6px 12px;border-radius:7px;cursor:pointer}
+.clock{font:500 13px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.label{font:500 11px var(--body);color:var(--faint);text-transform:uppercase;letter-spacing:.07em}
+main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:10px;min-height:0}
+.scene{position:relative;background:#0b1013;border:1px solid var(--line);border-radius:10px;overflow:hidden;min-height:320px}
+.scene canvas{display:block;width:100%;height:100%}
+.legend3d{position:absolute;left:12px;bottom:10px;display:flex;flex-wrap:wrap;gap:6px 14px;font:12px var(--body);color:var(--muted);pointer-events:none}
+.legend3d i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.badge{position:absolute;left:12px;top:10px;font:500 12px var(--body);background:rgba(15,20,24,.82);border:1px solid var(--line);padding:5px 9px;border-radius:7px}
+.side{display:flex;flex-direction:column;gap:8px;overflow:auto;min-height:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.post{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
+.post h3{margin:0;font:600 14px var(--display);display:flex;align-items:center;gap:8px}
+.post h3 i{width:10px;height:10px;border-radius:50%}
+.pill{font:500 11.5px var(--body);padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.pill.on{color:#1a1206;background:var(--arc);border-color:var(--arc)}
+.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 10px;grid-column:1/-1}
+.kv div{display:flex;flex-direction:column}
+.kv b{font:500 15px var(--mono);font-variant-numeric:tabular-nums}
+.kv span{font-size:11px;color:var(--muted)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;grid-column:1/-1}
+.bar{height:4px;background:var(--panel-2);border-radius:3px;overflow:hidden;grid-column:1/-1}
+.bar > div{height:100%;background:var(--air);width:0}
+.sys .kv{grid-template-columns:repeat(2,minmax(0,1fr))}
+input[type=range]{width:100%;accent-color:var(--air)}
+.cmp{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px 10px;font-variant-numeric:tabular-nums;align-items:baseline}
+.cmp b{font:500 14px var(--mono);text-align:right}
+.cmp .h{font:500 11px var(--body);color:var(--muted);text-align:right}
+.save{grid-column:1/-1;margin-top:6px;font:500 13px var(--body);color:var(--ok)}
+.trends{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.trend{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px 6px}
+.trend .t{display:flex;justify-content:space-between;gap:8px;font:500 12px var(--body);color:var(--muted)}
+.trend canvas{width:100%;height:120px;display:block}
+.note{font-size:11.5px;color:var(--faint)}
+.alert{color:var(--crit)}
+select,input[type=number]{background:var(--panel-2);border:1px solid var(--line);color:var(--fg);font:13px var(--body);border-radius:6px;padding:4px 6px;min-width:0}
+select{max-width:100%}
+.cfg{display:grid;grid-template-columns:1fr;gap:5px;grid-column:1/-1}
+.cfg label{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.cfg label.wide{grid-template-columns:1fr}
+.src{font-size:11px;color:var(--faint);grid-column:1/-1}
+.subs{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.subs td,.subs th{padding:3px 4px;border-bottom:1px solid var(--line);text-align:right}
+.subs th{color:var(--faint);font-weight:500}
+.subs td:first-child,.subs th:first-child{text-align:left}
+.subs tr.lim td{color:var(--warn)}
+.subs .st{color:var(--faint);font-size:10.5px}
+details summary{cursor:pointer;color:var(--muted);font-size:12px}
+@media (max-width:980px){
+  html,body{height:auto}
+  .app{height:auto}
+  main{grid-template-columns:1fr}
+  .scene{height:58vw;min-height:280px}
+  .trends{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:560px){ .trends{grid-template-columns:1fr} .kv{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (prefers-reduced-motion:reduce){ *{scroll-behavior:auto} }
+</style>
+
+<div class="app">
+  <header>
+    <h1>Цифровой двойник вытяжки<small>сварочные посты (от 1 до 8) · вид сварки и материал на каждом — из Методики 1997 · местная вытяжка + общеобменная</small></h1>
+    <div class="spacer"></div>
+    <div><div class="label">Показать в 3D</div>
+      <div class="seg" id="viewSeg">
+        <button id="vB" aria-pressed="true" data-v="B">Предлагаемая система</button>
+        <button id="vA" aria-pressed="false" data-v="A">Промышленный стандарт</button>
+      </div></div>
+    <div><div class="label">Скорость времени</div>
+      <div class="seg" id="speedSeg">
+        <button aria-pressed="false" data-s="1">×1</button><button aria-pressed="true" data-s="10">×10</button>
+        <button aria-pressed="false" data-s="60">×60</button><button aria-pressed="false" data-s="300">×300</button>
+      </div></div>
+    <div><div class="label">Время смены</div><div class="clock" id="clock">00:00:00</div></div>
+    <button class="btn" id="pauseBtn">Пауза</button>
+    <button class="btn" id="resetBtn">Сначала</button>
+  </header>
+
+  <main>
+    <div class="scene" id="scene">
+      <div class="badge" id="badge">Предлагаемая система</div>
+      <div class="legend3d">
+        <span><i style="background:var(--arc)"></i>сварочная дуга</span>
+        <span><i style="background:var(--air)"></i>поток воздуха (плотность ∝ расходу)</span>
+        <span>диск в разрезе воздуховода — заслонка</span>
+      </div>
+    </div>
+    <aside class="side">
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="label">Режим работы постов</span>
+          <div class="seg" id="autoSeg"><button aria-pressed="true" data-a="1">Смена (авто)</button><button aria-pressed="false" data-a="0">Вручную</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="label">С начала смены</div>
+        <div class="cmp" style="margin-top:6px">
+          <span></span><span class="h">Пром. стандарт</span><span class="h">Предлагаемая</span>
+          <span>Вентиляторы, кВт·ч</span><b id="eA">0</b><b id="eB">0</b>
+          <span>Нагрев притока, кВт·ч</span><b id="hA">0</b><b id="hB">0</b>
+          <span>Худшее Σ C/ПДК, макс.</span><b id="mA">0</b><b id="mB">0</b>
+          <div class="save" id="saving">—</div>
+        </div>
+        <p class="note">Полная смена на скорости ×300 — около полутора минут. Пром. стандарт: заслонки «открыто/закрыто», постоянное разрежение, общеобменная — проектный расход по всем веществам. Предлагаемая: регулирование расхода каждого поста, сброс давления, общеобменная по выделениям процессов + датчики аэрозоля, NO₂ и CO (цель Σ C/ПДК ≤ 0,5).</p>
+      </div>
+      <div class="card cfg" id="roomCard">
+        <div class="label">Помещение (цех)</div>
+        <label>Длина, м<input type="number" id="roomL" min="3" max="500" step="1" value="48"></label>
+        <label>Ширина, м<input type="number" id="roomW" min="3" max="300" step="1" value="24"></label>
+        <label>Высота, м<input type="number" id="roomH" min="2.5" max="40" step="0.1" value="14.4"></label>
+        <p class="note" id="roomNote"></p>
+      </div>
+      <div id="posts"></div>
+      <div class="card sys">
+        <div class="label">Вентилятор и фильтр</div>
+        <div class="kv" style="margin-top:6px">
+          <div><b id="fanN">—</b><span>частота, об/мин</span></div>
+          <div><b id="fanP">—</b><span>давление, Па</span></div>
+          <div><b id="fanW">—</b><span>мощность, кВт</span></div>
+          <div><b id="qTot">—</b><span>местные отсосы, м³/ч</span></div>
+        </div>
+        <label class="label" for="foul" style="display:block;margin-top:8px">Загрязнение фильтра: <span id="foulV">×1,0</span></label>
+        <input type="range" id="foul" min="1" max="3" step="0.1" value="1">
+        <details style="margin-top:8px"><summary>Потери давления по элементам (Идельчик)</summary>
+          <label class="label" style="display:block;margin:6px 0 4px">Путь воздуха от поста: <select id="lossPost"></select></label>
+          <table class="subs"><thead><tr><th>Элемент</th><th>ζ / λl/d</th><th>Δp, Па</th></tr></thead><tbody id="lossBody"></tbody></table>
+          <p class="note">Сумма по пути = давлению вентилятора (проверяется автотестом). Тройник: ζ зависит от отношения расходов, может быть &lt; 0 (эжекция).</p>
+        </details>
+      </div>
+      <div class="card sys">
+        <div class="label">Воздух в цехе</div>
+        <div class="kv" style="margin-top:6px">
+          <div><b id="lgen">—</b><span>общеобменная, м³/ч</span></div>
+          <div><b id="mn">—</b><span>худшее Σ C/ПДК</span></div>
+          <div><b id="sens">—</b><span>датчик аэрозоля, мг/м³</span></div>
+          <div><b id="heat">—</b><span>нагрев притока, кВт</span></div>
+        </div>
+        <table class="subs" style="margin-top:8px"><thead><tr><th>Вещество</th><th>C, мг/м³</th><th>ПДК</th><th>C/ПДК</th></tr></thead><tbody id="subsBody"></tbody></table>
+        <p class="note" id="designNote"></p>
+      </div>
+      <p class="note">Удельные выделения — ГОСТ Р 56164-2014 (= Методика 1997, перечень Минприроды, п. 18); ПДК — СанПиН 1.2.3685-21 (ред. 2025); воздухообмен — СП 60.13330.2020 (ред. с изм. 1–6); местные сопротивления — Идельчик, 1992; нормы отсоса — ГОСТ 12.3.003-86. Отсосы — стационарные. Сеть и вентилятор подбираются автоматически под выбранные посты (геометрия условная). 88 автотестов.</p>
+    </aside>
+  </main>
+
+  <section class="trends">
+    <div class="trend"><div class="t"><span>Расход постов, доля уставки</span><span>— 100 %</span></div><canvas id="c1"></canvas></div>
+    <div class="trend"><div class="t"><span>Открытие заслонок, %</span><span>последние 15 мин</span></div><canvas id="c2"></canvas></div>
+    <div class="trend"><div class="t"><span>Вентилятор, об/мин</span><span id="c3l"></span></div><canvas id="c3"></canvas></div>
+    <div class="trend"><div class="t"><span>Худшее Σ C/ПДК в цехе</span><span>— ПДК (1) и цель (0,5)</span></div><canvas id="c4"></canvas></div>
+  </section>
+</div>
+
+<script>// Расчётное ядро vent-sim (собрано из src/engine/*.ts). Не редактировать вручную.
+(function(){
+"use strict";
+
+// ---- norms.ts
+// РЕЕСТР НОРМАТИВНЫХ И СПРАВОЧНЫХ ВЕЛИЧИН (российские источники).
+// Каждая константа модели, которую могут спросить на защите, берётся отсюда — с источником и пунктом.
+// Статусы: [Н] — норматив РФ (ГОСТ, СП, СанПиН, методика из перечня Минприроды);
+//          [С] — российский справочник / учебник; [А] — параметр алгоритма (выбран автором, исследована чувствительность);
+//          [Д] — допущение демонстрационного примера (заменяется паспортом оборудования конкретного объекта);
+//          [П] — источник найден, страницу/таблицу сверить по бумажному изданию.
+
+// ---------- Воздух
+/** Плотность воздуха 1,2 кг/м³ — стандартные условия испытаний вентиляторов. ГОСТ 10921-2017, разд. 1 (область применения), разд. 14 [Н] */
+const RHO_AIR = 1.2;
+/** Кинематическая вязкость воздуха при 20 °C, м²/с. Варгафтик Н.Б. Справочник по теплофизическим свойствам газов и жидкостей. — М.: Наука, 1972 [С][П] */
+const NU_AIR = 15.06e-6;
+/** Удельная теплоёмкость воздуха, кДж/(кг·°C). Варгафтик Н.Б., 1972 [С][П]; то же значение в учебниках по отоплению и вентиляции */
+const C_AIR = 1.005;
+
+// ---------- Воздуховоды
+/** Эквивалентная шероховатость стальных воздуховодов, м. Справочник проектировщика. Внутренние санитарно-технические устройства. Ч. 3. Вентиляция
+ *  и кондиционирование воздуха. Кн. 2 / под ред. Н.Н. Павлова, Ю.И. Шиллера. — М.: Стройиздат, 1992 [С][П]; Альтшуль А.Д. Гидравлические сопротивления. — М.: Недра, 1982 */
+const KE_STEEL = 0.1e-3;
+/** Минимальная скорость в воздуховодах от сварочных постов, м/с — нижняя граница рекомендуемого диапазона 8–14 м/с.
+ *  Боломатов В.Н. Выбор скорости воздуха в воздуховодах // АВОК. 2021. № 3. Табл. 4 [С] (там же ссылка на справочник Рысина С.А., 1964) */
+const W_MIN_WELDING = 8;
+
+// ---------- Сварка: нормы отсоса
+/** Объём удаляемого воздуха от одного поста на стандартном сварочном столе — не менее 1500 м³/ч; скорость всасывания в точке сварки ≥ 0,2 м/с.
+ *  ГОСТ 12.3.003-86 ССБТ. Работы электросварочные. Требования безопасности, п. 2.11.1 [Н] */
+const Q_POST_MIN_M3H = 1500;
+/** Эффективность местного отсоса η при отсутствии данных — 0,8. Методика расчёта выделений (выбросов) ЗВ в атмосферу при сварочных работах
+ *  (на основе удельных показателей), утв. приказом Госкомэкологии РФ от 14.04.1997 № 158; включена в перечень методик распоряжением
+ *  Минприроды России от 14.12.2020 № 35-р. Разд. 2.1, примечание 1 [Н]. Подтверждение: Гримитлин А.М. Вентиляция сварочного производства
+ *  // АВОК Северо-Запад, 2006 — подъёмно-поворотные отсосы улавливают 80–85 % [С] */
+const ETA_LEV_DEFAULT = 0.8;
+/** Коэффициент гравитационного оседания сварочного аэрозоля и его твёрдых компонентов при выделении в помещение — 0,4. Та же Методика, разд. 2.3 [Н] */
+const K_SETTLE = 0.4;
+
+// ---------- Удельные выделения, г/кг: ГОСТ Р 56164-2014, табл. 1, «Полуавтоматическая сварка сталей в защитных средах — в среде углекислого газа
+// электродной проволокой», строка Св-08Г2С [Н]; те же значения — Методика 1997 (изд. 2021), табл. 1. Марганец — «марганец и его соединения»
+// без пересчёта на MnO₂ (в шапке таблиц пересчёт указан только для хрома, NOx и фторидов) — сверено 11.10.2026
+const SV08G2S = { aerosol: 10.0, fe: 7.67, mn: 1.90, sio2: 0.43 };
+/** Флюс ФЦ-12 (сварка под флюсом), г/кг: аэрозоль 0,09; железа оксид 0,06; марганец 0,03; гидрофторид 0,02. ГОСТ Р 56164-2014, табл. 1 = Методика 1997, табл. 1 [Н] */
+const FC12 = { aerosol: 0.09, fe: 0.06, mn: 0.03, hf: 0.02 };
+
+// ---------- ПДК (СанПиН 1.2.3685-21; действует до 01.03.2027)
+/** Марганец в сварочных аэрозолях при его содержании до 20 %: ПДК м.р. 0,6 / с.с. 0,2 мг/м³, класс 2. Табл. 2.1, стр. 1222 [Н] (сверено по скриншоту) */
+const PDK_MN_WELD_LE20 = { mr: 0.6, ss: 0.2 };
+/** Марганец в сварочных аэрозолях 20–30 %: 0,3 / 0,1 мг/м³. Табл. 2.1, стр. 1223 [Н] */
+const PDK_MN_WELD_20_30 = { mr: 0.3, ss: 0.1 };
+/** Марганец и его соединения в атмосферном воздухе (в пересчёте на MnO₂): ПДК м.р. 0,01, с.с. 0,001 мг/м³. Табл. 1.1, поз. 302 [Н].
+ *  Используется как концентрация в приточном воздухе q_пр (верхняя оценка); СП 60.13330.2020, п. 5.11: q_пр ≤ 0,3 ПДК р.з. [Н] */
+const MN_ATM_SS = 0.001;
+
+// ---------- Климат и микроклимат
+/** Москва, период со среднесуточной температурой ≤ 8 °C: 202 сут, средняя −1,7 °C. СП 131.13330.2025 «Строительная климатология»,
+ *  табл. 5.1 «Климатические параметры холодного периода года», графы для периода ≤ 8 °C (утв. приказом Минстроя России от 08.08.2025 № 470/пр, действует с 09.09.2025) [Н] */
+const MOSCOW_HEATING = { days: 202, tAvg: -1.7 };
+/** Температура воздуха в цехе в холодный период — 18 °C: середина оптимального диапазона 17–19 °C для категории работ IIб.
+ *  ГОСТ 12.1.005-88, табл. 1 (холодный период, IIб: оптимальная 17–19 °C, скорость воздуха 0,2 м/с, допустимая ≤ 0,4 м/с; IIб — в т.ч. сварочные цеха, прил. 1) [Н] — сверено;
+ *  СанПиН 1.2.3685-21, разд. V (оптимальные параметры микроклимата) [Н][П: номер таблицы] */
+const T_IN_WINTER = 18;
+
+// ---------- Сварочная проволока: коэффициент расплавления при сварке в CO₂
+/** α_р = 9,05 + 3,1·10⁻⁴·I·l/d², г/(А·ч); l — вылет электрода, мм (10–20 мм); d — диаметр, мм.
+ *  Соколов Г.Н., Зорин И.В., Артемьев А.А., Дубцов Ю.Н. Технология и материалы для сварки и наплавки: учеб.-метод. пособие. — Волгоград:
+ *  ВолгГТУ, 2016. Ф. (3.22) [С][П: сверить коэффициенты по печатному изданию; формула восходит к работам по сварке в CO₂ — Потапьевский А.Г.] */
+function alphaMelt(I        , d = 1.2, l = 15) { return 9.05 + 3.1e-4 * I * l / (d * d); }
+/** Расход проволоки (масса расплавленного металла), кг/ч: B = α_р·I */
+function wireRate(I        , d = 1.2, l = 15) { return I <= 0 ? 0 : alphaMelt(I, d, l) * I / 1000; }
+
+// ---------- Исполнительные механизмы
+/** Ряд номинальных значений времени полного хода электрических исполнительных механизмов, с.
+ *  ГОСТ 7192-89 «Механизмы исполнительные электрические постоянной скорости ГСП. Общие технические условия» [Н] */
+const ACTUATOR_TIMES_GOST7192 = [2.5, 4, 6.3, 8, 10, 12.5, 15, 16, 20, 25, 30, 32, 40, 50, 63, 80, 100, 125, 160, 250, 400, 630];
+
+// ---------- Электродвигатель
+/** Минимальный КПД двигателей класса IE3, 4 полюса, 50 Гц. ГОСТ IEC 60034-30-1-2016 (идентичен IEC 60034-30-1:2014), табл. 1 [Н] */
+const IE3_4P_GOST                          = [[750, 0.825], [1100, 0.841], [1500, 0.853], [2200, 0.867], [3000, 0.877], [4000, 0.886], [5500, 0.896], [7500, 0.904], [11000, 0.914], [15000, 0.921], [18500, 0.926], [22000, 0.930], [30000, 0.936], [37000, 0.939], [45000, 0.942], [55000, 0.946], [75000, 0.950]];
+/** КПД асинхронного двигателя при нагрузке β = P/P_н через разделение потерь: ΣP(β) = P_пост + P_пер·β².
+ *  Отношение постоянных потерь к переменным k = 0,5 (максимум КПД при β = √k ≈ 0,71, т.е. «при нагрузке, несколько меньшей номинальной»).
+ *  Копылов И.П. Электрические машины: учебник. — М.: Высшая школа (разд. «Потери и КПД асинхронной машины») [С][П: стр.];
+ *  Безик В.А. Автоматизированный электропривод: учеб.-метод. пособие. — Брянск: Брянский ГАУ, 2023, разд. 1 (пример с P_пост/P_пер = 0,5) [С] */
+const MOTOR_LOSS_RATIO = 0.5;
+function motorEfficiency(beta        , etaNom        , k = MOTOR_LOSS_RATIO) {
+  if (beta <= 0) return 0;
+  const lossNom = 1 / etaNom - 1;                       // суммарные потери при номинале, доли P_н
+  const loss = lossNom * (k + beta * beta) / (1 + k);   // потери при нагрузке β
+  return beta / (beta + loss);
+}
+
+// ---------- Воздухообмен по массе вредных веществ
+/** СП 60.13330.2020 (та же формула — СНиП 2.04.05-91*, прил. 17, ф. 2):
+ *    L = L_wz + (m_po − L_wz·(q_wz − q_in)) / (q_l − q_in),  м³/ч
+ *  L — расход ПРИТОЧНОГО воздуха (= всего удаляемого: местные отсосы + общеобменная);
+ *  L_wz — расход воздуха, удаляемого из рабочей зоны МЕСТНЫМИ ОТСОСАМИ и на технологические нужды, м³/ч;
+ *  m_po — вредное вещество, поступающее в ВОЗДУХ ПОМЕЩЕНИЯ, мг/ч (то, что отсос не поймал: (1 − η)·G);
+ *  q_wz — концентрация в рабочей зоне (не выше ПДК), q_l — в воздухе, удаляемом выше рабочей зоны, q_in — в приточном воздухе, мг/м³.
+ *  При полном перемешивании q_l = q_wz [Д — запас: сварочный аэрозоль поднимается, реально q_l ≥ q_wz], и формула даёт L = m_po/(q_wz − q_in).
+ *  Тогда общеобменная (сверх местных отсосов) L_оо = L − L_wz. [Н] */
+function sp60Supply(m        , Lwz        , qwz        , qin        , ql = qwz)         {
+  return Lwz + (m - Lwz * (qwz - qin)) / (ql - qin);
+}
+/** Общеобменная вытяжка сверх местных отсосов, не меньше 0 */
+const sp60General = (m        , Lwz        , qwz        , qin        , ql = qwz) => Math.max(0, sp60Supply(m, Lwz, qwz, qin, ql) - Lwz);
+
+// ---------- Подбор диаметров воздуховодов
+/** Ряд наружных диаметров круглых воздуховодов из унифицированных деталей, м — ВСН 353-86 «Проектирование и применение воздуховодов из унифицированных деталей» [С] */
+const DUCT_D_STD = [0.1, 0.125, 0.16, 0.2, 0.25, 0.315, 0.355, 0.4, 0.45, 0.5, 0.56, 0.63, 0.71, 0.8, 0.9, 1.0, 1.12, 1.25, 1.4, 1.6, 1.8, 2.0];
+/** Транспортная скорость в воздуховодах от сварочных постов 8–14 м/с — Боломатов В.Н., «АВОК», 2021, № 3, табл. 4 [С].
+ *  (СП 60.13330.2020, табл. Л.4 — 4–8 м/с — для пылегазоудаления не применяется: п. 1.2 исключает его из области СП 60.) Целевая 12 м/с [А]. */
+const W_TRANSPORT = { min: 8, max: 14, target: 12 };
+/** Подбор диаметра: из стандартного ряда — тот, у которого скорость в пределах 8–14 м/с и ближе всего к целевой;
+ *  если такого нет (очень малый или очень большой расход) — наименьший с w ≤ w_max, иначе наибольший. */
+function pickDuctD(Qm3h        , w = W_TRANSPORT)         {
+  const vel = (d        ) => Qm3h / 3600 / (Math.PI * d * d / 4);
+  let best = -1, bestDev = Infinity;
+  for (const d of DUCT_D_STD) { const v = vel(d); if (v >= w.min && v <= w.max && Math.abs(v - w.target) < bestDev) { best = d; bestDev = Math.abs(v - w.target); } }
+  if (best > 0) return best;
+  return DUCT_D_STD.find(d => vel(d) <= w.max) ?? DUCT_D_STD[DUCT_D_STD.length - 1];
+}
+
+
+// ---- physics.ts
+// Физические зависимости. Внутри — СИ: м, м³/с, Па, кг/м³.
+// Каждая функция помечена источником и статусом: [Н] норматив, [М] инженерная модель, [Д] допущение, [П] требует проверки.
+
+const AIR = { rho: RHO_AIR, nu: NU_AIR }; // ГОСТ 10921-2017; Варгафтик, 1972 — см. norms.ts
+
+const m3h = (q        ) => q / 3600;      // м³/ч -> м³/с
+const toM3h = (q        ) => q * 3600;    // м³/с -> м³/ч
+const area = (d        ) => Math.PI * d * d / 4;
+
+/** Скорость, м/с */
+const velocity = (Q        , d        ) => Q / area(d);
+
+/** Динамическое давление pд = ρw²/2, Па [М] */
+const dynPressure = (w        , rho = AIR.rho) => rho * w * w / 2;
+
+/** Коэффициент трения по формуле А.Д. Альтшуля λ = 0,11·(kэ/d + 68/Re)^0,25 [М]
+ *  Альтшуль А.Д. Гидравлические сопротивления. — М.: Недра, 1982.
+ *  Проверено: воспроизводит λ·l/d из таблицы 4.1 диплома (kэ = 0,1 мм). */
+function lambdaAltshul(w        , d        , ke = KE_STEEL, nu = AIR.nu)         {
+  const Re = Math.max(Math.abs(w) * d / nu, 1);
+  const turb = (r        ) => 0.11 * Math.pow(ke / d + 68 / r, 0.25);
+  if (Re <= 2000) return 64 / Re;              // ламинарный режим (Пуазейль) — бывает только в утечках через закрытую заслонку
+  if (Re >= 4000) return turb(Re);             // турбулентный — формула Альтшуля
+  // переходная зона 2000 < Re < 4000: линейная интерполяция между режимами, чтобы λ была непрерывной [М]
+  const t = (Re - 2000) / 2000; return (1 - t) * (64 / 2000) + t * turb(4000);
+}
+
+/** Потери давления на участке воздуховода Δp = (λ·l/d + Σζ)·pд, Па [М]
+ *  Формула Дарси–Вейсбаха + местные сопротивления (Идельчик И.Е., 1992; Посохин В.Н., 2008). */
+function ductLoss(Q        , d        , l        , sumZeta        , ke = KE_STEEL)         {
+  const w = velocity(Math.abs(Q), d);
+  const lam = lambdaAltshul(w, d, ke);
+  return (lam * l / d + sumZeta) * dynPressure(w) * Math.sign(Q);
+}
+
+// ---------- Заслонка
+/** Характеристика дроссель-клапана (плоский дисковый затвор) в трубе круглого сечения: угол α (0° — открыт, 90° — закрыт) → ζ, к скорости в трубе.
+ *  Идельчик И.Е., 1992, диагр. 9-17, с. 452–453, кривая 2 (D̄ = D_д/D₀ = 1,0), значения ζ_кв: 10° — 0,52; 20° — 1,54; 30° — 4,50; 40° — 11,0;
+ *  50° — 29,0; 60° — 105; 70° — 625 [С] (сверено по книге 11.10.2026). Слагаемое 120·A/Re диаграммы при Re > 10⁴ < 1 % — не учитывается.
+ *  0° — для кривой 2 в таблице нет значения: принято 0,2 [Д] (тонкий диск вдоль потока; уточнить по паспорту заслонки).
+ *  90° — [Д]: закрытая заслонка моделируется утечкой (ζ = 10⁴). До 11.10.2026 в модели была другая таблица (30° — 3,91; 60° — 118; 70° — 751). */
+const BUTTERFLY_ROUND                          = [
+  [0, 0.2], [10, 0.52], [20, 1.54], [30, 4.50], [40, 11.0], [50, 29.0], [60, 105], [70, 625], [90, 1e4],
+];
+
+/** ζ(α) — интерполяция ln ζ по углу (ζ растёт почти экспоненциально) [М] */
+function damperZeta(alphaDeg        , table = BUTTERFLY_ROUND)         {
+  const a = Math.min(Math.max(alphaDeg, table[0][0]), table[table.length - 1][0]);
+  for (let i = 1; i < table.length; i++) {
+    const [a0, z0] = table[i - 1], [a1, z1] = table[i];
+    if (a <= a1) {
+      const t = (a - a0) / (a1 - a0);
+      return Math.exp(Math.log(z0) + t * (Math.log(z1) - Math.log(z0)));
+    }
+  }
+  return table[table.length - 1][1];
+}
+
+/** Обратная функция: какой угол даёт заданное ζ (для линеаризации регулятора) */
+function damperAngleForZeta(zeta        , table = BUTTERFLY_ROUND)         {
+  let lo = table[0][0], hi = table[table.length - 1][0];
+  for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (damperZeta(m, table) < zeta) lo = m; else hi = m; }
+  return (lo + hi) / 2;
+}
+
+// ---------- Вентилятор
+/** Характеристика вентилятора по точкам каталога (Q м³/ч, p Па) при n0 об/мин.
+ *  Пересчёт на другую частоту — законы подобия (пропорциональности): Q~n, p~n², N~n³.
+ *  ГОСТ 10921-2017, разд. 14 «Правила пересчёта аэродинамических характеристик», прил. К [Н]; Калинушкин М.П. Вентиляторные установки. — М.: Высшая школа, 1979 [С]. */
+                           
+                                                                                                
+                                                                                                                                    
+ 
+
+/** КПД частотного преобразователя от нагрузки (доля номинальной мощности ПЧ).
+ *  [Д] Российского нормативного ЧИСЛОВОГО значения нет: методика определения потерь ПЧ — ГОСТ IEC 61800-9-2-2021 (с 01.01.2022), значения — по паспорту
+ *  конкретного ПЧ. До получения паспорта приняты типовые значения ШИМ-ПЧ 5 л.с. (US DOE Motor Tip Sheet #11, табл. 1) — указывать как зарубежный справочный. */
+const VFD_EFF                          = [[0.016, 0.35], [0.125, 0.80], [0.25, 0.88], [0.42, 0.91], [0.5, 0.92], [0.75, 0.94], [1.0, 0.95]];
+function tab(t                         , x        ) {
+  if (x <= t[0][0]) return t[0][1];
+  for (let i = 1; i < t.length; i++) if (x <= t[i][0]) { const [x0, y0] = t[i - 1], [x1, y1] = t[i]; return y0 + (x - x0) * (y1 - y0) / (x1 - x0); }
+  return t[t.length - 1][1];
+}
+/** Электрическая мощность из сети: P_эл = P_вал / (η_дв(β)·η_ПЧ(β)), β = P_вал / P_ном; η_дв(β) — разделение потерь (Копылов; norms.ts) */
+function electricPower(fan          , shaftW        )         {
+  if (shaftW <= 0) return 0;
+  if (!fan.motorW || !fan.motorEta) return shaftW;
+  const beta = shaftW / fan.motorW;
+  return shaftW / (motorEfficiency(beta, fan.motorEta) * tab(VFD_EFF, beta));
+}
+
+function fanPressure(fan          , Q        , n        )         {
+  const k = n / fan.n0;
+  if (k <= 0) return 0;
+  const Q0 = toM3h(Q) / k; // приводим к номинальной частоте
+  const p = fan.points;
+  let p0        ;
+  if (Q0 <= p[0][0]) p0 = p[0][1];
+  else if (Q0 >= p[p.length - 1][0]) {
+    const [qa, pa] = p[p.length - 2], [qb, pb] = p[p.length - 1];
+    p0 = pb + (Q0 - qb) * (pb - pa) / (qb - qa); // экстраполяция за последнюю точку
+  } else {
+    let i = 1; while (Q0 > p[i][0]) i++;
+    const [qa, pa] = p[i - 1], [qb, pb] = p[i];
+    p0 = pa + (Q0 - qa) * (pb - pa) / (qb - qa);
+  }
+  return p0 * k * k;
+}
+
+/** Потребляемая мощность N = Q·p/η, Вт [М]; η — постоянная [Д] (уточнить по каталогу) */
+const fanPower = (fan          , Q        , p        ) => Math.max(0, Q * p) / fan.eta; // < 0 физически невозможно для вентилятора: за пределами характеристики мощность 0 [М]
+
+// ---------- Фильтр
+/** Сопротивление фильтра Δp = Δp_ном·(Q/Q_ном)^m·k_загр.
+ *  m = 1: сопротивление фильтровальной перегородки и слоя пыли пропорционально скорости фильтрации (закон Дарси) —
+ *  Ужов В.Н., Мягков Б.И. Очистка промышленных газов фильтрами. — М.: Химия, 1970; Штокман Е.А. Очистка воздуха. — М.: АСВ, 1999 [С][П: стр.].
+ *  Δp_ном (чистый) и конечное — по паспорту фильтра; k_загр ≥ 1 — коэффициент загрязнения. */
+                                                                                        
+const filterLoss = (f            , Q        ) =>
+  f.dpNom * Math.pow(Math.abs(Q) / f.qNom, f.m) * f.fouling * Math.sign(Q);
+
+
+// ---- fittings.ts
+// МЕСТНЫЕ СОПРОТИВЛЕНИЯ (фасонные части) — по Идельчику И.Е. Справочник по гидравлическим сопротивлениям. 3-е изд. — М.: Машиностроение, 1992.
+// Каждый коэффициент ζ отнесён к динамическому давлению в указанном сечении. Потери Δp = ζ·ρw²/2.
+// [П] — формула приведена по справочнику, номер диаграммы и коэффициенты сверить по книге (Саша пришлёт фото страниц).
+
+/** Отвод круглого сечения с плавным поворотом, R₀/D₀ < 3 — Идельчик И.Е., 1992, разд. 6, диагр. 6-1, с. 277–278 [С] (сверено по книге 11.10.2026).
+ *  ζ_м = A₁·B₁·C₁ (C₁ = 1 для круглого сечения), отнесено к скорости в отводе.
+ *  A₁(δ) — таблица на с. 278: 0°—0; 20°—0,31; 30°—0,45; 45°—0,60; 60°—0,78; 75°—0,90; 90°—1,00; 110°—1,13; 130°—1,20; 150°—1,28; 180°—1,40.
+ *  B₁ = 0,21·(R₀/D₀)^−2,5 при R₀/D₀ = 0,5…1,0; 0,21·(R₀/D₀)^−0,5 при R₀/D₀ > 1,0.
+ *  Шероховатые стенки (воздуховоды из стали, Δ > 0), Re ≥ 10⁴: ζ = k_Δ·k_Re·ζ_м + ζ_тр (п. 2 диаграммы); ζ_тр — трение по длине дуги, считается в длине участка.
+ *  k_Re (с. 277): R₀/D₀ > 0,70 → 1,3 − 0,29·ln(Re·10⁻⁵); 0,55…0,70 → 5,45/Re^0,131; 0,50…0,55 → 1 + 4400/Re.
+ *  k_Δ (с. 278, R₀/D₀ > 0,55, Δ̄ ≤ 0,001): Re 3·10³…4·10⁴ → 1,0; 4·10⁴…2·10⁵ → λ_Δ/λ_гл; > 2·10⁵ → 1 + Δ̄·10³.
+ *  [М] На границах диапазонов Re таблица k_Δ даёт скачки (при Δ̄ = 0,0005 на Re = 2·10⁵: 1,16 → 1,5). Чтобы у сети было решение при любом расходе,
+ *  k_Δ сглажен линейно по ln Re в пределах ×/÷ 1,25 от границ (3,2·10⁴…5·10⁴ и 1,6·10⁵…2,5·10⁵); Re < 10⁴ (только утечки через закрытые заслонки) — k_Re по Re = 10⁴. */
+const A1_TAB                          = [[0, 0], [20, 0.31], [30, 0.45], [45, 0.60], [60, 0.78], [75, 0.90], [90, 1.00], [110, 1.13], [130, 1.20], [150, 1.28], [180, 1.40]];
+const lin = (t                         , x        ) => {
+  if (x <= t[0][0]) return t[0][1];
+  for (let i = 1; i < t.length; i++) if (x <= t[i][0]) { const [x0, y0] = t[i - 1], [x1, y1] = t[i]; return y0 + (x - x0) * (y1 - y0) / (x1 - x0); }
+  return t[t.length - 1][1];
+};
+const bendA1 = (deltaDeg        ) => lin(A1_TAB, deltaDeg);
+const bendB1 = (rOverD        ) => rOverD <= 1 ? 0.21 / rOverD ** 2.5 : 0.21 / rOverD ** 0.5;
+/** ζ_м = A₁·B₁ — местное сопротивление отвода с гладкими стенками при Re > 2·10⁵ */
+function bendZeta(deltaDeg        , rOverD        )         { return bendA1(deltaDeg) * bendB1(rOverD); }
+/** λ технически гладких труб (Идельчик, диагр. 2-1; формула Филоненко–Альтшуля): λ = 1/(1,8·lg Re − 1,64)², Re ≥ 4000 */
+const lambdaSmooth = (Re        ) => 1 / (1.8 * Math.log10(Math.max(Re, 4000)) - 1.64) ** 2;
+function bendKRe(Re        , rOverD        )         {
+  const R = Math.max(Re, 1e4);
+  if (rOverD > 0.70) return 1.3 - 0.29 * Math.log(R * 1e-5);
+  if (rOverD > 0.55) return 5.45 / R ** 0.131;
+  return 1 + 4400 / R;
+}
+/** k_Δ; lamRough — λ шероховатой трубы при этом Re (Альтшуль), relRough = Δ/D */
+function bendKDelta(Re        , lamRough        , relRough        )         {
+  const mid = lamRough / lambdaSmooth(Re), hi = 1 + Math.min(relRough, 0.001) * 1e3;
+  const blend = (x        , x0        , x1        , y0        , y1        ) => { const t = (Math.log(x) - Math.log(x0)) / (Math.log(x1) - Math.log(x0)); return y0 + Math.min(1, Math.max(0, t)) * (y1 - y0); };
+  if (Re <= 3.2e4) return 1;
+  if (Re < 5e4) return blend(Re, 3.2e4, 5e4, 1, mid);  // от 1,0 к λ_Δ/λ_гл (непрерывно)
+  if (Re <= 1.6e5) return mid;
+  if (Re < 2.5e5) return blend(Re, 1.6e5, 2.5e5, mid, hi);
+  return hi;
+}
+/** Полный местный коэффициент отвода в стальном воздуховоде при данном Re */
+function bendZetaRough(deltaDeg        , rOverD        , Re        , lamRough        , relRough        )         {
+  return bendKDelta(Re, lamRough, relRough) * bendKRe(Re, rOverD) * bendZeta(deltaDeg, rOverD);
+}
+
+/** Внезапное расширение (формула Борда–Карно): ζ = (1 − F₁/F₂)², отнесено к скорости в узком сечении F₁ (разд. 4-1, диагр. 4-1) */
+const suddenExpansionZeta = (d1        , d2        ) => (1 - (d1 / d2) ** 2) ** 2;
+
+/** Конический диффузор в сети, угол раскрытия α, F₁/F₀ = n — Идельчик, 1992, разд. 5, диагр. 5-2, с. 211 (табл. ζ_д при n = 2, l₀/D₀ = 0) и
+ *  формулы (5-6), (5-7), с. 192–193 (сверено по книге 11.10.2026). ζ к скорости в узком сечении, включает трение.
+ *  Таблица дана для n ≥ 2; у переходов в сети n ≈ 1,5–2, поэтому [М]: ζ(n) = [ζ_табл(α, Re; n = 2) − ζ_тр(2)]·((1 − 1/n)/0,5)^1,92 + ζ_тр(n),
+ *  где 1,92 — показатель m для конических диффузоров в (5-7), ζ_тр = λ/(8·sin(α/2))·(1 − 1/n²) — формула (5-6).
+ *  Re < 0,5·10⁵ и > 4·10⁵ — значения на границе таблицы. При α > 40° — не меньше Борда–Карно (1 − 1/n)². */
+const DIFF_A = [3, 4, 6, 8, 10, 12, 14, 16, 20, 30, 45, 60, 90, 120, 180];
+const DIFF_RE = [0.5e5, 1e5, 2e5, 4e5];
+const DIFF_N2 = [
+  [0.148, 0.135, 0.121, 0.112, 0.107, 0.109, 0.120, 0.141, 0.191, 0.315, 0.331, 0.326, 0.315, 0.308, 0.298],
+  [0.120, 0.106, 0.090, 0.083, 0.080, 0.088, 0.102, 0.122, 0.196, 0.298, 0.297, 0.286, 0.283, 0.279, 0.276],
+  [0.093, 0.082, 0.070, 0.068, 0.062, 0.062, 0.063, 0.073, 0.120, 0.229, 0.279, 0.268, 0.268, 0.265, 0.263],
+  [0.079, 0.068, 0.056, 0.048, 0.048, 0.048, 0.051, 0.051, 0.068, 0.120, 0.271, 0.272, 0.272, 0.268, 0.268],
+];
+function diffuserZetaN2(alphaDeg        , Re        )         {
+  const a = Math.min(Math.max(alphaDeg, 3), 180), r = Math.min(Math.max(Re, DIFF_RE[0]), DIFF_RE[3]);
+  let j = 1; while (j < DIFF_A.length - 1 && a > DIFF_A[j]) j++;
+  let i = 1; while (i < DIFF_RE.length - 1 && r > DIFF_RE[i]) i++;
+  const ta = (a - DIFF_A[j - 1]) / (DIFF_A[j] - DIFF_A[j - 1]), tr = (Math.log(r) - Math.log(DIFF_RE[i - 1])) / (Math.log(DIFF_RE[i]) - Math.log(DIFF_RE[i - 1]));
+  const v = (ii        ) => DIFF_N2[ii][j - 1] + ta * (DIFF_N2[ii][j] - DIFF_N2[ii][j - 1]);
+  return v(i - 1) + tr * (v(i) - v(i - 1));
+}
+function diffuserZeta(d1        , d2        , alphaDeg = 15, Re = 2e5, lam = 0.018)         {
+  const n = (d2 / d1) ** 2;
+  if (n <= 1) return 0;
+  const bc = (1 - 1 / n) ** 2;
+  const fr = (nn        ) => lam / (8 * Math.sin(alphaDeg / 2 * Math.PI / 180)) * (1 - 1 / nn ** 2);
+  const z = Math.max(0, diffuserZetaN2(alphaDeg, Re) - fr(2)) * ((1 - 1 / n) / 0.5) ** 1.92 + fr(n);
+  return alphaDeg > 40 ? Math.max(z, bc) : z;
+}
+
+/** Внезапное сужение: ζ = 0,5·(1 − F₂/F₁)^0,75, к скорости в узком сечении F₂ (разд. 4, диагр. 4-9) [П] */
+const suddenContractionZeta = (d1        , d2        ) => 0.5 * (1 - (d2 / d1) ** 2) ** 0.75;
+
+/** Вход в трубу через конический коллектор (раструб без торцевой стенки) — Идельчик, 1992, диагр. 3-6, с. 127 (сверено): при α = 60°
+ *  ζ = 0,25 (l/D = 0,15), 0,17 (l/D = 0,25); принято 0,2 [Д: геометрия зонта l/D ≈ 0,2];
+ *  острая кромка без коллектора — 0,5. Выход в атмосферу (потеря динамического давления) — ζ = 1,0. */
+const HOOD_CONE_ZETA = 0.2;
+const SHARP_ENTRY_ZETA = 0.5;
+const EXIT_ZETA = 1.0;
+
+/** Тройник вытяжной (слияние потоков) 90°, F_п + F_б > F_с, F_п = F_с — Идельчик, 1992, разд. 7, **диагр. 7-4, с. 346**; A — **табл. 7-1, с. 335** [С] (сверено по книге 11.10.2026).
+ *  Коэффициенты отнесены к скорости в ОБЩЕМ (сборном) канале w_с:
+ *   боковое ответвление: ζ_с.б = A·[1 + (Q_б/Q_с · F_с/F_б)² − 2·(1 − Q_б/Q_с)²],  A — по teeA() [П];
+ *   проход:              ζ_с.п = 1,55·(Q_б/Q_с) − (Q_б/Q_с)².
+ *  Коэффициенты могут быть отрицательными (эжекция) — это физический эффект. */
+function teeSideZeta(qb        , qc        , db        , dc        , A         )         {
+  if (qc <= 0) return 0;
+  const r = Math.min(1, Math.max(0, qb / qc)), fcfb = (dc / db) ** 2;
+  return (A ?? teeA(1 / fcfb, r)) * (1 + (r * fcfb) ** 2 - 2 * (1 - r) ** 2);
+}
+/** Поправочный коэффициент A к боковому ответвлению тройника на слияние (F_п = F_с):
+ *  F_б/F_с ≤ 0,35 → A = 1; F_б/F_с > 0,35: Q_б/Q_с ≤ 0,4 → A = 0,9·(1 − Q_б/Q_с); Q_б/Q_с > 0,4 → A = 0,55.
+ *  Идельчик И.Е., 1992, табл. 7-1, с. 335 (сверено). До 11.10.2026 в модели было A = 1 — завышало потери бокового входа до 1,8 раза при F_б/F_с > 0,35. */
+function teeA(fbfc        , r        )         {
+  if (fbfc <= 0.35) return 1;
+  // по таблице на границе r = 0,4 скачок 0,54 → 0,55; берётся max(…), чтобы характеристика была непрерывной (иначе у сети нет точного решения
+  // при r ≈ 0,4 — найдено автотестом на 4 постах). Отличие от таблицы — только при 0,389 < r ≤ 0,4 и не более 0,01 (1,8 %) [М]
+  return Math.max(0.9 * (1 - r), 0.55);
+}
+function teeStraightZeta(qb        , qc        )         {
+  if (qc <= 0) return 0;
+  const r = Math.min(1, Math.max(0, qb / qc));
+  return 1.55 * r - r * r;
+}
+
+
+// ---- network.ts
+// Модель разветвлённой вытяжной сети с одним вентилятором.
+// Метод: для каждого местного отсоса записывается баланс давления по пути
+// «вход отсоса → ... → вентилятор → выброс»: Σ Δp(участков пути) = p_вент(Q_общ).
+// Неизвестные — расходы отсосов Q_1..Q_N; решается методом Ньютона (якобиан численный).
+// Расход на любом участке = сумма расходов отсосов, проходящих через него (закон сохранения массы).
+
+
+
+                                                                                    // тройник на слияние, проход; side — участок бокового входа
+
+                                                                                    
+// Дерево: листья — ветви отсосов, корень (parent = null) — участок перед вентилятором.
+
+                          
+                      
+                                                                            
+                                                                                     
+                
+                                         
+ 
+
+                           
+                                                                      
+                 
+                                                           
+                                                       
+                                                                                                                  
+                                  
+                     
+                     
+ 
+
+/** Потери на элементе, Па (знак — по направлению потока). ctx: расход родительского участка (сборного канала) и расходы всех участков. */
+function elemLoss(e         , Q        , ctx                                            )         {
+  switch (e.kind) {
+    case 'duct': return ductLoss(Q, e.d, e.l, e.zeta);
+    case 'damper': return ductLoss(Q, e.d, 0, damperZeta(e.alpha, e.table));
+    case 'filter': return filterLoss(e.spec, Q);
+    case 'local': return ductLoss(Q, e.d, 0, e.zeta);
+    case 'diffuser': { const w = Math.abs(Q) / area(e.d1), Re = w * e.d1 / AIR.nu; return ductLoss(Q, e.d1, 0, diffuserZeta(e.d1, e.d2, e.alpha ?? 15, Re, lambdaAltshul(w, e.d1))); }
+    case 'bend': { const w = Math.abs(Q) / area(e.d), Re = w * e.d / AIR.nu; return ductLoss(Q, e.d, 0, bendZetaRough(e.delta, e.rd, Re, lambdaAltshul(w, e.d), KE_STEEL / e.d)); }
+    case 'teeSide': { const qc = ctx?.Qp ?? Q; return teeSideZeta(Q, qc, e.db, e.dc) * dynPressure(qc / area(e.dc)); }
+    case 'teeStraight': { const qc = ctx?.Qp ?? Q, qb = ctx?.f[e.side] ?? 0; return teeStraightZeta(qb, qc) * dynPressure(qc / area(e.dc)); }
+  }
+}
+const segLossFn = (s                                                 , Q        , f                         ) =>
+  s.elements.reduce((a, e) => a + elemLoss(e, Q, f ? { Qp: s.parent ? f[s.parent] : Q, f } : undefined), 0);
+
+/** Разбивка потерь давления по элементам при найденном решении (для отчёта и проверки энергетического баланса) */
+function lossBreakdown(net         , sol          )                                                                          {
+  const out                                                                          = [];
+  for (const s of net.segments) for (const e of s.elements) out.push({ seg: s.id, id: e.id, kind: e.kind, q: sol.Q[s.id], dp: elemLoss(e, sol.Q[s.id], { Qp: s.parent ? sol.Q[s.parent] : sol.Q[s.id], f: sol.Q }) });
+  for (const e of net.common) out.push({ seg: 'common', id: e.id, kind: e.kind, q: sol.Qtotal, dp: elemLoss(e, sol.Qtotal) });
+  return out;
+}
+
+function solve(net         , guess           )           {
+  const byId = new Map(net.segments.map(s => [s.id, s]));
+  // путь от каждого отсоса до корня
+  const paths = net.hoods.map(h => { const p            = []; let s = byId.get(h); while (s) { p.push(s); s = s.parent ? byId.get(s.parent) : undefined; } return p; });
+  // какие отсосы проходят через сегмент
+  const users = new Map                  ();
+  paths.forEach((p, i) => p.forEach(s => { if (!users.has(s.id)) users.set(s.id, []); users.get(s.id) .push(i); }));
+
+  const N = net.hoods.length;
+  const segFlows = (q          ) => { const m                         = {}; for (const [id, u] of users) m[id] = u.reduce((a, i) => a + q[i], 0); return m; };
+  const residual = (q          ) => {
+    const f = segFlows(q); const Qt = q.reduce((a, b) => a + b, 0);
+    const pF = fanPressure(net.fan, Qt, net.fanSpeed) - segLossFn({ elements: net.common }, Qt);
+    return paths.map(p => p.reduce((a, s) => a + segLossFn(s, f[s.id], f), 0) - pF);
+  };
+
+  // демпфированный метод Ньютона; если из начального приближения сойтись не удалось (застревание на границе q → 0),
+  // повтор из приближений, масштабированных по частоте вентилятора
+  const newton = (q0          ) => {
+    let q = [...q0], it = 0, ok = false;
+    for (; it < 200; it++) {
+      const r = residual(q);
+      if (Math.max(...r.map(Math.abs)) < 1e-3) { ok = true; break; }
+      const J = Array.from({ length: N }, () => Array(N).fill(0));
+      for (let j = 0; j < N; j++) {
+        const h = Math.max(1e-6, Math.abs(q[j]) * 1e-5);
+        const qp = [...q]; qp[j] += h; const rp = residual(qp);
+        for (let i = 0; i < N; i++) J[i][j] = (rp[i] - r[i]) / h;
+      }
+      const dx = gauss(J, r.map(v => -v));
+      const norm = (v          ) => Math.sqrt(v.reduce((a, x) => a + x * x, 0)), r0 = norm(r);
+      let t = 1; while (t > 1e-4 && q.some((v, i) => v + t * dx[i] <= 0)) t /= 2;
+      let qn = q.map((v, i) => Math.max(v + t * dx[i], 1e-9));
+      while (t > 1e-6 && norm(residual(qn)) > (1 - 1e-4 * t) * r0) { t /= 2; qn = q.map((v, i) => Math.max(v + t * dx[i], 1e-9)); }
+      q = qn;
+    }
+    return { q, ok, it };
+  };
+  const k = Math.max(net.fanSpeed / net.fan.n0, 0.01);
+  const starts = [guess && guess.length === N ? guess : null, Array(N).fill(m3h(500) * k), Array(N).fill(m3h(500)), Array(N).fill(m3h(50) * k)].filter(Boolean)              ;
+  let res = newton(starts[0]), tries = 1;
+  while (!res.ok && tries < starts.length) { res = newton(starts[tries]); tries++; }
+  const q = res.q, ok = res.ok, it = res.it;
+  const f = segFlows(q); const Qt = q.reduce((a, b) => a + b, 0);
+  const pFan = fanPressure(net.fan, Qt, net.fanSpeed);
+  const segLoss                         = {};
+  const fq                         = { ...f }; net.hoods.forEach((h, i) => (fq[h] = q[i]));
+  for (const s of net.segments) segLoss[s.id] = segLossFn(s, fq[s.id] ?? 0, fq);
+  segLoss['common'] = segLossFn({ elements: net.common }, Qt);
+  const Q                         = { ...f }; net.hoods.forEach((h, i) => (Q[h] = q[i]));
+  const power = fanPower(net.fan, Qt, pFan);
+  return { Q, Qtotal: Qt, pFan, power, powerEl: electricPower(net.fan, power), segLoss, iterations: it, converged: ok };
+}
+
+function gauss(A            , b          )           {
+  const n = b.length, M = A.map((r, i) => [...r, b[i]]);
+  for (let c = 0; c < n; c++) {
+    let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+    [M[c], M[p]] = [M[p], M[c]];
+    for (let r = c + 1; r < n; r++) { const k = M[r][c] / M[c][c]; for (let k2 = c; k2 <= n; k2++) M[r][k2] -= k * M[c][k2]; }
+  }
+  const x = Array(n).fill(0);
+  for (let r = n - 1; r >= 0; r--) { let s = M[r][n]; for (let c = r + 1; c < n; c++) s -= M[r][c] * x[c]; x[r] = s / M[r][r]; }
+  return x;
+}
+
+/** Установить угол заслонки в сегменте */
+function setDamper(net         , segId        , alpha        ) {
+  const s = net.segments.find(x => x.id === segId) ;
+  for (const e of s.elements) if (e.kind === 'damper') e.alpha = alpha;
+}
+
+
+// ---- balance.ts
+// Установившийся режим регулирования: подобрать углы заслонок и частоту вентилятора так, чтобы
+// 1) расход каждого работающего поста = требуемому; 2) неработающие посты закрыты;
+// 3) давление минимально: заслонка «критической» (самой нагруженной) ветви открыта полностью.
+// Принцип 3 — аналог «сброса уставки давления» в VAV-системах (Liu et al., ASHRAE Trans., 2010) [М].
+
+
+const ALPHA_OPEN = 0, ALPHA_CLOSED = 90;
+
+function anglesForSpeed(net         , req                        , n        , warm = false) {
+  net.fanSpeed = n;
+  const dampers = net.hoods.map(h => net.segments.find(s => s.id === h) .elements.find(e => e.kind === 'damper')       );
+  // начальные углы: 20° (или, при warm, углы предыдущего шага бисекции — ускоряет подбор в 2–3 раза, результат тот же в пределах допуска 0,05 %)
+  net.hoods.forEach((h, i) => { dampers[i].alpha = req[h] > 0 ? (warm && dampers[i].alpha < 70 ? dampers[i].alpha : 20) : ALPHA_CLOSED; });
+  let sol = solve(net);
+  for (let it = 0; it < 200; it++) {
+    let maxErr = 0;
+    net.hoods.forEach((h, i) => {
+      if (!(req[h] > 0)) return;
+      const d = dampers[i];
+      const z = damperZeta(d.alpha, d.table);
+      const ratio = sol.Q[h] / req[h];
+      maxErr = Math.max(maxErr, Math.abs(ratio - 1));
+      // Δp заслонки ~ ζ·Q²: чтобы уменьшить расход в ratio раз, увеличиваем сопротивление ветви
+      const tb = d.table ?? BUTTERFLY_ROUND;
+      const zNew = Math.min(Math.max(z * Math.pow(ratio, 2 * 0.7) + (ratio - 1) * 0.5, damperZeta(0, tb)), damperZeta(70, tb));
+      d.alpha = damperAngleForZeta(zNew, tb);
+    });
+    sol = solve(net, net.hoods.map(h => sol.Q[h]));
+    if (maxErr < 0.0005) break;
+  }
+  const active = net.hoods.filter(h => req[h] > 0);
+  const short = active.filter(h => sol.Q[h] < req[h] * 0.999);  // не добирают даже при открытой заслонке
+  const minAlpha = Math.min(...active.map(h => dampers[net.hoods.indexOf(h)].alpha));
+  return { sol, short, minAlpha, angles: Object.fromEntries(net.hoods.map((h, i) => [h, dampers[i].alpha])) };
+}
+
+function balance(net         , req                        , nMin = 300, nMax = 1500)                {
+  const top = anglesForSpeed(net, req, nMax);
+  if (top.short.length) {
+    return { feasible: false, fanSpeed: nMax, angles: top.angles, sol: top.sol,
+      message: `Требуемый расход недостижим при максимальной частоте: посты ${top.short.join(', ')}. Факт.: ${top.short.map(h => (top.sol.Q[h] * 3600).toFixed(0)).join(', ')} м³/ч` };
+  }
+  // бисекция по частоте: минимальная частота, при которой все посты получают требуемый расход
+  let lo = nMin, hi = nMax, best = top;
+  for (let i = 0; i < 25 && hi - lo > 0.5; i++) {   // точность частоты 0,5 об/мин
+    const mid = (lo + hi) / 2, r = anglesForSpeed(net, req, mid, true);
+    if (r.short.length === 0) { hi = mid; best = r; } else lo = mid;
+  }
+  anglesForSpeed(net, req, hi, true); // привести сеть в найденное состояние
+  return { feasible: true, fanSpeed: hi, angles: best.angles, sol: best.sol,
+    message: `Критическая ветвь открыта на ${(100 - best.minAlpha / 0.9).toFixed(0)} %` };
+}
+
+
+// ---- sim.ts
+// Динамическая модель (блок 3). Шаг по времени dt, на каждом шаге:
+// 1) состояние постов по расписанию → выделение (блок 1);
+// 2) регуляторы задают целевые углы заслонок и частоту вентилятора (по режиму управления);
+// 3) приводы отрабатывают с ограниченной скоростью (время полного хода);
+// 4) сеть решается квазистационарно (блок 2): время прохода воздуха по сети — секунды [Д];
+// 5) концентрация в цехе — нестационарное уравнение баланса вредных веществ при полном перемешивании V·dC/dτ = G − L(C − C_пр);
+//    стационарное решение — формула СП 60.13330.2020 (прил. И) [Н]; нестационарная форма — Эльтерман В.М. Вентиляция химических производств. — М.: Химия, 1980 [С][П: стр.];
+// 6) интегрируются энергия вентилятора и тепло на подогрев приточного воздуха.
+
+
+
+// constant  — без регулирования: заслонки открыты, вентилятор 100 % всю смену
+// onoff     — промышленный стандарт: заслонка открыта/закрыта по датчику тока, ЧП держит постоянное разрежение
+// adaptive  — предлагаемая система: ПИ-регулятор расхода в каждой ветви + сброс давления (критическая ветвь открыта)
+
+                                                                                                                    
+// g, г/кг (если выделение поста задано функцией emis — не используется); ПДК, q_пр — мг/м³; settles=false — газ (не оседает);
+// group — группа суммации однонаправленного действия: Σ C_i/ПДК_i ≤ 1
+                                                                                                                                   
+                                                    // emis — выделение веществ при работе поста, мг/с (из библиотеки процессов)
+// etaReal — фактическая эффективность захвата (если отличается от принятой в расчёте η_ном): проверка устойчивости к ошибке модели
+// B кг/ч (если current не задан), Qset м³/с; current(t) — сварочный ток, А → B по таблице проволоки
+
+/** Общеобменная вентиляция (блок 4) */
+                          
+                                          
+                                                                             
+                                                                                                             
+                                                        
+                                                                 
+                                                                                  
+                                                                                                                             
+                                                                                                          
+                                                                                                    
+                                                                                                                            
+                                                  
+                                                                                                                                    
+                                                                                                                                     
+                                                                                                                             
+ 
+                            
+             
+                                  
+                                           
+                                                                       
+                    
+                          
+                                                                                                          
+                                                                                                                              
+                                                                                        
+                                                                                                                         
+                                                               
+                                                                                                                                  
+                                                      
+                             
+                                                                                
+                                                         
+              
+                                     
+                                                                                                                        
+                                                                               
+                
+                                                                                                      
+                                       
+                                                                                                                                       
+                                                                                                                                     
+                                                                                                                                       
+                                                                                                                             
+                                                                                                          
+                                                                                                     
+                                                                                                                                                                                                                                                                               
+ 
+                                                                                                                                                                                                                                                                                   
+                            
+                                                                              
+                                                                                      
+                                                                                       
+                                                             
+                                                                                                                                                              
+                   
+                                                                                                                                
+                                                                                                             
+                                                                                                                                           
+                                                                                                                                
+                                      
+                                                                                               
+                                                                                                               
+                                                                             
+ 
+
+// Теплота на нагрев приточного воздуха Q = ρ·c·L·(t_в − t_н), кВт — уравнение теплового баланса (Богословский В.Н. и др. Отопление и вентиляция. Ч. 2.
+// — М.: Стройиздат, 1976 [С]); ρ = 1,2 кг/м³ (ГОСТ 10921-2017), c = 1,005 кДж/(кг·°C) (Варгафтик, 1972)
+const HEAT_COEF = RHO_AIR * C_AIR; // 1,206 кВт на 1 м³/с на 1 °C
+
+function interp(tab                         , x        ) {
+  if (x <= tab[0][0]) return tab[0][1] * x / tab[0][0];           // ниже первой точки — пропорционально [Д]
+  for (let i = 1; i < tab.length; i++) if (x <= tab[i][0]) {
+    const [x0, y0] = tab[i - 1], [x1, y1] = tab[i]; return y0 + (x - x0) * (y1 - y0) / (x1 - x0);
+  }
+  const [x0, y0] = tab[tab.length - 2], [x1, y1] = tab[tab.length - 1]; return y1 + (x - x1) * (y1 - y0) / (x1 - x0);
+}
+
+/** Пошаговый симулятор: step() продвигает модель на dt и возвращает текущее состояние.
+ *  Используется и для расчёта смены (simulate), и в интерактивном интерфейсе. */
+function createSimulator(net         , p           ) {
+  const ids = p.posts.map(x => x.id);
+  const damper = (id        ) => net.segments.find(s => s.id === id) .elements.find(e => e.kind === 'damper')                     ;
+  const alpha                         = {}; ids.forEach(id => (alpha[id] = 90));
+  const lnZ                         = {}; ids.forEach(id => (lnZ[id] = Math.log(damperZeta(30))));
+  const memZ                         = { ...lnZ }; // упреждение: при включении поста заслонка сразу идёт в последнее рабочее положение
+  let n = 0, nTarget = 0, sol                  = null, lastKey = '';
+  // какие посты обслуживает каждый участок (для контроля транспортной скорости)
+  const segHoods = new Map                  ();
+  for (const h of ids) { let sg = net.segments.find(x => x.id === h); while (sg) { if (!segHoods.has(sg.id)) segHoods.set(sg.id, []); segHoods.get(sg.id) .push(h); sg = sg.parent ? net.segments.find(x => x.id === sg .parent) : undefined; } }
+  const segD = (els       ) => els.filter(e => e.kind === 'duct').map(e => e.d          );
+  const limName = p.limiting ?? p.gen?.limiting ?? p.substances[0].name;
+  // группы суммации (вещества без группы — каждое само по себе); вещества без ПДК (сумма аэрозоля для датчика) не нормируются
+  const groups = new Map                     ();
+  for (const s of p.substances) if (Number.isFinite(s.pdk)) { const k = s.group ?? s.name; if (!groups.has(k)) groups.set(k, []); groups.get(k) .push(s); }
+  const genOf = (ps          , s           , t        ) => ps.emis ? (ps.emis(t)[s.name] ?? 0) : s.g * 1000 * Bof(ps, t) / 3600;   // мг/с
+  // наблюдатель состава: внутренняя модель цеха по известным выделениям и измеренным расходам (η — расчётная);
+  // даёт доли компонентов в воздухе цеха, датчик общей массы аэрозоля уточняет количество
+  const Chat                         = {}; p.substances.forEach(x => (Chat[x.name] = x.qIn));
+  let ffGasF = 0, ratioMax = 0; const gasS                         = {}; p.substances.forEach(x => (gasS[x.name] = x.qIn));
+  const bzSum                         = {}, bzMax                         = {}; ids.forEach(id => { bzSum[id] = 0; bzMax[id] = 0; });
+  // скользящее 15-минутное среднее (максимально разовая ПДК сравнивается со средним за время отбора пробы) [Н: МУ/ГОСТ 12.1.005]
+  const W = Math.max(1, Math.round(900 / p.dt));
+  const ring                           = {}, ringSum                         = {}, bz15                         = {};
+  [...ids, '__room'].forEach(id => { ring[id] = []; ringSum[id] = 0; bz15[id] = 0; });
+  const push = (id        , v        ) => { const r = ring[id]; r.push(v); ringSum[id] += v; if (r.length > W) ringSum[id] -= r.shift() ; if (r.length === W) bz15[id] = Math.max(bz15[id], ringSum[id] / W); };
+  const lowSeg                         = {}; let lowAny = 0, fanOnTime = 0, nonConv = 0;
+  const C                         = {}; p.substances.forEach(s => (C[s.name] = s.qIn));
+  const maxC                         = { ...C }, sumC                         = {}; p.substances.forEach(s => (sumC[s.name] = 0));
+  let fanJ = 0, heatJ = 0, flowInt = 0, onTime = 0, under = 0, over = 0, genJ = 0, overPdk = 0, genInt = 0;
+  let LgenNow = p.gen ? p.gen.Ldesign : p.room.Lgen, fbInt = 0, sensorC = 0, seed = 12345, ffF = 0;
+  const noise = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648 - 0.5) * 2; // [-1;1]
+  const Bof = (ps          , t        ) => (ps.current && p.wire ? interp(p.wire, ps.current(t)) : ps.B);
+  const series           = [];
+  const dAlphaMax = 90 / p.damperStroke * p.dt, dnMax = p.nMax / p.fanRamp * p.dt;
+
+  let t = 0;
+  const offT                         = {}; ids.forEach(id => (offT[id] = Infinity));
+  function step()         {
+    const on                          = {}; ids.forEach(id => (on[id] = p.schedule(id, t)));
+    const anyOn = ids.some(id => on[id]);
+    const Q = (id        ) => (sol ? sol.Q[id] : 0);
+
+    // ---- регуляторы: целевые углы и частота
+    const target                         = {};
+    if (p.mode === 'constant') { ids.forEach(id => (target[id] = p.openAngles?.[id] ?? 0)); nTarget = p.nConst ?? p.nMax; }
+    if (p.mode === 'onoff') {
+      ids.forEach(id => (target[id] = on[id] ? (p.openAngles?.[id] ?? 0) : 90));
+      // ЧП: ПИ по разрежению в коллекторе (давление перед общим трактом)
+      const pColl = sol && n > 0 ? sol.pFan - sol.segLoss['common'] : 0;
+      nTarget = anyOn ? Math.min(p.nMax, Math.max(p.nMin, nTarget + 0.5 * ((p.pSet ?? 600) - pColl) * p.dt)) : 0;
+    }
+    if (p.mode === 'adaptive') {
+      for (const ps of p.posts) {
+        if (!on[ps.id]) {
+          offT[ps.id] += p.dt;
+          // задержка закрытия: в короткой паузе заслонка остаётся на последнем угле (сразу готова к следующему шву)
+          if (offT[ps.id] < (p.closeDelay ?? 0)) { target[ps.id] = alpha[ps.id]; continue; }
+          target[ps.id] = 90; lnZ[ps.id] = memZ[ps.id]; continue;
+        }
+        offT[ps.id] = 0;
+        // ПИ в пространстве ln ζ: линеаризует нелинейную характеристику заслонки
+        const e = sol ? (Q(ps.id) - ps.Qset) / ps.Qset : 0;
+        lnZ[ps.id] = Math.min(Math.log(damperZeta(70)), Math.max(Math.log(damperZeta(0)), lnZ[ps.id] + (p.kI ?? 1.5) * e * p.dt));
+        target[ps.id] = damperAngleForZeta(Math.exp(lnZ[ps.id]));
+        memZ[ps.id] = lnZ[ps.id];
+      }
+      const act = p.posts.filter(ps => on[ps.id]);
+      if (!act.length) nTarget = 0;
+      else {
+        if (nTarget < p.nMin) nTarget = p.nMin;
+        const key = act.map(ps => ps.id).join(',');
+        if (p.nFF && key !== lastKey) nTarget = Math.max(nTarget, p.nFF(act.map(ps => ps.id))); // упреждение при включении поста
+        const aMin = Math.min(...act.map(ps => alpha[ps.id]));
+        const deficit = Math.max(...act.map(ps => (ps.Qset - Q(ps.id)) / ps.Qset));
+        // сброс давления: если самая открытая заслонка прикрыта > 5° — снижаем частоту; если открыта и расхода не хватает — повышаем
+        if (aMin < 2 && deficit > 0.002) nTarget += 400 * deficit * p.dt;
+        else if (aMin > 5) nTarget -= 1.0 * (aMin - 5) * p.dt;
+        nTarget = Math.min(p.nMax, Math.max(p.nMin, nTarget));
+      }
+      lastKey = act.map(ps => ps.id).join(',');
+    }
+    // ---- исполнительные механизмы с ограниченной скоростью
+    ids.forEach(id => { const d = target[id] - alpha[id]; alpha[id] += Math.max(-dAlphaMax, Math.min(dAlphaMax, d)); damper(id).alpha = alpha[id]; });
+    n += Math.max(-dnMax, Math.min(dnMax, nTarget - n));
+    net.fanSpeed = n;
+
+    // ---- сеть
+    if (n < 30) sol = null;
+    else sol = solve(net, sol ? ids.map(id => Math.max(sol .Q[id], 1e-4)) : undefined);
+    if (sol && !sol.converged) nonConv++;
+    const Qtot = sol ? sol.Qtotal : 0;
+    // ---- транспортная скорость на участках с рабочим потоком
+    if (sol && p.wMin) {
+      fanOnTime += p.dt; let any = false;
+      const check = (id        , Qs        , ds          ) => {
+        for (const d of ds) if (Qs / area(d) < p.wMin ) { lowSeg[id] = (lowSeg[id] ?? 0) + p.dt; any = true; return; }
+      };
+      for (const sg of net.segments) if ((segHoods.get(sg.id) ?? []).some(h => on[h])) check(sg.id, sol.Q[sg.id], segD(sg.elements));
+      if (anyOn) check('common', Qtot, segD(net.common));
+      if (any) lowAny += p.dt;
+    }
+    const P = sol ? sol.powerEl : 0;   // электрическая мощность (если заданы данные двигателя)
+
+    // ---- помещение: V dC/dt = Σ(1-η)G − (L_мо + L_оо)(C − q_пр)
+    // η снижается, если расход поста меньше требуемого: η = η_ном·min(1, Q/Q_тр) [Д]
+    const nOn = ids.filter(id => on[id]).length;
+    let Lgen = p.room.LgenPerPost !== undefined ? (p.room.LgenMin ?? 0) + p.room.LgenPerPost * nOn : p.room.Lgen;
+    if (p.gen) {
+      const g = p.gen, lim = p.substances.find(x => x.name === g.limiting) ;
+      let Lt = g.Ldesign;
+      if (g.mode === 'posts') Lt = g.Lmin + (g.Ldesign - g.Lmin) * nOn / ids.length;
+      if (g.mode === 'ff' || g.mode === 'fffb') {
+        // упреждение по СП 60: нужный ВЕСЬ удаляемый воздух L = Σ(1−η_ном)·g·B(I)/(C_уст − q_пр); общеобменная = L − (расход местных отсосов, измерен)
+        let ffRaw        , ffGasRaw = 0, e = 0;
+        if (g.multi) {
+          // по всем веществам (СП 60): для группы суммации L = Σ G_i/(frac·ПДК_i − q_пр,i) — расходы по веществам складываются; берётся максимум по группам
+          const esc                         = {};
+          for (const s of p.substances) { esc[s.name] = 0; for (const ps of p.posts) if (on[ps.id]) esc[s.name] += (1 - ps.etaNom) * genOf(ps, s, t); }
+          ffRaw = 0;
+          for (const [, mem] of groups) {
+            const need = mem.reduce((a, s) => a + esc[s.name] / (g.multi .frac * s.pdk - s.qIn), 0);
+            ffRaw = Math.max(ffRaw, need);
+            if (mem.every(s => s.settles === false)) ffGasRaw = Math.max(ffGasRaw, need);   // группы только из газов — датчик аэрозоля их не видит
+          }
+          // оценка концентраций: аэрозоль — C_датч·Ĉ_i/Ĉ_аэр; газ с датчиком — показание; газ без датчика — наблюдатель Ĉ_i
+          const cA = Chat[g.sensor.of] ?? 0, meas = new Set(g.multi.gasSensors ?? []);
+          const est = (x           ) => x.settles !== false ? (cA > 1e-9 ? sensorC * (Chat[x.name] - x.qIn) / cA + x.qIn : x.qIn)
+            : meas.has(x.name) ? gasS[x.name] : Chat[x.name];
+          let worst = -1, seen = false;
+          for (const [, mem] of groups) { seen = true; worst = Math.max(worst, mem.reduce((a, x) => a + est(x) / x.pdk, 0) / g.multi.frac - 1); }
+          e = seen ? worst : 0;
+        } else {
+          let G = 0; for (const ps of p.posts) if (on[ps.id]) G += (1 - ps.etaNom) * genOf(ps, lim, t);
+          ffRaw = G / (g.Cset - lim.qIn);
+        }
+        ffRaw = Math.max(0, ffRaw - Qtot); ffGasRaw = Math.max(0, ffGasRaw - Qtot);   // минус воздух местных отсосов (L_wz в СП 60)
+        ffF += g.ffTau ? (ffRaw - ffF) * p.dt / g.ffTau : ffRaw - ffF;
+        ffGasF += g.ffTau ? (ffGasRaw - ffGasF) * p.dt / g.ffTau : ffGasRaw - ffGasF;
+        Lt = ffF;
+        if (g.mode === 'fffb') {
+          if (!g.multi) { const est = sensorC * g.sensor.ratio; e = (est - g.Cset) / g.Cset; }   // оценка лимитирующего вещества по датчику общей массы
+          // anti-windup (условное интегрирование): интеграл не копится, если выход упёрся в ограничение в ту же сторону
+          const uFree = Lt + g.kP * e * g.Ldesign + fbInt;
+          const satHi = uFree >= g.Lmax && e > 0, satLo = uFree <= g.Lmin && e < 0;
+          if (g.antiWindup === false || (!satHi && !satLo)) fbInt = Math.max(-g.Ldesign, Math.min(g.Ldesign, fbInt + g.kI * e * g.Ldesign * p.dt));
+          Lt += g.kP * e * g.Ldesign + fbInt;
+        }
+      }
+      Lt = Math.min(g.Lmax, Math.max(g.Lmin, Lt));
+      const dL = g.Lmax / g.ramp * p.dt; LgenNow += Math.max(-dL, Math.min(dL, Lt - LgenNow));
+      Lgen = LgenNow;
+      // вентилятор ОВ подбирается на свой максимальный расход: dpDesign — давление сети ОВ при L_ref; при меньшем расходе p ∝ L², N ∝ L³ (ГОСТ 10921-2017, разд. 14) [Д]
+      // L_ref: для постоянного режима и «по числу постов» — L_расч (больше не бывает), для регулирования по выделениям — L_макс
+      const Lref = g.mode === 'ff' || g.mode === 'fffb' ? Math.max(g.Ldesign, g.Lmax) : g.Ldesign;
+      const Pg = Lref * g.dpDesign / g.etaFan * Math.pow(Lgen / Lref, 3);
+      genJ += Pg * p.dt;
+    }
+    genInt += Lgen * p.dt;
+    const Lout = Qtot + Lgen;
+    for (const s of p.substances) {
+      let Groom = 0; // мг/с
+      for (const ps of p.posts) if (on[ps.id]) {
+        const eta = (ps.etaReal ?? ps.etaNom) * Math.min(1, Q(ps.id) / ps.Qset);
+        Groom += (1 - eta) * genOf(ps, s, t) * (s.settles === false ? 1 : (p.room.kSettle ?? 1));
+      }
+      C[s.name] += p.dt * (Groom - Lout * (C[s.name] - s.qIn)) / p.room.V;
+      maxC[s.name] = Math.max(maxC[s.name], C[s.name]); sumC[s.name] += C[s.name] * p.dt;
+    }
+    if (p.gen?.multi) for (const s of p.substances) {
+      let Gh = 0; for (const ps of p.posts) if (on[ps.id]) Gh += (1 - ps.etaNom * Math.min(1, Q(ps.id) / ps.Qset)) * genOf(ps, s, t);
+      Chat[s.name] += p.dt * (Gh - Lout * (Chat[s.name] - s.qIn)) / p.room.V;
+    }
+    // ---- зона дыхания сварщика (ближняя зона)
+    const lim = p.substances.find(x => x.name === limName) ;
+    const Cbz                         = {};
+    for (const ps of p.posts) {
+      let c = C[lim.name];
+      if (p.nearField && on[ps.id]) {
+        const eta = (ps.etaReal ?? ps.etaNom) * Math.min(1, Q(ps.id) / ps.Qset);
+        const Gesc = (1 - eta) * genOf(ps, lim, t);                          // мг/с, ушло мимо отсоса
+        const beta = 0.5 * 2 * Math.PI * p.nearField.r ** 2 * p.nearField.s; // м³/с
+        c += Gesc / beta;
+      }
+      Cbz[ps.id] = c; bzSum[ps.id] += c * p.dt; bzMax[ps.id] = Math.max(bzMax[ps.id], c); push(ps.id, c);
+    }
+    push('__room', C[lim.name]);
+    if (p.gen) {
+      const g = p.gen, lim = p.substances.find(x => x.name === g.limiting) ;
+      if (!g.multi && C[lim.name] > lim.pdk) overPdk += p.dt;
+      // датчик: инерционное звено 1-го порядка + шум (доля от показания) [Д]
+      const meas = C[g.sensor.of] * (1 + g.sensor.noise * noise());
+      sensorC += (meas - sensorC) * p.dt / g.sensor.tau;
+      for (const gs of g.multi?.gasSensors ?? []) { const m = C[gs] * (1 + g.sensor.noise * noise()); gasS[gs] += (m - gasS[gs]) * p.dt / g.sensor.tau; }   // газоанализаторы [Д]: τ и шум как у датчика аэрозоля
+    }
+    // ---- отношение к ПДК по группам суммации (в цехе)
+    { let worst = 0; for (const [, mem] of groups) worst = Math.max(worst, mem.reduce((a, s) => a + C[s.name] / s.pdk, 0));
+      ratioMax = Math.max(ratioMax, worst); if (p.gen?.multi && worst > 1) overPdk += p.dt; }
+    // ---- энергия и качество регулирования
+    const heat = HEAT_COEF * Lout * p.room.dT; // кВт
+    fanJ += P * p.dt; heatJ += heat * 1000 * p.dt; flowInt += Qtot * p.dt;
+    for (const ps of p.posts) if (on[ps.id]) {
+      onTime += p.dt; const r = Q(ps.id) / ps.Qset;
+      if (r < 0.95) under += p.dt; if (r > 1.10) over += p.dt;
+    }
+    const sample         = { Cbz, t, n, Q: Object.fromEntries(ids.map(id => [id, Q(id) * 3600])), alpha: { ...alpha }, on, C: { ...C }, P, heat, Lgen: Lgen * 3600, sensor: sensorC, pFan: sol ? sol.pFan : 0, Qtot: Qtot * 3600 };
+    if (p.record && Math.abs(t / p.record - Math.round(t / p.record)) < 1e-9) series.push(sample);
+    t += p.dt;
+    return sample;
+  }
+  /** Итоги; duration — интервал усреднения, с (по умолчанию длительность сценария) */
+  function result(duration = p.duration)            {
+    const d = Math.max(duration, 1e-9);
+    const avgC                         = {}; for (const k in sumC) avgC[k] = sumC[k] / d;
+    return { fanKWh: fanJ / 3.6e6, heatKWh: heatJ / 3.6e6, avgFlow: flowInt / d * 3600,
+      underFlowShare: onTime ? under / onTime : 0, overFlowShare: onTime ? over / onTime : 0, maxC, avgC, series,
+      genKWh: genJ / 3.6e6, overPdkShare: overPdk / d, avgLgen: genInt / d * 3600,
+      bzTWA: Object.fromEntries(ids.map(id => [id, bzSum[id] / d])), bzMax: { ...bzMax }, bz15max: { ...bz15 },
+      lowVelShare: fanOnTime ? lowAny / fanOnTime : 0,
+      lowVelBySeg: Object.fromEntries(Object.entries(lowSeg).map(([k, v]) => [k, fanOnTime ? v / fanOnTime : 0])),
+      nonConverged: nonConv, ratioMax,
+      groupRatioAvg: Object.fromEntries([...groups].map(([k, mem]) => [k, mem.reduce((a, s) => a + avgC[s.name] / s.pdk, 0)])) };
+  }
+  return { step, result, net, params: p, time: () => t };
+}
+
+function simulate(net         , p           )            {
+  const sim = createSimulator(net, p);
+  for (let t = 0; t <= p.duration; t += p.dt) sim.step();
+  return sim.result();
+}
+
+
+// ---- demo-network.ts
+// Демонстрационная сеть: 3 поста на общем коллекторе, фильтр, вентилятор.
+// ВНИМАНИЕ: геометрия и характеристика вентилятора — [Д] условные, для проверки ядра.
+
+
+/** Сборка сети «посты вдоль коллектора» с поэлементным учётом местных сопротивлений (Идельчик, 1992):
+ *  ветвь поста: зонт (вход) → трение по длине → отвод 90° (R/D = 1,5) → отвод 45° → заслонка → вход в коллектор
+ *  (первый пост — отвод 90° в торец коллектора; остальные — боковой вход тройника на слияние);
+ *  коллектор: трение → переход на больший диаметр (диффузор 15°) → проход тройника; последний участок — отвод 90° к фильтру;
+ *  общий тракт: фильтр → трение → отвод 90° → выход в атмосферу (ζ = 1). [Д] — геометрия демонстрационная. */
+function chainNetwork(dPost          , dColl          , lBranch = 6, lColl = 5, lMain = 10, dOut = dColl[dColl.length - 1])                                                                  {
+  const N = dPost.length, segs                      = [];
+  for (let i = 1; i <= N; i++) {
+    const db = dPost[i - 1], dc = dColl[i - 1];
+    const el            = [
+      { kind: 'local', id: `hood${i}`, d: db, zeta: HOOD_CONE_ZETA, label: 'вход через зонт' },
+      { kind: 'duct', id: `branch${i}`, d: db, l: lBranch, zeta: 0 },
+      { kind: 'bend', id: `bend90_${i}`, d: db, delta: 90, rd: 1.5, label: 'отвод 90°, R/D = 1,5' },
+      { kind: 'bend', id: `bend45_${i}`, d: db, delta: 45, rd: 1.5, label: 'отвод 45°, R/D = 1,5' },
+      { kind: 'damper', id: `damper${i}`, d: db, alpha: 0 },
+    ];
+    if (i === 1) { el.push({ kind: 'bend', id: 'bend_end', d: db, delta: 90, rd: 1.0, label: 'отвод 90° в торец коллектора' });
+      if (dc > db) el.push({ kind: 'diffuser', id: 'trans1', d1: db, d2: dc }); }
+    else el.push({ kind: 'teeSide', id: `tee${i}`, db, dc });
+    segs.push({ id: `post${i}`, parent: `c${i}`, elements: el });
+    const ce            = [{ kind: 'duct', id: `c${i}`, d: dc, l: i < N ? lColl : lMain, zeta: 0 }];
+    if (i < N) { const dn = dColl[i]; if (dn > dc) ce.push({ kind: 'diffuser', id: `trans_c${i}`, d1: dc, d2: dn }); ce.push({ kind: 'teeStraight', id: `teeP${i + 1}`, dc: dn, side: `post${i + 1}` }); }
+    else ce.push({ kind: 'bend', id: 'bend_main', d: dc, delta: 90, rd: 1.5, label: 'отвод 90° к фильтру' });
+    segs.push({ id: `c${i}`, parent: i < N ? `c${i + 1}` : null, elements: ce });
+  }
+  return { segments: segs, hoods: Array.from({ length: N }, (_, i) => `post${i + 1}`),
+    commonTail: [{ kind: 'duct', id: 'discharge', d: dOut, l: 5, zeta: 0 }, { kind: 'bend', id: 'bend_out', d: dOut, delta: 90, rd: 1.5, label: 'отвод 90°' }, { kind: 'local', id: 'exit', d: dOut, zeta: EXIT_ZETA, label: 'выход в атмосферу' }] };
+}
+
+function demoNetwork()          {
+  const c = chainNetwork([0.2, 0.2, 0.2], [0.25, 0.315, 0.4]);
+  return {
+    segments: c.segments, hoods: c.hoods,
+    common: [
+      { kind: 'filter', id: 'filter', spec: { dpNom: 400, qNom: 4500 / 3600, m: 1, fouling: 1 } },
+      // m = 1: перегородка + слой пыли — закон Дарси (Ужов, Мягков, 1970); Δp_ном 400 Па — [Д] до паспорта фильтра
+      ...c.commonTail,
+    ],
+    fan: { n0: 1500, eta: 0.65, points: DEMO_FAN, motorW: 2200, motorEta: 0.867 },
+    // двигатель 2,2 кВт, 4 полюса, класс IE3: КПД ≥ 86,7 % (ГОСТ IEC 60034-30-1-2016, табл. 1)
+    fanSpeed: 1500,
+  };
+}
+/** Демонстрационная характеристика вентилятора (полное давление, Па, при 1500 об/мин) [Д] — заменяется каталогом */
+const DEMO_FAN                          = [[0, 1400], [2000, 1300], [4000, 1050], [5000, 850], [6000, 550], [7000, 150]];
+
+/** Генератор сети на N постов: посты вдоль коллектора, диаметры — стандартный ряд, скорость 8–14 м/с (ближе к 12) при расчётном расходе.
+ *  [Д] Геометрия условная; вентилятор масштабируется по расходу (характеристика демо-вентилятора × N/3). */
+function makeNetwork(N        , Qpost = 1500, wDesign = 12)          {
+  return makeNetworkFor(Array(N).fill(Qpost), 1, wDesign);
+}
+
+/** Двигатели IE3, 4 полюса, 50 Гц: номинальная мощность, Вт → минимальный КПД (ГОСТ IEC 60034-30-1-2016, табл. 1) */
+const IE3_4P = IE3_4P_GOST;   // ГОСТ IEC 60034-30-1-2016, табл. 1
+/** Подбор двигателя: ближайший стандартный ≥ максимальной мощности на валу */
+function pickMotor(maxShaftW        ) {
+  const m = IE3_4P.find(([w]) => w >= maxShaftW) ?? IE3_4P[IE3_4P.length - 1];
+  return { motorW: m[0], motorEta: m[1] };
+}
+
+/** Сеть под произвольные расходы постов (м³/ч): диаметры — из стандартного ряда (ВСН 353-86) со скоростью 8–14 м/с, ближе к 12 м/с, вентилятор — демо-характеристика × k (k подбирается в plant.ts). [Д] */
+function makeNetworkFor(Qposts          , fanScale = 1, wDesign = 12)          {
+  const dFor = (Qm3h        ) => pickDuctD(Qm3h, { ...W_TRANSPORT, target: wDesign });   // стандартный ряд ВСН 353-86, скорость 8–14 м/с
+  const q = Qposts.map(x => Math.max(x, 50));
+  let cum = 0; const dColl = q.map(x => dFor((cum += x)));
+  const dPost = q.map(dFor);
+  const c = chainNetwork(dPost, dColl.map((d, i) => Math.max(d, dPost[i])));
+  const total = cum, s = total / 4500 * fanScale, ps = fanScale;   // запас по расходу и давлению
+  return {
+    segments: c.segments, hoods: c.hoods,
+    common: [{ kind: 'filter', id: 'filter', spec: { dpNom: 400, qNom: total / 3600, m: 1, fouling: 1 } }, ...c.commonTail],
+    fan: { n0: 1500, eta: 0.65, points: DEMO_FAN.map(([x, p]) => [x * s, p * ps]                    ), ...pickMotor(1900 * s * ps) },
+    fanSpeed: 1500,
+  };
+}
+
+
+// ---- scenario.ts
+// Сценарий смены: 3 поста MAG-сварки, 8 ч с обедом. Все численные параметры — [Д] условные, кроме помеченных.
+
+
+
+
+/** Базовый режим сварки блока 3: ток 225 А, проволока Св-08Г2С Ø1,2 мм, вылет 15 мм → B = α_р·I (norms.ts) */
+const I_BASE = 225;
+const B_BASE = wireRate(I_BASE);
+/** Общеобменная вентиляция по СП 60.13330.2020: L_оо = L − L_wz, L = L_wz + (m − L_wz(q_wz − q_in))/(q_l − q_in);
+ *  m = n·(1−η)·g_Mn·B — марганец, попавший в цех; L_wz = n·1500 м³/ч — местные отсосы (они тоже разбавляют воздух цеха) */
+function genVentByFormula(n = 3, eta = ETA_LEV_DEFAULT, B = B_BASE, QpostM3h = Q_POST_MIN_M3H) {
+  const m = n * (1 - eta) * SV08G2S.mn * 1000 * B / 3600;   // мг/с
+  return sp60General(m, n * QpostM3h / 3600, PDK_MN_WELD_LE20.ss, MN_ATM_SS);   // м³/с
+}
+
+/** Таблица упреждения: расчётная частота вентилятора для каждого набора работающих постов (по установившемуся режиму блока 2) */
+function feedforwardTable(ids          , Qset        ) {
+  const cache = new Map                ();
+  return (active          ) => {
+    const key = active.join(',');
+    if (!cache.has(key)) {
+      const req = Object.fromEntries(ids.map(id => [id, active.includes(id) ? Qset : 0]));
+      cache.set(key, balance(demoNetwork(), req).fanSpeed);
+    }
+    return cache.get(key) ;
+  };
+}
+
+/** Детерминированное псевдослучайное расписание: дуга горит отрезками 1–5 мин, паузы 1–7 мин;
+ *  обед 4:00–5:00 — все посты выключены. Доля горения ~40–45 % — порядок значений для MIG/MAG по данным TWI. */
+function makeSchedule(ids          , duration        , seed = 7) {
+  let x = seed; const rnd = () => ((x = (x * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const iv                                          = {};
+  for (const id of ids) {
+    iv[id] = []; let t = rnd() * 300;
+    while (t < duration) { const on = 60 + rnd() * 240; iv[id].push([t, t + on]); t += on + 60 + rnd() * 360; }
+  }
+  return (id        , t        ) => !(t >= 4 * 3600 && t < 5 * 3600) && iv[id].some(([a, b]) => t >= a && t < b);
+}
+
+/** Пусконаладка: балансировка ветвей при расчётном режиме (все посты по 1500 м³/ч) — фиксированные углы и частота */
+function commissioning() {
+  const b = balance(demoNetwork(), { post1: m3h(1500), post2: m3h(1500), post3: m3h(1500) });
+  return { angles: b.angles, n: b.fanSpeed, pSet: b.sol.pFan - b.sol.segLoss['common'] };
+}
+
+function shiftParams(mode      , pSet         , balanced = true)            {
+  const c0 = commissioning(), com = balanced ? c0 : null;
+  const ids = ['post1', 'post2', 'post3'];
+  const duration = 8 * 3600;
+  return {
+    mode, dt: 1, duration, schedule: makeSchedule(ids, duration), record: 10,
+    posts: ids.map(id => ({ id, B: B_BASE, Qset: m3h(Q_POST_MIN_M3H), etaNom: ETA_LEV_DEFAULT })),  // 1500 м³/ч — ГОСТ 12.3.003-86 п. 2.11.1; η = 0,8 — Методика 1997
+    substances: [
+      { name: 'Mn', g: SV08G2S.mn, pdk: PDK_MN_WELD_LE20.ss, qIn: MN_ATM_SS },   // Методика 1997 табл. 1; СанПиН 1.2.3685-21 табл. 2.1, 1.1
+      { name: 'Fe2O3', g: SV08G2S.fe, pdk: 6, qIn: 0.04 },                          // СанПиН 1.2.3685-21, табл. 2.1, стр. 1031: -/6 (с.с.), Ф, 4 кл. — сверено
+    ],
+    room: { V: 48 * 24 * 14.4, Lgen: genVentByFormula(), dT: T_IN_WINTER - MOSCOW_HEATING.tAvg },
+    // объём цеха — из диплома; Δt = 18 − (−1,7) = 19,7 °C (СанПиН 1.2.3685-21; СП 131.13330.2025)
+    damperStroke: 8,  // 8 с — из ряда времени полного хода ГОСТ 7192-89 (исследованы также 15 и 30 с); одинаково для всех режимов
+    fanRamp: 10, nMax: 1500, nMin: 300, pSet: pSet ?? c0.pSet, kI: 4,   // уставка разрежения — из пусконаладки, если не задана
+    nFF: mode === 'adaptive' ? feedforwardTable(ids, m3h(1500)) : undefined,
+    openAngles: com ? com.angles : undefined, nConst: com ? com.n : undefined,
+  };
+}
+
+
+// ---- scenario4.ts
+// Блок 4: смена с переменным током сварки, общеобменная вентиляция по потребности.
+
+
+
+/** Расход проволоки Св-08Г2С Ø1,2 мм от тока: B = α_р(I)·I, α_р = 9,05 + 3,1·10⁻⁴·I·l/d², l = 15 мм (norms.ts; Соколов и др., ВолгГТУ, 2016).
+ *  Таблица с шагом 5 А для интерполяции: 175 А — 1,68; 225 А — 2,20; 270 А — 2,68 кг/ч. */
+const WIRE_12                          = Array.from({ length: 80 }, (_, i) => [5 * (i + 1), wireRate(5 * (i + 1))]                    );
+
+/** Те же интервалы горения дуги, что в блоке 3; каждому интервалу — свой режим (175/225/270 А) */
+function makeShift(ids          , duration        , seed = 7) {
+  let x = seed; const rnd = () => ((x = (x * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const iv                                                  = {};
+  for (const id of ids) {
+    iv[id] = []; let t = rnd() * 300;
+    while (t < duration) { const on = 60 + rnd() * 240; const I = [175, 225, 270][Math.floor(rnd() * 3)]; iv[id].push([t, t + on, I]); t += on + 60 + rnd() * 360; }
+  }
+  const lunch = (t        ) => t >= 4 * 3600 && t < 5 * 3600;
+  return {
+    schedule: (id        , t        ) => !lunch(t) && iv[id].some(([a, b]) => t >= a && t < b),
+    current: (id        ) => (t        ) => { const r = iv[id].find(([a, b]) => t >= a && t < b); return r && !lunch(t) ? r[2] : 0; },
+  };
+}
+
+const MN = { name: 'Mn', g: SV08G2S.mn, pdk: PDK_MN_WELD_LE20.ss, qIn: MN_ATM_SS };   // Методика 1997; СанПиН 1.2.3685-21, табл. 2.1, стр. 1222 (Mn ≤ 20 %)
+const AER = { name: 'aerosol', g: SV08G2S.aerosol, pdk: 1e9, qIn: 0 };   // сварочный аэрозоль, общая масса (для датчика)
+
+/** Расчётный (проектный) расход ОВ: все 3 поста одновременно на максимальном режиме 270 А, C = ПДК (блок 1) */
+function designLgen(eta = ETA_LEV_DEFAULT, n = 3) {
+  const G = n * (1 - eta) * MN.g * 1000 * wireRate(270) / 3600; // мг/с
+  return sp60General(G, n * Q_POST_MIN_M3H / 3600, MN.pdk, MN.qIn);   // СП 60: местные отсосы тоже разбавляют воздух цеха
+}
+
+function shift4(mode                 , opts                                      = {})            {
+  const ids = ['post1', 'post2', 'post3'];
+  const base = shiftParams('adaptive');
+  const sh = makeShift(ids, base.duration);
+  const Ld = designLgen();
+  return {
+    ...base, schedule: sh.schedule, wire: WIRE_12,
+    posts: ids.map(id => ({ id, B: 0, Qset: m3h(1500), etaNom: ETA_LEV_DEFAULT, etaReal: opts.etaReal, current: sh.current(id) })),
+    substances: [MN, AER],
+    gen: {
+      // L_макс: не меньше 1,5·L_расч и не меньше нужной для уставки при всех постах на 270 А (весь воздух L = G/(C_уст − q_пр) минус отсосы) [А]
+      mode, Ldesign: Ld, Lmin: 0.2 * Ld, Lmax: Math.max(1.5 * Ld, 1.1 * (3 * (1 - ETA_LEV_DEFAULT) * MN.g * 1000 * wireRate(270) / 3600 / ((opts.Cset ?? 0.5 * MN.pdk) - MN.qIn) - 3 * Q_POST_MIN_M3H / 3600)), limiting: 'Mn', Cset: opts.Cset ?? 0.5 * MN.pdk,
+      sensor: { of: 'aerosol', ratio: MN.g / AER.g, tau: 30, noise: 0.1 },   // [Д] датчик: τ = 30 с, шум ±10 %
+      kP: 0.5, kI: 0.005, ffTau: 600, dpDesign: 600, etaFan: 0.6, ramp: 20,  // [Д]; ffTau, kI подобраны на модели (таблица настройки в блоке 4)
+    },
+  };
+}
+
+
+// ---- substances.ts
+// СПРАВОЧНИК ВРЕДНЫХ ВЕЩЕСТВ: ПДК в воздухе рабочей зоны, класс опасности, агрегатное состояние, фон в приточном воздухе.
+// Источник ПДК р.з. — СанПиН 1.2.3685-21, табл. 2.1 (действует до 01.03.2027). Фон q_пр — ПДК с.с. атмосферного воздуха (СанПиН, табл. 1.1)
+// как верхняя оценка (подход диплома; СП 60.13330.2020, п. 5.11 — q_пр ≤ 0,3 ПДК р.з.).
+// status: 'сверено' — значение сверено с первоисточником; 'П' — значение из ГН 2.2.5.3532-18 / СанПиН по памяти, СВЕРИТЬ по табл. 2.1 перед защитой.
+// group — группа суммации (однонаправленное действие): при одновременном присутствии Σ C_i/ПДК_i ≤ 1 (ГОСТ 12.1.005-88; СП 60.13330.2020, разд. 7.4).
+
+                                
+                           
+                                                         
+                                                                                               
+                                              
+                                                                                      
+                                                                      
+                                              
+                          
+                
+ 
+
+/** ПДК, с которой сравнивается среднесменная концентрация */
+const pdkOf = (s               ) => s.pdkSs ?? s.pdkMr;
+
+const SUBSTANCES                                = {
+  aerosol: { id: 'aerosol', name: 'Сварочный аэрозоль (сумма твёрдых частиц)', pdkMr: Infinity, cls: 4, aerosol: true, qIn: 0, status: 'сверено',
+    note: 'Отдельной ПДК нет — нормируется по компонентам; величина нужна для оптического датчика' },
+  mn: { id: 'mn', name: 'Марганец в сварочных аэрозолях', pdkMr: 0.6, pdkSs: 0.2, cls: 2, aerosol: true, qIn: 0.001, status: 'сверено',
+    note: 'Табл. 2.1, стр. 1221–1223 (сверено по ред. с изм. от 24.12.2025): до 20 % — 0,6/0,2; 20–30 % — 0,3/0,1; «а», 2 кл.; строки > 30 % нет. Категория выбирается по доле Mn в аэрозоле процесса (mnCategory). Фон — табл. 1.1, поз. 302 (в пересчёте на MnO₂)' },
+  fe: { id: 'fe', name: 'Железа оксид (диЖелезо триоксид)', pdkMr: 6, pdkSs: 6, cls: 4, aerosol: true, qIn: 0.04, status: 'сверено', note: 'Табл. 2.1, стр. 1031: «-/6» — максимально разовая не установлена, среднесменная 6; «а», 4 кл., «Ф» (фиброгенное). Фон — табл. 1.1, поз. 259: с.с. 0,04 (по железу), 3 кл. Сверено по ред. Гарант с изм. от 24.12.2025' },
+  sio2: { id: 'sio2', name: 'Кремний диоксид (в сварочном аэрозоле)', pdkMr: 3, pdkSs: 1, cls: 3, aerosol: true, qIn: 0, status: 'сверено', note: 'Табл. 2.1: строки «пыль неорганическая с SiO₂ 20–70 %» нет (это название кода атмосферных выбросов в Методике). Для аморфного SiO₂ аэрозоля конденсации — стр. 1150 (в смеси с оксидами Mn ≤ 10 % каждого) 3/1, стр. 1152 (10–60 %) 6/2; кристаллический 10–70 % — стр. 1155: 6/2; все «а», 3 кл., «Ф». Принято наиболее строгое 3/1 (в запас)' },
+  fluor: { id: 'fluor', name: 'Фториды неорганические (по F)', pdkMr: 2.5, pdkSs: 0.5, cls: 3, aerosol: true, qIn: 0, group: 'F', status: 'сверено', note: 'Табл. 2.1: обобщённой строки «фториды неорганические» нет. Кальций дифторид (по фтору) — стр. 1080: 2,5/0,5, «а», 3 кл. (принято); натрий фторид — стр. 1503: 1/0,2, 2 кл. (если в покрытии электрода NaF — брать его)' },
+  hf: { id: 'hf', name: 'Гидрофторид (фтористый водород, по F)', pdkMr: 0.5, pdkSs: 0.1, cls: 2, aerosol: false, qIn: 0, group: 'F', status: 'сверено', note: 'Табл. 2.1, стр. 608: 0,5/0,1, «п», 2 кл., «О» (остронаправленного действия — не фиброгенное)' },
+  no2: { id: 'no2', name: 'Азота диоксид', pdkMr: 2, cls: 3, aerosol: false, qIn: 0, status: 'сверено', note: 'Табл. 2.1, стр. 4: 2 мг/м³ (м.р.), «О»' },
+  co: { id: 'co', name: 'Углерод оксид', pdkMr: 20, cls: 4, aerosol: false, qIn: 0, status: 'сверено', note: 'Табл. 2.1, стр. 2122: 20 (м.р.), «п», 4 кл., «О»; примечание 7 к табл. 2.1: при работе не более 1 ч — до 50, 30 мин — 100, 15 мин — 200 мг/м³' },
+  cr6: { id: 'cr6', name: 'Хром (VI) (в пересчёте на CrO₃)', pdkMr: 0.03, pdkSs: 0.01, cls: 1, aerosol: true, qIn: 0, status: 'П' },
+  pb: { id: 'pb', name: 'Свинец и его неорганические соединения (по Pb)', pdkMr: 0.05, pdkSs: 0.005, cls: 1, aerosol: true, qIn: 0, status: 'П' },
+  sn: { id: 'sn', name: 'Олово и его соединения (оксиды)', pdkMr: 2, cls: 3, aerosol: true, qIn: 0, status: 'П' },
+  dust_abr: { id: 'dust_abr', name: 'Пыль абразивная (корунд белый)', pdkMr: 6, cls: 4, aerosol: true, qIn: 0, status: 'П' },
+  dust_met: { id: 'dust_met', name: 'Пыль металлическая (по оксидам железа)', pdkMr: 6, cls: 4, aerosol: true, qIn: 0, status: 'П' },
+  oil: { id: 'oil', name: 'Масла минеральные нефтяные (аэрозоль СОЖ)', pdkMr: 5, cls: 3, aerosol: true, qIn: 0, status: 'П' },
+  xylene: { id: 'xylene', name: 'Диметилбензол (ксилол)', pdkMr: 150, pdkSs: 50, cls: 3, aerosol: false, qIn: 0, status: 'П' },
+  toluene: { id: 'toluene', name: 'Метилбензол (толуол)', pdkMr: 150, pdkSs: 50, cls: 3, aerosol: false, qIn: 0, status: 'П' },
+  whitespirit: { id: 'whitespirit', name: 'Уайт-спирит', pdkMr: 900, pdkSs: 300, cls: 4, aerosol: false, qIn: 0, status: 'П' },
+  paint_aer: { id: 'paint_aer', name: 'Аэрозоль лакокрасочного материала (сухой остаток)', pdkMr: 10, cls: 4, aerosol: true, qIn: 0, status: 'П',
+    note: 'ПДК — по пигменту/плёнкообразователю конкретного ЛКМ; 10 — условно для невредного состава, задать по паспорту ЛКМ' },
+  h2so4: { id: 'h2so4', name: 'Серная кислота (аэрозоль)', pdkMr: 1, cls: 2, aerosol: true, qIn: 0, status: 'П' },
+  naoh: { id: 'naoh', name: 'Натрия гидроксид (аэрозоль)', pdkMr: 0.5, cls: 2, aerosol: true, qIn: 0, status: 'П' },
+};
+
+/** Категория ПДК марганца по его доле в сварочном аэрозоле (СанПиН 1.2.3685-21, табл. 2.1, стр. 1221–1223).
+ *  Доля > 30 % — категории нет: консервативно принимается ПДК марганца оксидов (аэрозоль конденсации) 0,05 мг/м³ [вопрос к руководителю]. */
+function mnCategory(mnShare        )                                                  {
+  if (mnShare <= 0.20) return { pdkMr: 0.6, pdkSs: 0.2, label: 'до 20 %' };
+  if (mnShare <= 0.30) return { pdkMr: 0.3, pdkSs: 0.1, label: '20–30 %' };
+  return { pdkMr: 0.05, pdkSs: 0.05, label: 'более 30 % (строки в СанПиН нет — принято по стр. 1230: марганца оксиды /в пересчёте на MnO₂/, аэрозоль конденсации, 0,05, 1 кл.)' };
+}
+
+
+// ---- processes.ts
+// БИБЛИОТЕКА ТЕХНОЛОГИЧЕСКИХ ПРОЦЕССОВ.
+// Для каждого процесса: какие вещества выделяются (удельные показатели из российской методики перечня Минприроды),
+// от какого параметра зависит интенсивность (ток, расход материала, мощность машины, толщина реза, площадь ванны…),
+// и какой минимальный расход местного отсоса требует норма.
+// Пользователь может задать свой материал/показатели (customMaterial) — модель от этого не меняется.
+
+const MET_WELD = 'ГОСТ Р 56164-2014 «Выбросы загрязняющих веществ в атмосферу. Метод расчета выбросов при сварочных работах на основе удельных показателей» (основной источник удельных показателей); те же значения — Методика расчёта выделений (выбросов) ЗВ в атмосферу при сварочных работах, утв. приказом Госкомэкологии РФ от 14.04.1997 № 158 (изд. 2021; перечень Минприроды, распоряжение № 35-р от 14.12.2020, п. 18)';
+const MET_MECH = 'Методика расчёта выделений (выбросов) ЗВ в атмосферу при механической обработке металлов (на основе удельных показателей), утв. приказом Госкомэкологии РФ от 14.04.1997 № 158; перечень, п. 17';
+const MET_PAINT = 'Методика расчёта выделений (выбросов) ЗВ в атмосферу при нанесении лакокрасочных материалов (на основе удельных показателей), утв. приказом Госкомэкологии РФ от 12.11.1997 № 497; перечень, п. 19';
+const MET_GALV = 'Методика расчёта выделений (выбросов) ЗВ в атмосферу при производстве металлопокрытий гальваническим способом, утв. приказом Госкомэкологии РФ от 30.04.1999 № 216; перечень, п. 20';
+const MET_REC = 'Расчётная инструкция (методика) «Удельные показатели образования вредных веществ… для предприятий радиоэлектронного комплекса», 2006; перечень, п. 8';
+
+// ---------- нормы расхода местных отсосов
+const H_TABLE           = { id: 'table', label: 'Сварочный стол с отсосом', qmin: () => 1500,
+  source: 'ГОСТ 12.3.003-86, п. 2.11.1: не менее 1500 м³/ч, скорость в точке сварки ≥ 0,2 м/с' };
+const H_TORCH_CO2           = { id: 'torch', label: 'Встроенный в горелку отсос (CO₂, 250–500 А)', qmin: () => 50,
+  source: 'ГОСТ 12.3.003-86, п. 2.12.2: не менее 50 м³/ч' };
+const H_TORCH_AUTO           = { id: 'torch_auto', label: 'Встроенный отсос автомата / в инертных газах', qmin: () => 150,
+  source: 'ГОСТ 12.3.003-86, п. 2.12.2: не менее 150 м³/ч' };
+const H_CUT_GAS           = { id: 'cut_gas', label: 'Раскроечный стол, газовая резка', qmin: p => 2500 * (p.area ?? 1),
+  source: 'Гримитлин А.М. Вентиляция сварочного производства // АВОК Северо-Запад, 2006, с. 39: 2500 м³/(ч·м²) площади стола [С]' };
+const H_CUT_PLASMA           = { id: 'cut_plasma', label: 'Раскроечный стол, плазменная резка', qmin: p => 4000 * (p.area ?? 1),
+  source: 'Гримитлин А.М., 2006, с. 39: 4000 м³/(ч·м²) площади стола [С]' };
+const H_SOLDER           = { id: 'solder', label: 'Местный отсос у места пайки', qmin: p => 0.6 * (p.open ?? 0.05) * 3600,
+  source: 'Санитарные правила организации процессов пайки мелких изделий сплавами, содержащими свинец, № 952-72, п. 3.3: скорость у места пайки не менее 0,6 м/с' };
+const H_BOOTH           = { id: 'booth', label: 'Окрасочная камера (по скорости в проёме)', qmin: p => (p.v ?? 0.5) * (p.open ?? 2) * 3600,
+  source: 'Скорость в открытом проёме — по Санитарным правилам при окрасочных работах с применением ручных распылителей [П: значение по составу ЛКМ]' };
+const H_USER           = { id: 'user', label: 'Задаётся проектировщиком', qmin: p => p.Q ?? 1000, source: 'нормы нет — по паспорту укрытия / расчёту (по умолчанию 1000 м³/ч [Д])' };
+/** Параметр «расход отсоса» — показывается, когда выбран отсос «задаётся проектировщиком» */
+const P_Q           = { id: 'Q', label: 'Расход отсоса (паспорт укрытия)', unit: 'м³/ч', def: 1000, min: 50, max: 10000, step: 50 };
+
+const P_I           = { id: 'I', label: 'Сварочный ток', unit: 'А', def: 225, min: 80, max: 400, step: 5 };
+const P_D           = { id: 'd', label: 'Диаметр проволоки', unit: 'мм', def: 1.2, min: 0.8, max: 2.0, step: 0.2 };
+const P_B = (def        , label = 'Расход материала')           => ({ id: 'B', label, unit: 'кг/ч', def, min: 0.05, max: 20, step: 0.05 });
+
+const PROCESSES            = [
+  {
+    id: 'mag_co2', group: 'Сварка', name: 'Полуавтоматическая сварка в CO₂ проволокой', unit: 'г/кг проволоки',
+    activity: p => wireRate(p.I, p.d ?? 1.2, p.l ?? 15), activityLabel: 'расход проволоки B = α_р·I, кг/ч',
+    params: [P_I, P_D], source: MET_WELD + ', табл. 1; α_р — Соколов Г.Н. и др., ВолгГТУ, 2016, ф. (3.22)',
+    hoods: [H_TABLE, H_USER],   // в диссертации — только стационарные отсосы (решение 11.10.2026); H_TORCH_CO2 оставлен в библиотеке
+    materials: [
+      { id: 'sv08g2s', name: 'Св-08Г2С', factors: { aerosol: 10.0, fe: 7.67, mn: 1.90, sio2: 0.43 }, source: 'табл. 1', status: 'сверено' },
+    ],
+  },
+  {
+    id: 'mma', group: 'Сварка', name: 'Ручная дуговая сварка штучными электродами', unit: 'г/кг электродов',
+    activity: p => p.B, activityLabel: 'расход электродов, кг/ч', params: [P_B(1.5, 'Расход электродов')],
+    source: MET_WELD + ', табл. 1', hoods: [H_TABLE, H_USER],
+    materials: [
+      { id: 'uoni1345', name: 'УОНИ-13/45', factors: { aerosol: 16.31, fe: 10.69, mn: 0.92, sio2: 1.40, fluor: 3.3, hf: 0.75, no2: 1.50, co: 13.3 }, source: 'ГОСТ, табл. 1: аэрозоль 16,40 — опечатка ГОСТ (сумма компонентов 16,31; в Методике изд. 2021 — 16,31); принято 16,31', status: 'сверено' },
+      { id: 'uoni1355', name: 'УОНИ-13/55', factors: { aerosol: 16.99, fe: 13.90, mn: 1.09, sio2: 1.0, fluor: 1.0, hf: 0.93, no2: 2.70, co: 13.3 }, source: 'Методика изд. 2021, табл. 1: Fe 13,90 + фториды 1,0. В ГОСТ, табл. 1: Fe 14,90, фториды «—» (обе суммы 16,99) — расхождение источников, принят вариант с фторидами (в запас)', status: 'П' },
+      { id: 'mr3', name: 'МР-3', factors: { aerosol: 11.5, fe: 9.77, mn: 1.73, hf: 0.40 }, source: 'табл. 1', status: 'сверено' },
+      { id: 'ano4', name: 'АНО-4', factors: { aerosol: 17.8, fe: 15.73, mn: 1.66, sio2: 0.41 }, source: 'табл. 1', status: 'сверено' },
+      { id: 'ozs4', name: 'ОЗС-4', factors: { aerosol: 10.9, fe: 9.63, mn: 1.27 }, source: 'табл. 1', status: 'сверено' },
+    ],
+  },
+  {
+    id: 'saw', group: 'Сварка', name: 'Автоматическая сварка под флюсом', unit: 'г/кг флюса',
+    activity: p => p.B, activityLabel: 'расход флюса, кг/ч', params: [P_B(6, 'Расход флюса')],
+    source: MET_WELD + ', табл. 1; отсос не дальше 40 мм от дуги — Правила 884н, п. 67', hoods: [H_TABLE, H_USER],   // стационарный отсос; H_TORCH_AUTO (встроенный в автомат) оставлен в библиотеке
+    materials: [
+      { id: 'an348a', name: 'АН-348-А', factors: { aerosol: 0.20, fe: 0.06, mn: 0.02, sio2: 0.05, fluor: 0.07, hf: 0.06, no2: 0.001, co: 0.71 }, source: 'ГОСТ, табл. 1 = Методика изд. 2021, табл. 1 (фториды, HF, NO₂, CO). Флюс широкого применения для углеродистых и низколегированных сталей — ГОСТ Р 52222-2004, прил. А; принят по умолчанию', status: 'сверено' },
+      { id: 'osc45', name: 'ОСЦ-45', factors: { aerosol: 0.28, fe: 0.2, mn: 0.02, sio2: 0.05, fluor: 0.01, hf: 0.15, no2: 0.006, co: 1.285 }, source: 'ГОСТ, табл. 1 = Методика изд. 2021, табл. 1 (фториды, HF, NO₂, CO)', status: 'сверено' },
+      { id: 'fc12', name: 'ФЦ-12', factors: { aerosol: 0.09, fe: 0.06, mn: 0.03, hf: 0.02 }, source: 'табл. 1', status: 'сверено' },
+    ],
+  },
+  {
+    id: 'gas_weld', group: 'Сварка', name: 'Газовая сварка стали', unit: 'г/кг горючего газа',
+    activity: p => p.B, activityLabel: 'расход горючего газа, кг/ч', params: [P_B(0.4, 'Расход горючего газа')],
+    source: MET_WELD + ', табл. 3', hoods: [H_TABLE, H_USER],
+    materials: [
+      { id: 'acetylene', name: 'Ацетилен–кислород', factors: { no2: 22 }, source: 'табл. 3: оксиды азота 22 г/кг ацетилена', status: 'сверено' },
+      { id: 'propane', name: 'Пропан-бутан', factors: { no2: 15 }, source: 'табл. 3: 15 г/кг смеси', status: 'сверено' },
+    ],
+  },
+  {
+    id: 'contact', group: 'Сварка', name: 'Контактная электросварка', unit: 'г/ч на эталонную мощность машины',
+    // ГОСТ Р 56164-2014, ф. (9): M = K75·N/75 (стыковая/линейная); ф. (10): M = K50·N/50 (точечная); N — мощность машины, кВт.
+    // (В Методике изд. 2021, ф. (2.4) — множитель 0,013 вместо 1/75 = 0,0133; разница 2,5 %. Принят ГОСТ.)
+    activity: () => 1, activityLabel: 'мощность машины, кВт', params: [{ id: 'N', label: 'Номинальная мощность машины', unit: 'кВт', def: 75, min: 5, max: 300, step: 5 }],
+    custom: (m, p) => { const k = m.id === 'spot' ? 1 / 50 : 1 / 75, out                         = {}; for (const [s, f] of Object.entries(m.factors)) out[s] = f * k * p.N; return out; },
+    source: MET_WELD + ', табл. 3, ф. (9), (10)', hoods: [H_USER],
+    materials: [
+      { id: 'butt', name: 'Стыковая и линейная', factors: { aerosol: 25.0, fe: 24.25, mn: 0.75 }, source: 'ГОСТ, табл. 3: Fe 24,25; Mn 0,75 г/ч на 75 кВт; ф. (9): ×N/75', status: 'сверено' },
+      { id: 'spot', name: 'Точечная', factors: { aerosol: 2.5, fe: 2.425, mn: 0.075 }, source: 'ГОСТ, табл. 3: Fe 2,425 г/ч на 50 кВт; Mn 0,075 (в ГОСТ подписано «на 75 кВт» — опечатка, в Методике — на 50 кВт); ф. (10): ×N/50', status: 'сверено' },
+    ],
+  },
+  {
+    id: 'gas_cut', group: 'Резка', name: 'Газовая резка углеродистой стали', unit: 'г/ч',
+    activity: () => 1, activityLabel: '—', params: [{ id: 'thick', label: 'Толщина металла', unit: 'мм', def: 10, min: 5, max: 20, step: 1 },
+      { id: 'area', label: 'Площадь раскроечного стола', unit: 'м²', def: 1, min: 0.5, max: 12, step: 0.5 }],
+    source: MET_WELD + '; ГОСТ, табл. 4 / Методика изд. 2021, табл. 6: газовая резка, сталь углеродистая, 5/10/20 мм (г/ч на единицу оборудования)',
+    hoods: [H_CUT_GAS, H_USER],
+    materials: [{ id: 'carbon', name: 'Сталь углеродистая', factors: {}, source: 'ГОСТ, табл. 4 (= Методика изд. 2021, табл. 6), г/ч по толщине', status: 'сверено' }],
+    custom: (_m, p) => {
+      const T                                          = [
+        [5, { aerosol: 74.0, mn: 1.1, fe: 72.9, co: 49.5, no2: 39.0 }],
+        [10, { aerosol: 131.0, mn: 1.9, fe: 129.1, co: 63.4, no2: 64.1 }],
+        [20, { aerosol: 200.0, mn: 3.0, fe: 197.0, co: 65.0, no2: 53.2 }],
+      ];
+      const t = Math.min(20, Math.max(5, p.thick ?? 10));
+      let i = 1; while (i < T.length - 1 && t > T[i][0]) i++;
+      const [t0, a] = T[i - 1], [t1, b] = T[i], w = (t - t0) / (t1 - t0), out                         = {};
+      for (const k of Object.keys(a)) out[k] = a[k] + w * (b[k] - a[k]);
+      return out;   // г/ч
+    },
+  },
+  {
+    id: 'grind', group: 'Механическая обработка', name: 'Шлифование / заточка (без СОЖ)', unit: 'г/с на станок',
+    activity: () => 3600, activityLabel: 'с/ч', params: [],
+    source: MET_MECH + ', табл. 5.1.1', hoods: [H_USER],
+    materials: [
+      { id: 'sharp100', name: 'Заточной, круг 100 мм', factors: { dust_abr: 0.004, dust_met: 0.006 }, source: 'табл. 5.1.1', status: 'сверено' },
+      { id: 'sharp550', name: 'Заточной, круг 550 мм', factors: { dust_abr: 0.027, dust_met: 0.040 }, source: 'табл. 5.1.1', status: 'сверено' },
+      { id: 'flat175', name: 'Плоскошлифовальный, круг 175 мм', factors: { dust_abr: 0.014, dust_met: 0.022 }, source: 'табл. 5.1.1', status: 'сверено' },
+      { id: 'round100', name: 'Круглошлифовальный, круг 100 мм', factors: { dust_abr: 0.010, dust_met: 0.018 }, source: 'табл. 5.1.1', status: 'сверено' },
+      { id: 'rough100', name: 'Обдирочно-шлифовальный, круг 100 мм', factors: { dust_abr: 0.62, dust_met: 0.96 }, source: 'табл. 5.1.1', status: 'сверено' },
+    ],
+  },
+  {
+    id: 'paint', group: 'Покраска', name: 'Окраска пневматическим распылением', unit: 'расчёт по составу ЛКМ',
+    activity: p => p.B, activityLabel: 'расход ЛКМ, кг/ч',
+    params: [P_B(2, 'Расход ЛКМ'), { id: 'fp', label: 'Доля летучей части ЛКМ', unit: '%', def: 45, min: 10, max: 90, step: 1 },
+      { id: 'open', label: 'Площадь проёма камеры', unit: 'м²', def: 2, min: 0.5, max: 10, step: 0.5 },
+      { id: 'v', label: 'Скорость в проёме', unit: 'м/с', def: 0.5, min: 0.3, max: 1.5, step: 0.1 }],
+    source: MET_PAINT + ' [П: доли δ_a = 30 % (аэрозоль) и δ′_р = 25 % (растворитель при окраске) для пневматического распыления — сверить по табл. Методики]',
+    hoods: [H_BOOTH, H_USER],
+    materials: [
+      { id: 'pf115', name: 'Эмаль ПФ-115 (растворитель: уайт-спирит 50 % + ксилол 50 %)', factors: { whitespirit: 0.5, xylene: 0.5 }, source: 'состав растворителя — [П] по паспорту ЛКМ', status: 'П' },
+    ],
+    custom: (m, p) => {
+      const B = p.B, fp = (p.fp ?? 45) / 100, dA = 0.30, dP = 0.25;   // [П]
+      const out                         = { paint_aer: 1000 * B * (1 - fp) * dA };
+      for (const [k, share] of Object.entries(m.factors)) out[k] = 1000 * B * fp * dP * share;
+      return out;   // г/ч
+    },
+  },
+  {
+    id: 'solder', group: 'Пайка', name: 'Пайка свинцовосодержащими припоями', unit: 'г/кг припоя',
+    activity: p => p.B, activityLabel: 'расход припоя, кг/ч', params: [P_B(0.05, 'Расход припоя'), { id: 'open', label: 'Площадь всасывающего отверстия', unit: 'м²', def: 0.05, min: 0.01, max: 0.5, step: 0.01 }],
+    source: MET_REC + ' — удельные показатели ввести по методике (в открытом доступе не найдены)', hoods: [H_SOLDER, H_USER],
+    materials: [{ id: 'pos61', name: 'ПОС-61 (показатели ввести)', factors: { pb: 0, sn: 0 }, source: 'ввести по методике п. 8 перечня', status: 'ввести' }],
+  },
+  {
+    id: 'galv', group: 'Гальваника / химия', name: 'Гальваническая ванна (по площади зеркала)', unit: 'г/(ч·м²)',
+    activity: p => p.area, activityLabel: 'площадь зеркала ванны, м²', params: [{ id: 'area', label: 'Площадь зеркала ванны', unit: 'м²', def: 1, min: 0.1, max: 20, step: 0.1 }],
+    source: MET_GALV + ' — удельные показатели ввести по таблицам методики', hoods: [H_USER],
+    materials: [
+      { id: 'chrome', name: 'Хромирование (показатель ввести)', factors: { cr6: 0 }, source: 'ввести по методике п. 20 перечня', status: 'ввести' },
+      { id: 'pickle', name: 'Травление в серной кислоте (показатель ввести)', factors: { h2so4: 0 }, source: 'ввести по методике п. 20 перечня', status: 'ввести' },
+    ],
+  },
+];
+
+const processById = (id        ) => PROCESSES.find(p => p.id === id) ;
+
+/** Какие группы процессов доступны в интерфейсе. Сейчас — только сварка (решение 11.10.2026: остальные процессы —
+ *  после согласования с руководителем). Чтобы включить, добавить группы: 'Резка', 'Механическая обработка', 'Покраска', 'Пайка', 'Гальваника / химия'. */
+const ENABLED_GROUPS = ['Сварка'];
+const activeProcesses = () => PROCESSES.filter(p => ENABLED_GROUPS.includes(p.group));
+
+/** Настройка поста: процесс, материал, параметры, тип отсоса; factorsOverride — свои удельные показатели (ввод пользователя) */
+                                                                                                                                                                                                   
+                                                                                                                                                                
+                                                                                                                                                    
+                      
+
+function paramsOf(cfg            )                         {
+  const pr = processById(cfg.process), out                         = {};
+  for (const d of pr.params) out[d.id] = cfg.params?.[d.id] ?? d.def;
+  return { ...out, ...(cfg.params ?? {}) };
+}
+
+/** Выделение веществ на посту при работе, мг/с (до местного отсоса) */
+function emissionOf(cfg            , paramsOverride                         )                         {
+  const pr = processById(cfg.process), m = pr.materials.find(x => x.id === cfg.material) ?? pr.materials[0];
+  const mat           = cfg.factorsOverride ? { ...m, factors: { ...m.factors, ...cfg.factorsOverride } } : m;
+  const p = { ...paramsOf(cfg), ...(paramsOverride ?? {}) };
+  let gph                        ;
+  if (pr.custom) gph = pr.custom(mat, p);
+  else { const a = pr.activity(p); gph = {}; for (const [k, f] of Object.entries(mat.factors)) gph[k] = f * a; }
+  const out                         = {}; for (const [k, v] of Object.entries(gph)) out[k] = v * 1000 / 3600;   // г/ч → мг/с
+  return out;
+}
+
+/** Минимальный расход отсоса по норме для выбранного укрытия, м³/ч; итоговая уставка — не меньше нормы */
+function qminOf(cfg            )                                               {
+  const pr = processById(cfg.process), h = pr.hoods.find(x => x.id === cfg.hood) ?? pr.hoods[0];
+  return { q: h.qmin(paramsOf(cfg)), source: h.source, label: h.label };
+}
+function qsetOf(cfg            )         { return Math.max(qminOf(cfg).q, cfg.Qset ?? 0); }
+
+
+// ---- plant.ts
+// СБОРКА ЦЕХА ИЗ НАСТРОЕК ПОСТОВ (универсальная модель).
+// Вход: для каждого поста — процесс, материал, параметры, тип отсоса. Выход: сеть, параметры моделирования, отчёт:
+//  1) выделение всех веществ на каждом посту (библиотека процессов, российские методики);
+//  2) ПДК каждого вещества (СанПиН), категория Mn — по доле в аэрозоле, группы суммации;
+//  3) уставка расхода каждого отсоса — не ниже нормы для выбранного укрытия;
+//  4) подбор вентилятора (запас, пока режим «все посты» достижим), пусконаладка, упреждение;
+//  5) общеобменная вентиляция по всем веществам: L = max по группам Σ(G_i/ПДК_i)/(1 − Σ q_пр,i/ПДК_i) (СП 60.13330.2020; Σ C/ПДК ≤ 1).
+
+
+
+
+
+
+
+/** Сводка «вещества и потребный воздухообмен» без моделирования (блок 1 для смеси процессов) */
+function designReport(posts              ) {
+  const em = posts.map(p => emissionOf(p));
+  const ids = new Set        (['aerosol']); em.forEach(e => Object.keys(e).forEach(k => ids.add(k)));
+  // категория ПДК Mn — по доле Mn в сварочном аэрозоле, поступающем в воздух цеха (смесь от всех постов, СанПиН 1.2.3685-21, табл. 2.1)
+  const etaK = (p            ) => p.eta ?? ETA_LEV_DEFAULT;
+  const mnEsc = em.reduce((a, e, k) => a + (1 - etaK(posts[k])) * (e.mn ?? 0), 0), aerEsc = em.reduce((a, e, k) => a + (1 - etaK(posts[k])) * (e.aerosol ?? 0), 0);
+  const mnCat = mnEsc > 0 ? mnCategory(mnEsc / Math.max(aerEsc, 1e-12)) : undefined;
+  const postMnCats = em.map(e => (e.mn ?? 0) > 0 ? mnCategory((e.mn ?? 0) / Math.max(e.aerosol ?? e.mn, 1e-12)).label : undefined);
+  const subs              = [...ids].filter(id => SUBSTANCES[id]).map(id => {
+    const info = SUBSTANCES[id];
+    const pdk = id === 'mn' && mnCat ? mnCat.pdkSs : pdkOf(info);
+    return { name: id, g: 0, pdk, qIn: info.qIn, settles: info.aerosol, group: info.group };
+  });
+  const etaOf = (p            ) => p.eta ?? ETA_LEV_DEFAULT;
+  const esc                         = {};
+  // мг/с в цех: не уловленное отсосом (1 − η)·G; у агрегата с возвратом воздуха — ещё проскок фильтра η·(1 − η_ф)·G (газы: η_ф = 0)
+  const slip = (p            , s           ) => p.recircEta === undefined ? 0 : etaOf(p) * (1 - (s.settles !== false ? p.recircEta : 0));
+  for (const s of subs) esc[s.name] = posts.reduce((a, p, k) => a + (1 - etaOf(p) + slip(p, s)) * (em[k][s.name] ?? 0), 0);
+  const groups = new Map                     ();
+  for (const s of subs) if (Number.isFinite(s.pdk)) { const k = s.group ?? s.name; if (!groups.has(k)) groups.set(k, []); groups.get(k) .push(s); }
+  let Ld = 0, limiting = '';
+  const need                         = {};
+  for (const [k, mem] of groups) {
+    const L = mem.reduce((a, s) => a + esc[s.name] / (s.pdk - s.qIn), 0);   // м³/с: весь удаляемый воздух; СП 60 — расходы по веществам группы суммируются
+    for (const s of mem) need[s.name] = L;
+    if (L > Ld) { Ld = L; limiting = k; }
+  }
+  // СП 60: L = L_wz + (m − L_wz(q_wz − q_in))/(q_l − q_in) → при q_l = q_wz общеобменная L_оо = L − L_wz, L_wz — местные отсосы
+  const Llev = posts.reduce((a, p) => a + (p.recircEta === undefined ? qsetOf(p) : 0), 0) / 3600, Ltotal = Ld;   // агрегат с возвратом воздуха воздух из цеха не удаляет
+  Ld = Math.max(0, Ltotal - Llev);
+  return { em, subs, esc, need, Ld, Ltotal, Llev, limiting, mnCat, groups, mnShare: aerEsc > 0 ? mnEsc / aerEsc : 0, postMnCats };
+}
+
+function buildPlant(cfg             )                                                                                   {
+  const posts = cfg.posts.map((p, i) => ({ ...p, id: `post${i + 1}` }));
+  const ids = posts.map(p => p.id);
+  const qsets = posts.map(p => qsetOf(p));
+  // ---- подбор вентилятора: увеличиваем запас, пока режим «все посты на уставке» не станет достижимым
+  let fanScale = 1, feasible = false, b                                    = null;
+  const req = Object.fromEntries(ids.map((id, k) => [id, m3h(qsets[k])]));
+  for (let it = 0; it < 15; it++) {
+    b = balance(makeNetworkFor(qsets, fanScale), req);
+    if (b.feasible && b.fanSpeed < 1450) { feasible = true; break; }   // запас ≥ 3 % по частоте
+    fanScale *= 1.08;
+  }
+  const makeNet = () => makeNetworkFor(qsets, fanScale);
+  const net = makeNet();
+  const com = { n: b .fanSpeed, angles: b .angles, pSet: b .sol.pFan - b .sol.segLoss['common'] };
+  // ---- упреждение по частоте для набора работающих постов
+  const cache = new Map                ();
+  const nFF = (active          ) => { const k = active.join(','); if (!cache.has(k)) cache.set(k, balance(makeNet(), Object.fromEntries(ids.map((id, j) => [id, active.includes(id) ? m3h(qsets[j]) : 0]))).fanSpeed); return cache.get(k) ; };
+  // ---- вещества и расчётная ОВ
+  const d = designReport(posts);
+  const duration = cfg.duration ?? 8 * 3600;
+  const frac = cfg.frac ?? 0.5;
+  const limSub = [...d.groups.get(d.limiting) ?? []].sort((a, c) => d.esc[c.name] / c.pdk - d.esc[a.name] / a.pdk)[0]?.name ?? 'mn';
+  const Ld = Math.max(d.Ld, m3h(500));
+  const gen                      = cfg.gen ? {
+    // L_макс — производительность вентилятора ОВ: не меньше 1,5·L_расч и не меньше нужной для цели регулятора при всех работающих постах [А]
+    mode: cfg.gen, Ldesign: Ld, Lmin: 0.2 * Ld, Lmax: Math.max(1.5 * Ld, 1.1 * (d.Ltotal / frac - d.Llev)), limiting: limSub, Cset: frac, multi: { frac, gasSensors: cfg.gasSensors },
+    sensor: { of: 'aerosol', ratio: 0, tau: 30, noise: 0.1 }, kP: 0.5, kI: 0.005, ffTau: 600, dpDesign: 600, etaFan: 0.6, ramp: 20,
+  } : undefined;
+  const params            = {
+    mode: cfg.lev ?? 'adaptive', dt: 1, duration, record: 10,
+    schedule: cfg.schedule ?? makeSchedule(ids, duration, cfg.seed ?? 7),
+    posts: posts.map((p, k) => ({ id: p.id, B: 0, Qset: m3h(qsets[k]), etaNom: p.eta ?? ETA_LEV_DEFAULT, emis: () => emissionOf(cfg.posts[k]) })),   // читает настройку поста «вживую» (интерфейс)
+    substances: d.subs, limiting: limSub,
+    room: { V: cfg.V ?? 48 * 24 * 14.4, Lgen: Ld, dT: T_IN_WINTER - MOSCOW_HEATING.tAvg },
+    damperStroke: 8, fanRamp: 10, nMax: 1500, nMin: 300, pSet: com.pSet, kI: 4,
+    nFF: (cfg.lev ?? 'adaptive') === 'adaptive' ? nFF : undefined, openAngles: com.angles, nConst: com.n, gen,
+  };
+  const report              = {
+    posts: posts.map((p, k) => { const q = qminOf(p); return { id: p.id, process: processById(p.process).name, material: (processById(p.process).materials.find(m => m.id === p.material) ?? processById(p.process).materials[0]).name,
+      emission: d.em[k], qset: qsets[k], qmin: q.q, qminSource: q.source, hood: q.label, eta: p.eta ?? ETA_LEV_DEFAULT }; }),
+    substances: d.subs.filter(s => Number.isFinite(s.pdk)).map(s => ({ id: s.name, name: SUBSTANCES[s.name].name, pdk: s.pdk, cls: SUBSTANCES[s.name].cls, status: SUBSTANCES[s.name].status, group: s.group, Lneed: (d.need[s.name] ?? 0) * 3600, note: SUBSTANCES[s.name].note }))
+      .sort((a, c) => c.Lneed - a.Lneed),
+    Ldesign: Ld * 3600, Ltotal: d.Ltotal * 3600, Llev: d.Llev * 3600, limiting: d.limiting, mnCategory: d.mnCat?.label, mnShare: d.mnShare, postMnCategory: d.postMnCats, fanScale, fanFeasible: feasible, commissioning: com,
+  };
+  return { net, params, report, makeNet };
+}
+
+/** Пример цеха с разными видами сварки (4 поста) */
+const MIXED_EXAMPLE               = [
+  { id: 'post1', process: 'mag_co2', material: 'sv08g2s', params: { I: 225 } },
+  { id: 'post2', process: 'mma', material: 'uoni1345', params: { B: 1.5 } },
+  { id: 'post3', process: 'saw', material: 'an348a', params: { B: 6 }, hood: 'table' },   // флюс АН-348-А (ГОСТ Р 52222-2004: широкого применения); B — расход флюса, кг/ч
+  { id: 'post4', process: 'contact', material: 'butt', params: { N: 75 } },
+];
+
+
+window.Engine = { RHO_AIR, NU_AIR, C_AIR, KE_STEEL, W_MIN_WELDING, Q_POST_MIN_M3H, ETA_LEV_DEFAULT, K_SETTLE, SV08G2S, FC12, PDK_MN_WELD_LE20, PDK_MN_WELD_20_30, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, alphaMelt, wireRate, ACTUATOR_TIMES_GOST7192, IE3_4P_GOST, MOTOR_LOSS_RATIO, motorEfficiency, sp60Supply, sp60General, DUCT_D_STD, W_TRANSPORT, pickDuctD, AIR, m3h, toM3h, area, velocity, dynPressure, lambdaAltshul, ductLoss, BUTTERFLY_ROUND, damperZeta, damperAngleForZeta, VFD_EFF, electricPower, fanPressure, fanPower, filterLoss, bendA1, bendB1, bendZeta, lambdaSmooth, bendKRe, bendKDelta, bendZetaRough, suddenExpansionZeta, diffuserZetaN2, diffuserZeta, suddenContractionZeta, HOOD_CONE_ZETA, SHARP_ENTRY_ZETA, EXIT_ZETA, teeSideZeta, teeA, teeStraightZeta, elemLoss, lossBreakdown, solve, setDamper, balance, interp, createSimulator, simulate, chainNetwork, demoNetwork, DEMO_FAN, makeNetwork, IE3_4P, pickMotor, makeNetworkFor, I_BASE, B_BASE, genVentByFormula, feedforwardTable, makeSchedule, commissioning, shiftParams, WIRE_12, makeShift, MN, AER, designLgen, shift4, pdkOf, SUBSTANCES, mnCategory, P_Q, PROCESSES, processById, ENABLED_GROUPS, activeProcesses, paramsOf, emissionOf, qminOf, qsetOf, designReport, buildPlant, MIXED_EXAMPLE };
+})();
+</script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+const E = window.Engine;
+let IDS = [];
+const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#c84fd0', '#e3b341', '#4cc3c9', '#e5625c', '#9aa86b'];
+const COL = {};
+const MAX_POSTS = 8;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ---------- состояние интерфейса
+const WIN = 900;
+const fmt = (v, d = 0) => (Number.isFinite(v) ? v : 0).toLocaleString('ru-RU', { minimumFractionDigits: d, maximumFractionDigits: d });
+const setPressed = (seg, btn) => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+const cfg = [
+  { id: 'post1', process: 'mag_co2', material: 'sv08g2s', params: { I: 225, d: 1.2 }, hood: 'table', eta: 0.8 },
+  { id: 'post2', process: 'mma', material: 'uoni1345', params: { B: 1.5 }, hood: 'table', eta: 0.8 },
+  { id: 'post3', process: 'saw', material: 'an348a', params: { B: 6 }, hood: 'table', eta: 0.8 },
+];
+const ui = { auto: true, view: 'B', speed: 10, paused: false, posts: {}, fouling: 1 };
+/** номера постов идут подряд; цвет — по номеру */
+function syncIds() {
+  IDS = cfg.map((c, i) => (c.id = `post${i + 1}`));
+  IDS.forEach((id, i) => { COL[id] = PALETTE[i % PALETTE.length]; if (!ui.posts[id]) ui.posts[id] = { on: false }; });
+}
+syncIds();
+let shift = E.makeSchedule(IDS, 8 * 3600, 7);
+const isOn = (id, t) => ui.auto ? shift(id, t % (8 * 3600)) : ui.posts[id].on;
+
+// ---------- две модели параллельно: A — пром. стандарт, B — предлагаемая (сеть и вентилятор подбираются под посты)
+let report = null, groups = [];
+function build(kind) {
+  const pl = E.buildPlant({ posts: cfg, V: roomV(), lev: kind === 'B' ? 'adaptive' : 'onoff', gen: kind === 'B' ? 'fffb' : 'const', gasSensors: ['no2', 'co'] });
+  const p = pl.params; p.record = undefined; p.duration = 1e12; p.schedule = isOn;
+  if (kind === 'A') p.nFF = undefined;
+  report = pl.report;
+  const g = new Map(); for (const s of p.substances) if (Number.isFinite(s.pdk)) { const k = s.group ?? s.name; if (!g.has(k)) g.set(k, []); g.get(k).push(s); }
+  groups = [...g.values()];
+  return { sim: E.createSimulator(pl.net, p), net: pl.net, last: null, hist: [], params: p };
+}
+const worstRatio = C => groups.reduce((w, mem) => Math.max(w, mem.reduce((a, s) => a + C[s.name] / s.pdk, 0)), 0);
+let A, B;
+function reset() { A = build('A'); B = build('B'); shift = E.makeSchedule(IDS, 8 * 3600, 7); applyFouling(); renderDesign(); warm(); }
+/** число постов изменилось: карточки, расчёт и 3D-сцена собираются заново */
+let scene3dReady = false;
+function changeLayout() { renderCards(); reset(); if (scene3dReady) build3d(); }
+function applyFouling() { for (const m of [A, B]) m.net.common[0].spec.fouling = ui.fouling; }
+function warm() { for (let i = 0; i < 1200; i++) for (const m of [A, B]) { m.last = m.sim.step(); m.hist.push(m.last); if (m.hist.length > WIN) m.hist.shift(); } }
+
+// ---------- карточки постов: выбор процесса, материала, параметров, отсоса
+const postsEl = document.getElementById('posts');
+// размеры цеха: воздухообмен по вредным веществам от них НЕ зависит (СП 60, прил. Г, ф. Г.2); объём определяет скорость роста концентрации
+function roomV() { const v = id => Math.max(0.1, +document.getElementById(id).value || 0); return v('roomL') * v('roomW') * v('roomH'); }
+['roomL', 'roomW', 'roomH'].forEach(id => document.getElementById(id).onchange = () => reset());
+const PROCS = E.activeProcesses(), procGroups = [...new Set(PROCS.map(p => p.group))];
+const fmtN = v => String(v).replace('.', ',');
+function cardHtml(id, i) {
+  const c = cfg[i], pr = E.processById(c.process);
+  const procOpts = procGroups.map(g => `<optgroup label="${g}">${PROCS.filter(p => p.group === g).map(p => `<option value="${p.id}" ${p.id === c.process ? 'selected' : ''}>${p.name}</option>`).join('')}</optgroup>`).join('');
+  const matOpts = pr.materials.map(m => `<option value="${m.id}" ${m.id === c.material ? 'selected' : ''}>${m.name}${m.status === 'П' ? ' [сверить]' : m.status === 'ввести' ? ' [ввести показатели]' : ''}</option>`).join('');
+  const hoodOpts = pr.hoods.map(h => `<option value="${h.id}" ${h.id === c.hood ? 'selected' : ''}>${h.label}</option>`).join('');
+  const hoodNow = (pr.hoods.find(h => h.id === c.hood) ?? pr.hoods[0]).id;
+  const params = [...pr.params, ...(hoodNow === 'user' ? [E.P_Q] : [])].map(d => `<label>${d.label}, ${d.unit}<input type="number" data-p="${d.id}" min="${d.min}" max="${d.max}" step="${d.step}" value="${c.params?.[d.id] ?? d.def}"></label>`).join('');
+  const mat = pr.materials.find(m => m.id === c.material) ?? pr.materials[0];
+  const facts = mat.status === 'ввести' ? Object.keys(mat.factors).map(k => `<label>${E.SUBSTANCES[k].name}, ${pr.unit}<input type="number" data-f="${k}" min="0" step="0.001" value="${c.factorsOverride?.[k] ?? 0}"></label>`).join('') : '';
+  return `
+  <div class="card post" id="card-${id}">
+    <h3><i style="background:${COL[id]}"></i>Пост ${i + 1}</h3>
+    <span class="pill" id="pill-${id}">простой</span>
+    <div class="cfg">
+      <label class="wide"><select data-k="process" aria-label="Процесс">${procOpts}</select></label>
+      <label class="wide"><select data-k="material" aria-label="Материал">${matOpts}</select></label>
+      ${params}${facts}
+      <label class="wide"><select data-k="hood" aria-label="Местный отсос">${hoodOpts}</select></label>
+      <label>Захват отсоса η (Методика: 0,8)<input type="number" data-k="eta" min="0.3" max="0.99" step="0.01" value="${c.eta ?? 0.8}"></label>
+    </div>
+    <div class="src" id="src-${id}"></div>
+    <div class="row"><button class="btn" id="tog-${id}" aria-pressed="false">Включить</button>${IDS.length > 1 ? `<button class="btn" id="del-${id}">Удалить пост</button>` : ''}</div>
+    <div class="kv">
+      <div><b id="q-${id}">—</b><span>расход, м³/ч</span></div>
+      <div><b id="o-${id}">—</b><span>открытие, %</span></div>
+      <div><b id="a-${id}">—</b><span>угол заслонки</span></div>
+    </div>
+    <div class="bar"><div id="bar-${id}"></div></div>
+  </div>`;
+}
+function renderCards() {
+  postsEl.innerHTML = IDS.map((id, i) => cardHtml(id, i)).join('') +
+    `<div class="card"><button class="btn" id="addPost" ${IDS.length >= MAX_POSTS ? 'disabled' : ''}>+ Добавить сварочный пост</button>
+     <span class="note" style="margin-left:8px">постов: ${IDS.length} из ${MAX_POSTS}; сеть и вентилятор подбираются заново</span></div>`;
+  document.getElementById('addPost').onclick = () => { if (cfg.length >= MAX_POSTS) return;
+    cfg.push({ id: '', process: 'mag_co2', material: 'sv08g2s', params: { I: 225, d: 1.2 }, hood: 'table', eta: 0.8 }); syncIds(); changeLayout(); };
+  IDS.forEach((id, i) => {
+    const card = document.getElementById(`card-${id}`), c = cfg[i];
+    document.getElementById(`tog-${id}`).onclick = () => { setAuto(false); ui.posts[id].on = !ui.posts[id].on; };
+    const del = document.getElementById(`del-${id}`);
+    if (del) del.onclick = () => { cfg.splice(i, 1); const st = IDS.map(x => ui.posts[x]); st.splice(i, 1); ui.posts = {}; syncIds(); IDS.forEach((x, k) => (ui.posts[x] = st[k])); changeLayout(); };
+    card.querySelectorAll('select[data-k]').forEach(el => el.onchange = () => {
+      const k = el.dataset.k;
+      if (k === 'process') { const pr = E.processById(el.value); c.process = el.value; c.material = pr.materials[0].id; c.hood = pr.hoods[0].id; c.params = {}; c.factorsOverride = undefined; }
+      else c[k] = el.value;
+      if (k === 'material') c.factorsOverride = undefined;
+      renderCards(); reset();
+    });
+    card.querySelector('input[data-k="eta"]').onchange = e => { c.eta = Math.min(0.99, Math.max(0.3, +e.target.value)); reset(); };
+    card.querySelectorAll('input[data-p]').forEach(el => el.onchange = () => {
+      c.params = { ...(c.params ?? {}), [el.dataset.p]: +el.value };
+      // параметры, от которых зависит норма отсоса (площадь, проём, скорость), требуют пересборки сети; остальные действуют сразу
+      if (['area', 'open', 'v', 'Q'].includes(el.dataset.p)) reset(); else renderDesign();
+    });
+    card.querySelectorAll('input[data-f]').forEach(el => el.onchange = () => { c.factorsOverride = { ...(c.factorsOverride ?? {}), [el.dataset.f]: +el.value }; reset(); });
+  });
+}
+const KIND_RU = { duct: 'трение по длине', damper: 'заслонка', filter: 'фильтр', diffuser: 'переход на больший диаметр', teeSide: 'тройник: боковой вход', teeStraight: 'тройник: проход' };
+function renderLoss(m) {
+  const sel = document.getElementById('lossPost');
+  if (sel.options.length !== IDS.length) sel.innerHTML = IDS.map((id, i) => `<option value="${id}">Пост ${i + 1}</option>`).join('');
+  const sol = E.solve(m.net), br = E.lossBreakdown(m.net, sol), id = sel.value || IDS[0];
+  const path = []; let sg = m.net.segments.find(x => x.id === id);
+  while (sg) { path.push(sg.id); sg = sg.parent ? m.net.segments.find(x => x.id === sg.parent) : null; }
+  path.push('common');
+  const elOf = r => (r.seg === 'common' ? m.net.common : m.net.segments.find(x => x.id === r.seg).elements).find(e => e.id === r.id);
+  const rows = br.filter(r => path.includes(r.seg)).map(r => { const e = elOf(r);
+    const name = (e.kind === 'local' || e.kind === 'bend') ? e.label : e.kind === 'damper' ? `заслонка, ${fmt(e.alpha)}°` : KIND_RU[e.kind] + (e.kind === 'duct' ? `, ${fmtN(e.l)} м` : '');
+    return `<tr><td>${name}</td><td>${e.kind === 'local' ? fmt(e.zeta, 2) : e.kind === 'bend' ? fmt(r.dp / Math.max(1e-9, 0.6 * (r.q / (Math.PI * e.d * e.d / 4)) ** 2), 2) : e.kind === 'damper' ? fmt(E.damperZeta(e.alpha), 2) : ''}</td><td>${fmt(r.dp, 1)}</td></tr>`; });
+  const sum = br.filter(r => path.includes(r.seg)).reduce((a, r) => a + r.dp, 0);
+  document.getElementById('lossBody').innerHTML = rows.join('') + `<tr class="lim"><td>Итого по пути</td><td></td><td>${fmt(sum, 1)}</td></tr><tr><td>Давление вентилятора</td><td></td><td>${fmt(sol.pFan, 1)}</td></tr>`;
+}
+function renderDesign() {
+  const d = E.designReport(cfg);
+  IDS.forEach((id, i) => {
+    const q = E.qminOf(cfg[i]), em = d.em[i], top = Object.entries(em).filter(([k]) => k !== 'aerosol').sort((a, b) => b[1] - a[1]).slice(0, 3);
+    document.getElementById(`src-${id}`).innerHTML = `Уставка отсоса ${fmt(E.qsetOf(cfg[i]))} м³/ч — ${q.source}<br>Выделение: ${top.map(([k, v]) => `${E.SUBSTANCES[k].name.split(' (')[0]} ${fmt(v * 3.6, 2)} г/ч`).join('; ') || 'нет (ввести показатели)'}`;
+  });
+  const lim = report ? report.substances[0] : null;
+  if (report) { const V = roomV(), L = report.Ltotal + 1e-9, tau = V / L * 60, perW = L / Math.max(1, IDS.length);
+    document.getElementById('roomNote').innerHTML = `Объём ${fmt(V)} м³. Воздухообмен по вредным веществам от объёма не зависит (СП 60.13330.2020, прил. Г, ф. Г.2; расчёт по кратности для рабочей зоны не допускается — п. 7.4.1). Объём задаёт инерцию цеха: постоянная времени V/L ≈ <b>${fmt(tau)} мин</b> — за это время концентрация проходит ≈ 63 % пути к новому значению после включения/выключения постов. Наружного воздуха на одного работающего: ${fmt(perW)} м³/ч (минимум 30–60 по СП 60, прил. В) — ${perW >= 60 ? 'выполняется' : 'проверить'}.`; }
+  document.getElementById('designNote').innerHTML = report ? `По СП 60.13330.2020 (все посты, C = ПДК): весь воздух <b>${fmt(report.Ltotal)} м³/ч</b> − местные отсосы ${fmt(report.Llev)} = общеобменная <b>${fmt(report.Ldesign)} м³/ч</b>, лимитирует: <b>${lim ? lim.name : '—'}</b>${report.mnCategory ? `; доля Mn в аэрозоле цеха ${fmt(report.mnShare * 100, 1)} % → ПДК Mn по категории «${report.mnCategory}»` : ''}. Вещества с пометкой «сверить» — ПДК по ГН, сверить по СанПиН.` : '';
+}
+renderCards();
+reset();
+function setAuto(v) {
+  if (ui.auto && !v) { const t = B.sim.time(); for (const id of IDS) ui.posts[id].on = isOn(id, t); }
+  ui.auto = v; const seg = document.getElementById('autoSeg'); setPressed(seg, seg.querySelector(`[data-a="${v ? 1 : 0}"]`));
+}
+document.getElementById('autoSeg').onclick = e => { const b = e.target.closest('button'); if (b) setAuto(b.dataset.a === '1'); };
+document.getElementById('viewSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.view = b.dataset.v; setPressed(e.currentTarget, b);
+  document.getElementById('badge').textContent = ui.view === 'B' ? 'Предлагаемая система' : 'Промышленный стандарт'; };
+document.getElementById('speedSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.speed = +b.dataset.s; setPressed(e.currentTarget, b); };
+document.getElementById('pauseBtn').onclick = e => { ui.paused = !ui.paused; e.target.textContent = ui.paused ? 'Продолжить' : 'Пауза'; };
+document.getElementById('resetBtn').onclick = () => reset();
+document.getElementById('foul').oninput = e => { ui.fouling = +e.target.value; document.getElementById('foulV').textContent = '×' + ui.fouling.toFixed(1).replace('.', ','); applyFouling(); };
+
+// ---------- 3D сцена
+const host = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+host.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0b1013');
+scene.fog = new THREE.FogExp2('#0b1013', 0.012);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
+camera.position.set(-9, 11, 19);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(2, 3.2, 0); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49;
+scene.add(new THREE.HemisphereLight('#c9d6df', '#20272c', 0.9));
+const sun = new THREE.DirectionalLight('#ffffff', 1.1); sun.position.set(6, 14, 8); scene.add(sun);
+
+const M = {
+  floor: new THREE.MeshStandardMaterial({ color: '#2a3238', roughness: 0.95 }),
+  steel: new THREE.MeshStandardMaterial({ color: '#8d989f', metalness: 0.75, roughness: 0.35 }),
+  duct: new THREE.MeshStandardMaterial({ color: '#9aa6ad', metalness: 0.6, roughness: 0.45, transparent: true, opacity: 0.32, depthWrite: false }),
+  dark: new THREE.MeshStandardMaterial({ color: '#3b464d', metalness: 0.4, roughness: 0.6 }),
+  filter: new THREE.MeshStandardMaterial({ color: '#56646d', metalness: 0.5, roughness: 0.5 }),
+  disk: new THREE.MeshStandardMaterial({ color: '#d9e1e5', metalness: 0.8, roughness: 0.25 }),
+};
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 22), M.floor); floor.rotation.x = -Math.PI / 2; scene.add(floor);
+const grid = new THREE.GridHelper(40, 40, '#3a464e', '#2c363c'); grid.position.y = 0.01; scene.add(grid);
+
+const Y_COLL = 5.2, Z = 0, STEP = 5.5;
+let rig = null, rotor = null, tail = [], X_END = 0;
+const XS = {};
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const tube = (a, b, r, mat) => {
+  const v = new THREE.Vector3().subVectors(b, a), L = v.length();
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L, 24, 1, true), mat);
+  m.position.copy(a).addScaledVector(v, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().normalize()); rig.add(m); return m;
+};
+const posts3d = {};
+const NP = 140;
+function pathOf(id) {
+  const pts = [...posts3d[id].path, ...tail];
+  const seg = []; let L = 0; for (let i = 1; i < pts.length; i++) { const l = pts[i].distanceTo(pts[i - 1]); seg.push([pts[i - 1], pts[i], L, l]); L += l; }
+  return { seg, L };
+}
+/** 3D-цех под текущее число постов: столы и отсосы вдоль коллектора, затем фильтр, вентилятор, выброс */
+function build3d() {
+  if (rig) { scene.remove(rig); rig.traverse(o => { if (o.geometry && o.geometry.dispose) o.geometry.dispose(); }); }
+  rig = new THREE.Group(); scene.add(rig);
+  for (const k of Object.keys(posts3d)) delete posts3d[k];
+  const x0 = -((IDS.length - 1) * STEP) / 2 - 3;
+  IDS.forEach((id, i) => (XS[id] = x0 + i * STEP));
+  X_END = x0 + (IDS.length - 1) * STEP + 4;
+  for (const id of IDS) {
+    const x = XS[id];
+    const table = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 1.4), M.dark); table.position.set(x, 0.45, Z + 1.2); rig.add(table);
+    const work = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.15, 0.5), M.steel); work.position.set(x, 0.98, Z + 1.2); rig.add(work);
+    const hood = new THREE.Mesh(new THREE.ConeGeometry(0.75, 0.6, 28, 1, true), M.steel); hood.position.set(x, 2.35, Z + 1.2); rig.add(hood);
+    tube(V(x, 2.6, Z + 1.2), V(x, 3.0, Z + 1.2), 0.22, M.steel);
+    tube(V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), 0.22, M.duct);
+    tube(V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z), 0.22, M.duct);
+    const dPos = V(x, 4.35, Z + 0.3);   // заслонка: прозрачный корпус + диск на оси
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.36, 28, 1, true), M.duct); body.position.copy(dPos);
+    body.quaternion.setFromUnitVectors(V(0, 1, 0), V(0, Y_COLL - 3.6, -0.6).normalize()); rig.add(body);
+    const pivot = new THREE.Group(); pivot.position.copy(dPos); pivot.quaternion.copy(body.quaternion); rig.add(pivot);
+    for (const off of [-0.18, 0.18]) { const fl = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.025, 8, 32), M.steel); fl.rotation.x = Math.PI / 2; fl.position.y = off; pivot.add(fl); }
+    const disk = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.025, 32), M.disk); pivot.add(disk);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 8), M.dark); shaft.rotation.z = Math.PI / 2; pivot.add(shaft);
+    const act = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.22), new THREE.MeshStandardMaterial({ color: '#e0a23a', roughness: 0.6 })); act.position.set(0.46, 0, 0); pivot.add(act);
+    const arc = new THREE.PointLight('#ffb347', 0, 6, 2); arc.position.set(x, 1.15, Z + 1.2); rig.add(arc);
+    const spark = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), new THREE.MeshBasicMaterial({ color: '#fff2c4' })); spark.position.copy(arc.position); rig.add(spark);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.03, 8, 40), new THREE.MeshBasicMaterial({ color: COL[id] })); ring.rotation.x = Math.PI / 2; ring.position.set(x, 0.92, Z + 1.2); rig.add(ring);
+    posts3d[id] = { disk, arc, spark, path: [V(x, 1.4, Z + 1.2), V(x, 2.35, Z + 1.2), V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z)] };
+  }
+  tube(V(XS[IDS[0]] - 0.4, Y_COLL, Z), V(X_END, Y_COLL, Z), 0.36, M.duct);   // коллектор → фильтр → вентилятор → выброс
+  const filt = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.6, 1.8), M.filter); filt.position.set(X_END + 1.2, Y_COLL - 0.4, Z); rig.add(filt);
+  tube(V(X_END + 2.2, Y_COLL, Z), V(X_END + 3.0, Y_COLL, Z), 0.36, M.duct);
+  const fanHouse = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.7, 36), M.steel); fanHouse.rotation.x = Math.PI / 2; fanHouse.position.set(X_END + 3.9, Y_COLL, Z); rig.add(fanHouse);
+  rotor = new THREE.Group(); rotor.position.set(X_END + 3.9, Y_COLL, Z + 0.37); rig.add(rotor);
+  for (let i = 0; i < 6; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.82, 0.04), M.disk); b.position.y = 0.42; const g = new THREE.Group(); g.rotation.z = i * Math.PI / 3; g.add(b); rotor.add(g); }
+  const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.8, 24), new THREE.MeshStandardMaterial({ color: '#2f5f8a', roughness: 0.5 })); motor.rotation.x = Math.PI / 2; motor.position.set(X_END + 3.9, Y_COLL, Z - 0.75); rig.add(motor);
+  tube(V(X_END + 3.9, Y_COLL + 0.9, Z), V(X_END + 3.9, Y_COLL + 4.5, Z), 0.36, M.duct);
+  tail = [V(X_END, Y_COLL, Z), V(X_END + 3.9, Y_COLL, Z), V(X_END + 3.9, Y_COLL + 4.5, Z)];
+  for (const id of IDS) {   // частицы потока: «отсос → ветвь → коллектор → вентилятор → выброс»
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NP * 3), 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: '#63b8db', size: 0.11, transparent: true, opacity: 0.85, depthWrite: false }));
+    rig.add(pts);
+    posts3d[id].pts = pts; posts3d[id].route = pathOf(id); posts3d[id].s = Float32Array.from({ length: NP }, () => Math.random());
+  }
+  const left = XS[IDS[0]] - 2, right = X_END + 5, span = right - left;   // камера и пол — под весь цех
+  controls.target.set((left + right) / 2, 3.2, 0);
+  camera.position.set(controls.target.x - 9 - span * 0.05, 10 + span * 0.12, 13 + span * 0.42);
+  floor.scale.set(Math.max(1, (span + 10) / 40), 1, 1); floor.position.x = controls.target.x;
+  grid.position.x = controls.target.x; grid.scale.set(Math.max(1, (span + 10) / 40), 1, 1);
+}
+build3d(); scene3dReady = true;
+function placeParticles(id, flow, dt) {
+  const o = posts3d[id], { seg, L } = o.route, pos = o.pts.geometry.attributes.position;
+  const vis = Math.round(NP * Math.min(1, flow / 1800)); const speed = 0.4 + 6 * flow / 1500; // условная скорость отображения
+  for (let i = 0; i < NP; i++) {
+    o.s[i] = (o.s[i] + speed * dt / L) % 1; let d = o.s[i] * L;
+    let p = seg[seg.length - 1][1];
+    for (const [a, b, s0, l] of seg) if (d <= s0 + l) { p = a.clone().lerp(b, (d - s0) / l); break; }
+    const j = (i * 7919) % 100 / 100 - 0.5;
+    if (i < vis) pos.setXYZ(i, p.x + j * 0.18, p.y + ((i * 31) % 10 / 10 - 0.5) * 0.18, p.z + ((i * 17) % 10 / 10 - 0.5) * 0.18);
+    else pos.setXYZ(i, 0, -50, 0);
+  }
+  pos.needsUpdate = true;
+}
+function resize() { const w = host.clientWidth, h = host.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(host); resize();
+
+// ---------- тренды (последние 15 минут модельного времени)
+const charts = ['c1', 'c2', 'c3', 'c4'].map(id => document.getElementById(id));
+function drawChart(cv, series, yMax, lines = []) {
+  const dpr = Math.min(devicePixelRatio, 2), w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const pl = 34, pb = 4, pt = 6, W = w - pl - 4, H = h - pt - pb;
+  g.font = '10.5px IBM Plex Mono, monospace'; g.fillStyle = css('--faint'); g.strokeStyle = css('--line'); g.lineWidth = 1;
+  for (let k = 0; k <= 2; k++) { const y = pt + H - H * k / 2; g.beginPath(); g.moveTo(pl, y); g.lineTo(pl + W, y); g.stroke();
+    const v = yMax * k / 2; g.fillText(yMax >= 10 ? String(Math.round(v)) : v.toFixed(2).replace('.', ','), 2, y + 3.5); }
+  for (const [v, c] of lines) { const y = pt + H - H * Math.min(v / yMax, 1); g.setLineDash([4, 4]); g.strokeStyle = c; g.beginPath(); g.moveTo(pl, y); g.lineTo(pl + W, y); g.stroke(); g.setLineDash([]); }
+  for (const s of series) {
+    g.strokeStyle = s.c; g.lineWidth = 2; g.beginPath();
+    s.d.forEach((v, i) => { const x = pl + W * (i + WIN - s.d.length) / (WIN - 1), y = pt + H - H * Math.min(Math.max(v, 0) / yMax, 1); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+  }
+}
+
+// ---------- цикл
+let acc = 0, prev = performance.now(), frame = 0;
+function tick(now) {
+  const dtR = Math.min((now - prev) / 1000, 0.1); prev = now;
+  if (!ui.paused) {
+    acc += dtR * ui.speed; let k = 0;
+    while (acc >= 1 && k < 40) { for (const m of [A, B]) { m.last = m.sim.step(); m.hist.push(m.last); if (m.hist.length > WIN) m.hist.shift(); } acc -= 1; k++; }
+    if (k === 40) acc = 0;
+  }
+  const m = ui.view === 'B' ? B : A, s = m.last;
+  if (s) {
+    for (const id of IDS) {
+      const o = posts3d[id], on = s.on[id];
+      o.disk.rotation.x = (90 - s.alpha[id]) * Math.PI / 180;   // 90° — диск поперёк потока (закрыта)
+      o.arc.intensity = on ? 3.2 + Math.random() * 2.4 : 0; o.spark.visible = on;
+      placeParticles(id, s.Q[id], dtR * Math.min(ui.speed, 10) / 3);
+    }
+    rotor.rotation.z -= dtR * s.n / 60 * 2 * Math.PI * 0.05;
+    scene.fog.density = 0.006 + 0.025 * Math.min(worstRatio(s.C), 1.5);
+    if (frame++ % 6 === 0) updatePanel();
+  }
+  controls.update(); renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+function updatePanel() {
+  const m = ui.view === 'B' ? B : A, s = m.last, t = s.t;
+  const hh = Math.floor(t / 3600), mm = Math.floor(t % 3600 / 60), ss = Math.floor(t % 60);
+  document.getElementById('clock').textContent = [hh, mm, ss].map(v => String(v).padStart(2, '0')).join(':');
+  IDS.forEach((id, i) => {
+    const on = s.on[id], pill = document.getElementById(`pill-${id}`), qs = m.params.posts[i].Qset * 3600;
+    pill.textContent = on ? 'работает' : 'простой'; pill.classList.toggle('on', on);
+    document.getElementById(`tog-${id}`).textContent = (ui.auto ? on : ui.posts[id].on) ? 'Остановить' : 'Включить';
+    document.getElementById(`q-${id}`).textContent = fmt(s.Q[id]);
+    document.getElementById(`o-${id}`).textContent = fmt(100 - s.alpha[id] / 0.9);
+    document.getElementById(`a-${id}`).textContent = fmt(s.alpha[id]) + '°';
+    document.getElementById(`bar-${id}`).style.width = Math.min(100, s.Q[id] / qs * 75) + '%';
+  });
+  document.getElementById('fanN').textContent = fmt(s.n);
+  document.getElementById('fanP').textContent = fmt(s.pFan);
+  document.getElementById('fanW').textContent = fmt(s.P / 1000, 2);
+  document.getElementById('qTot').textContent = fmt(s.Qtot);
+  document.getElementById('lgen').textContent = fmt(s.Lgen);
+  const wr = worstRatio(s.C), mnEl = document.getElementById('mn'); mnEl.textContent = fmt(wr, 2); mnEl.classList.toggle('alert', wr > 1);
+  document.getElementById('sens').textContent = fmt(s.sensor, 2);
+  document.getElementById('heat').textContent = fmt(s.heat, 1);
+  if (document.querySelector('details[open] #lossBody') || frame % 60 === 0) renderLoss(m);
+  document.getElementById('subsBody').innerHTML = report.substances.map((x, k) => { const c = s.C[x.id] ?? 0, r = c / x.pdk;
+    return `<tr class="${k === 0 ? 'lim' : ''}"><td>${E.SUBSTANCES[x.id].name.split(' (')[0]}${x.status === 'П' ? ' <span class="st">[сверить]</span>' : ''}</td><td>${fmt(c, 3)}</td><td>${fmtN(x.pdk)}</td><td class="${r > 1 ? 'alert' : ''}">${fmt(r, 2)}</td></tr>`; }).join('');
+  const rA = A.sim.result(Math.max(A.last.t, 1)), rB = B.sim.result(Math.max(B.last.t, 1));
+  document.getElementById('eA').textContent = fmt(rA.fanKWh + rA.genKWh, 2); document.getElementById('eB').textContent = fmt(rB.fanKWh + rB.genKWh, 2);
+  document.getElementById('hA').textContent = fmt(rA.heatKWh, 1); document.getElementById('hB').textContent = fmt(rB.heatKWh, 1);
+  document.getElementById('mA').textContent = fmt(rA.ratioMax, 2); document.getElementById('mB').textContent = fmt(rB.ratioMax, 2);
+  const sv = rA.heatKWh > 0 ? 1 - rB.heatKWh / rA.heatKWh : 0, se = (rA.fanKWh + rA.genKWh) > 0 ? 1 - (rB.fanKWh + rB.genKWh) / (rA.fanKWh + rA.genKWh) : 0;
+  document.getElementById('saving').textContent = t > 60 ? `Экономия: тепло ${fmt(sv * 100)} %, электроэнергия ${fmt(se * 100)} %` : 'Экономия появится через минуту модельного времени';
+  const h = m.hist;
+  drawChart(charts[0], IDS.map((id, i) => ({ c: COL[id], d: h.map(x => x.on[id] ? x.Q[id] / (m.params.posts[i].Qset * 3600) * 100 : 0) })), 140, [[100, css('--muted')]]);
+  drawChart(charts[1], IDS.map(id => ({ c: COL[id], d: h.map(x => 100 - x.alpha[id] / 0.9) })), 100);
+  drawChart(charts[2], [{ c: css('--std'), d: A.hist.map(x => x.n) }, { c: css('--ok'), d: B.hist.map(x => x.n) }], 1600);
+  document.getElementById('c3l').innerHTML = `<span style="color:var(--std)">стандарт</span> · <span style="color:var(--ok)">предлагаемая</span>`;
+  drawChart(charts[3], [{ c: css('--std'), d: A.hist.map(x => worstRatio(x.C)) }, { c: css('--ok'), d: B.hist.map(x => worstRatio(x.C)) }], 1.2, [[1, css('--crit')], [0.5, css('--muted')]]);
+}
+// старт: прогон первых 20 минут смены, чтобы при открытии были данные
+updatePanel();
+requestAnimationFrame(tick);
+</script>
