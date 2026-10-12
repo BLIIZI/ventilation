@@ -2,176 +2,492 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Пульт диспетчера цеха: тёмная панель, 3D-сцена слева, карточки постов справа, ленты трендов снизу. Единая тёмная тема (как SCADA) — выбрана сознательно. */
+/* Общие токены и верхняя панель для всех страниц сайта. Тёмная тема — сознательный выбор (пульт диспетчера). */
 :root{
-  --bg:#0f1418; --panel:#161d23; --panel-2:#1c252c; --line:#2a353e; --fg:#e6ebee; --muted:#93a1ab; --faint:#5f6e78;
-  --arc:#f2a93b; --air:#63b8db; --ok:#5cc28a; --warn:#e3b341; --crit:#e5625c;
-  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --std:#a48be8;
-  --display:"Golos Text",system-ui,sans-serif; --body:"Golos Text",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --bg:#0d1216; --bg-2:#10171c; --panel:#151d23; --panel-2:#1b252c; --line:#26323b; --line-2:#33424d;
+  --fg:#e7edf0; --muted:#9caab4; --faint:#6b7a85;
+  --arc:#f2a93b; --air:#5bb6e0; --ok:#4fc489; --warn:#e6b84a; --crit:#ec6a63;
+  --std:#a88cf0; --new:#4fc489; --need:#e7edf0;
+  --display:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif; --body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --r:12px; --r-sm:8px; --topbar:56px;
   color-scheme:dark;
 }
-html,body{height:100%}
-body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--body);margin:0}
-.app{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100%;gap:10px;padding:10px 16px;box-sizing:border-box}
-header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
-h1{font:600 17px/1.2 var(--display);margin:0;letter-spacing:.01em;text-wrap:balance}
-h1 small{display:block;font:400 12px var(--body);color:var(--muted);letter-spacing:0}
-.spacer{flex:1}
-.seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:2px}
-.seg button{background:none;border:0;color:var(--muted);font:500 12.5px var(--body);padding:6px 10px;border-radius:6px;cursor:pointer}
-.seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}
-.seg button:focus-visible,.btn:focus-visible{outline:2px solid var(--air);outline-offset:1px}
-.btn{background:var(--panel-2);border:1px solid var(--line);color:var(--fg);font:500 12.5px var(--body);padding:6px 12px;border-radius:7px;cursor:pointer}
-.clock{font:500 13px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
-.label{font:500 11px var(--body);color:var(--faint);text-transform:uppercase;letter-spacing:.07em}
-main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:10px;min-height:0}
-.scene{position:relative;background:#0b1013;border:1px solid var(--line);border-radius:10px;overflow:hidden;min-height:320px}
-.scene canvas{display:block;width:100%;height:100%}
-.legend3d{position:absolute;left:12px;bottom:10px;display:flex;flex-wrap:wrap;gap:6px 14px;font:12px var(--body);color:var(--muted);pointer-events:none}
-.legend3d i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
-.badge{position:absolute;left:12px;top:10px;font:500 12px var(--body);background:rgba(15,20,24,.82);border:1px solid var(--line);padding:5px 9px;border-radius:7px}
-.side{display:flex;flex-direction:column;gap:8px;overflow:auto;min-height:0}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
-.post{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
-.post h3{margin:0;font:600 14px var(--display);display:flex;align-items:center;gap:8px}
-.post h3 i{width:10px;height:10px;border-radius:50%}
-.pill{font:500 11.5px var(--body);padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--body);margin:0;-webkit-font-smoothing:antialiased}
+a{color:var(--air)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--fg);font:500 13px var(--body);padding:7px 13px;border-radius:var(--r-sm);cursor:pointer;text-decoration:none;min-height:34px;transition:border-color .15s,background .15s}
+.btn:hover{border-color:var(--muted)}
+.btn:focus-visible,.iconbtn:focus-visible,.tabs a:focus-visible,.drawer a:focus-visible{outline:2px solid var(--air);outline-offset:2px}
+.btn.primary{background:var(--air);border-color:var(--air);color:#07131a}
+.btn.primary:hover{background:#7cc8eb}
+.btn.ghost{background:transparent}
+.btn.sm{padding:4px 10px;font-size:12.5px;min-height:30px}
+.btn svg{width:16px;height:16px;flex:none}
+.label{font:500 11px var(--body);color:var(--faint);text-transform:uppercase;letter-spacing:.08em}
+
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;display:flex;align-items:center;gap:12px;height:var(--topbar);padding-inline:12px 16px;background:rgba(13,18,22,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.iconbtn{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:10px;border:1px solid transparent;background:transparent;color:var(--fg);cursor:pointer;flex:none}
+.iconbtn:hover{background:var(--panel-2);border-color:var(--line)}
+.iconbtn svg{width:22px;height:22px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--fg);text-decoration:none;min-width:0}
+.brand .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(140deg,#1e3a4a,#173024);display:grid;place-items:center;border:1px solid var(--line-2);flex:none}
+.brand .logo svg{width:18px;height:18px;color:var(--air)}
+.brand b{font:600 15px/1.1 var(--display);white-space:nowrap}
+.brand small{display:block;font:400 11.5px var(--body);color:var(--muted);white-space:nowrap}
+.tabs{display:flex;gap:2px;margin-left:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
+.tabs a{color:var(--muted);text-decoration:none;font:500 13px var(--body);padding:6px 12px;border-radius:7px;white-space:nowrap}
+.tabs a:hover{color:var(--fg)}
+.tabs a[aria-current="page"]{background:var(--panel-2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-2)}
+.topbar .grow{flex:1}
+.topbar .ver{font:12px var(--mono);color:var(--faint);white-space:nowrap}
+.topbar .dl{white-space:nowrap}
+
+.scrim{position:fixed;inset:0;background:rgba(4,7,9,.6);z-index:60;opacity:0;transition:opacity .2s}
+.scrim.show{opacity:1}
+.drawer{position:fixed;top:0;bottom:0;left:0;z-index:61;width:min(340px,88vw);background:var(--bg-2);border-right:1px solid var(--line);padding:calc(env(safe-area-inset-top,0px) + 12px) 14px calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;flex-direction:column;gap:14px;transform:translateX(-100%);transition:transform .22s ease;overflow-y:auto}
+.drawer.show{transform:none}
+.drawer .dh{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.drawer nav{display:flex;flex-direction:column;gap:4px}
+.drawer nav a{display:flex;gap:12px;align-items:flex-start;padding:10px;border-radius:10px;color:var(--fg);text-decoration:none;border:1px solid transparent}
+.drawer nav a:hover{background:var(--panel);border-color:var(--line)}
+.drawer nav a[aria-current="page"]{background:var(--panel);border-color:var(--line-2)}
+.drawer nav a svg{width:20px;height:20px;flex:none;color:var(--air);margin-top:1px}
+.drawer nav a b{display:block;font:600 14px var(--display)}
+.drawer nav a span{display:block;font-size:12.5px;color:var(--muted);line-height:1.35}
+.drawer .foot{margin-top:auto;font-size:12px;color:var(--faint);line-height:1.5}
+.drawer hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
+@media (max-width:900px){ .tabs,.topbar .ver{display:none} }
+@media (max-width:520px){ .topbar .dl span{display:none} .brand small{display:none} }
+@media (prefers-reduced-motion:reduce){ .drawer,.scrim{transition:none} }
+</style>
+<style>
+/* Страница двойника: итоги сравнения → 3D-цех и посты → главные графики → дополнительные → подробности. */
+.app{display:flex;flex-direction:column;gap:14px;padding-block:14px 32px;padding-inline:16px;max-width:1520px;margin:0 auto}
+h1{font:600 clamp(19px,2.3vw,24px)/1.2 var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:600 15px/1.3 var(--display);margin:0;text-wrap:balance}
+.pagehead{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;justify-content:space-between}
+.pagehead p{margin:4px 0 0;color:var(--muted);font-size:13.5px;max-width:78ch}
+.pagehead p b{color:var(--fg);font-weight:500}
+.note{font-size:12.5px;color:var(--muted);margin:0}
+.alert{color:var(--crit)}
+
+/* панель управления моделью */
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px}
+.toolbar .grp{display:flex;align-items:center;gap:8px}
+.toolbar .grow{flex:1}
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:2px}
+.seg button{background:none;border:0;color:var(--muted);font:500 13px var(--body);padding:6px 11px;border-radius:7px;cursor:pointer;white-space:nowrap;min-height:30px}
+.seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-2)}
+.seg button:focus-visible,summary:focus-visible{outline:2px solid var(--air);outline-offset:1px}
+.seg .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:0}
+.clock{font:500 16px var(--mono);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.clockbox{display:flex;align-items:baseline;gap:8px}
+
+/* итоги */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:9px;min-width:0}
+.kpi .k-title{font:500 12.5px/1.35 var(--body);color:var(--muted);min-height:2.7em}
+.cmp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 10px;align-items:center;font-variant-numeric:tabular-nums}
+.cmp span{font-size:12px;color:var(--muted);white-space:nowrap}
+.cmp .bar{height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden}
+.cmp .bar i{display:block;height:100%;width:0;border-radius:3px;transition:width .4s}
+.cmp b{font:500 16px var(--mono);text-align:right;white-space:nowrap}
+.kpi .now{font-size:12px;color:var(--muted)} .kpi .now b{font:500 13px var(--mono);color:var(--fg)}
+.chip{align-self:flex-start;font:600 12px var(--body);padding:3px 10px;border-radius:99px;background:rgba(79,196,137,.13);color:var(--ok);border:1px solid rgba(79,196,137,.35)}
+.chip.neutral{background:var(--panel-2);color:var(--muted);border-color:var(--line)}
+.chip.warn{background:rgba(230,184,74,.13);color:var(--warn);border-color:rgba(230,184,74,.4)}
+.chip.crit{background:rgba(236,106,99,.13);color:var(--crit);border-color:rgba(236,106,99,.4)}
+
+/* сцена и посты */
+main{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:12px;align-items:start}
+.scene{position:relative;background:#0a0f12;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;height:min(64vh,640px);min-height:360px;touch-action:none;user-select:none;-webkit-user-select:none}
+.scene canvas{display:block;width:100%;height:100%;cursor:grab}
+.scene canvas:active{cursor:grabbing}
+.badge{position:absolute;left:12px;top:12px;font:600 12.5px var(--body);background:rgba(13,18,22,.85);border:1px solid var(--line);padding:5px 10px;border-radius:8px;backdrop-filter:blur(6px)}
+.badge i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:0}
+.viewbtns{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:6px}
+.viewbtns .btn{background:rgba(21,29,35,.92);width:40px;height:40px;padding:0;min-height:0;backdrop-filter:blur(6px)}
+.viewbtns .btn svg{width:18px;height:18px}
+.viewbtns .sep{height:4px}
+.hint{position:absolute;left:12px;bottom:12px;right:64px;display:flex;flex-wrap:wrap;gap:4px 14px;font:12px var(--body);color:var(--muted);pointer-events:none;text-shadow:0 1px 2px #000}
+.hint i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.hint .touch{display:none}
+@media (hover:none){ .hint .mouse{display:none} .hint .touch{display:inline} }
+.lbl3d{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font:600 11.5px var(--body);color:var(--fg);background:rgba(13,18,22,.78);border:1px solid var(--line-2);border-radius:6px;padding:2px 7px;white-space:nowrap;pointer-events:none;will-change:transform}
+.lbl3d i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:0}
+.lbl3d.on{border-color:var(--arc)}
+.lbl3d.sys{color:var(--muted);font-weight:500}
+.side{display:flex;flex-direction:column;gap:8px;min-width:0}
+.postsbox{display:flex;flex-direction:column;gap:8px;max-height:min(64vh,640px);overflow-y:auto;padding-right:2px;scrollbar-width:thin}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;min-width:0}
+.sidehead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.post{display:flex;flex-direction:column;gap:8px;border-left:3px solid var(--pc)}
+.post.on{box-shadow:inset 0 0 0 1px rgba(242,169,59,.25)}
+.post .top{display:flex;align-items:center;gap:8px;min-width:0}
+.post h3{margin:0;font:600 14px var(--display);white-space:nowrap}
+.post .proc{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.pill{font:500 11.5px var(--body);padding:2px 9px;border-radius:99px;border:1px solid var(--line-2);color:var(--muted);flex:none}
 .pill.on{color:#1a1206;background:var(--arc);border-color:var(--arc)}
-.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 10px;grid-column:1/-1}
+.flow{display:flex;align-items:baseline;gap:6px;font-variant-numeric:tabular-nums}
+.flow b{font:500 19px var(--mono)}
+.flow span{font-size:12px;color:var(--muted)}
+.flow .dev{margin-left:auto;font:500 12.5px var(--mono)}
+.dev.ok{color:var(--ok)} .dev.warn{color:var(--warn)} .dev.crit{color:var(--crit)}
+.gauge{position:relative;height:7px;background:var(--panel-2);border-radius:4px}
+.gauge > div{position:absolute;left:0;top:0;bottom:0;background:var(--faint);border-radius:4px;width:0;transition:width .25s}
+.gauge > div.ok{background:var(--ok)} .gauge > div.warn{background:var(--warn)} .gauge > div.crit{background:var(--crit)}
+.gauge::after{content:"";position:absolute;left:66.6%;top:-3px;bottom:-3px;width:2px;background:var(--fg);opacity:.8;border-radius:1px}
+.post .meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.post .meta b{color:var(--fg);font:500 12.5px var(--mono)}
+.post .acts{display:flex;flex-wrap:wrap;gap:6px}
+details.cfgbox > summary,details.more > summary{cursor:pointer;color:var(--muted);font-size:13px;list-style:none;display:inline-flex;align-items:center;gap:7px;min-height:28px}
+details.cfgbox > summary::-webkit-details-marker,details.more > summary::-webkit-details-marker{display:none}
+details.cfgbox > summary::before,details.more > summary::before{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .15s;margin-right:2px}
+details[open].cfgbox > summary::before,details[open].more > summary::before{transform:rotate(45deg)}
+details.more > summary{color:var(--fg);font:600 14px var(--display)}
+.cfg{display:grid;grid-template-columns:1fr;gap:6px;margin-top:8px}
+.cfg label{display:grid;grid-template-columns:minmax(0,1fr) 104px;gap:8px;align-items:center;font-size:12.5px;color:var(--muted)}
+.cfg label.wide{grid-template-columns:1fr}
+select,input[type=number]{background:var(--bg);border:1px solid var(--line-2);color:var(--fg);font:13.5px var(--body);border-radius:7px;padding:6px 8px;min-width:0;width:100%;min-height:34px}
+input[type=range]{width:100%;accent-color:var(--air)}
+.src{font-size:12px;color:var(--faint);margin:8px 0}
+
+/* графики */
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 10px;margin:6px 0 10px}
+.sec-h h2{font-size:17px}
+.charts-main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.charts-more{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.chart{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px 10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.chart .head{display:flex;flex-direction:column;gap:5px}
+.chart .q{font-size:12.5px;color:var(--muted);margin:0}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{display:inline-block;width:14px;height:3px;border-radius:2px}
+.legend .dash{width:14px;height:0;border-top:2px dashed var(--need)}
+.chart canvas{width:100%;display:block;touch-action:pan-y}
+.charts-main canvas{height:230px}
+.charts-more canvas{height:170px}
+.read{font-size:13px;color:var(--fg);margin:0;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-variant-numeric:tabular-nums}
+.read b{font-weight:600}
+.tip{position:absolute;pointer-events:none;background:rgba(13,18,22,.95);border:1px solid var(--line-2);border-radius:8px;padding:6px 9px;font:12px/1.45 var(--body);color:var(--fg);white-space:nowrap;z-index:2;font-variant-numeric:tabular-nums;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+.tip .t{color:var(--muted);margin-bottom:2px}
+.tip i{display:inline-block;width:8px;height:3px;border-radius:2px;margin-right:6px;vertical-align:3px}
+
+/* подробности */
+.details-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}
+.kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;margin-top:10px}
 .kv div{display:flex;flex-direction:column}
 .kv b{font:500 15px var(--mono);font-variant-numeric:tabular-nums}
-.kv span{font-size:11px;color:var(--muted)}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;grid-column:1/-1}
-.bar{height:4px;background:var(--panel-2);border-radius:3px;overflow:hidden;grid-column:1/-1}
-.bar > div{height:100%;background:var(--air);width:0}
-.sys .kv{grid-template-columns:repeat(2,minmax(0,1fr))}
-input[type=range]{width:100%;accent-color:var(--air)}
-.cmp{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px 10px;font-variant-numeric:tabular-nums;align-items:baseline}
-.cmp b{font:500 14px var(--mono);text-align:right}
-.cmp .h{font:500 11px var(--body);color:var(--muted);text-align:right}
-.save{grid-column:1/-1;margin-top:6px;font:500 13px var(--body);color:var(--ok)}
-.trends{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-.trend{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px 6px}
-.trend .t{display:flex;justify-content:space-between;gap:8px;font:500 12px var(--body);color:var(--muted)}
-.trend canvas{width:100%;height:120px;display:block}
-.note{font-size:11.5px;color:var(--faint)}
-.alert{color:var(--crit)}
-select,input[type=number]{background:var(--panel-2);border:1px solid var(--line);color:var(--fg);font:13px var(--body);border-radius:6px;padding:4px 6px;min-width:0}
-select{max-width:100%}
-.cfg{display:grid;grid-template-columns:1fr;gap:5px;grid-column:1/-1}
-.cfg label{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
-.cfg label.wide{grid-template-columns:1fr}
-.src{font-size:11px;color:var(--faint);grid-column:1/-1}
-.subs{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
-.subs td,.subs th{padding:3px 4px;border-bottom:1px solid var(--line);text-align:right}
+.kv span{font-size:12px;color:var(--muted)}
+.tbl{overflow-x:auto;margin-top:8px}
+.subs{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+.subs td,.subs th{padding:5px 4px;border-bottom:1px solid var(--line);text-align:right}
 .subs th{color:var(--faint);font-weight:500}
 .subs td:first-child,.subs th:first-child{text-align:left}
 .subs tr.lim td{color:var(--warn)}
 .subs .st{color:var(--faint);font-size:10.5px}
-details summary{cursor:pointer;color:var(--muted);font-size:12px}
-@media (max-width:980px){
-  html,body{height:auto}
-  .app{height:auto}
-  main{grid-template-columns:1fr}
-  .scene{height:58vw;min-height:280px}
-  .trends{grid-template-columns:repeat(2,minmax(0,1fr))}
-}
-@media (max-width:560px){ .trends{grid-template-columns:1fr} .kv{grid-template-columns:repeat(2,minmax(0,1fr))} }
-@media (prefers-reduced-motion:reduce){ *{scroll-behavior:auto} }
+
+/* примечания */
+dialog#notes{background:var(--panel);color:var(--fg);border:1px solid var(--line-2);border-radius:14px;padding:0;width:min(880px,calc(100% - 24px));max-height:calc(100% - 32px);box-shadow:0 20px 60px rgba(0,0,0,.5)}
+dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
+.notes-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:1}
+.notes-b{padding:4px 18px 20px}
+.notes-b h3{font:600 15px var(--display);margin:20px 0 8px}
+.notes-b p,.notes-b li{color:#cfd8de;max-width:74ch;margin:0 0 7px;font-size:14px}
+.notes-b ul{padding-left:18px;margin:0 0 6px}
+.notes-b code{font:12.5px var(--mono);color:var(--fg)}
+
+@media (max-width:1180px){ .kpis{grid-template-columns:repeat(2,minmax(0,1fr))} .details-grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:980px){ main{grid-template-columns:1fr} .scene{height:66vw;max-height:560px;min-height:300px} .postsbox{max-height:none;overflow:visible}
+  .postsbox{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))} .charts-main{grid-template-columns:1fr} }
+@media (max-width:700px){ .charts-more,.details-grid{grid-template-columns:1fr} .toolbar .grow{display:none} .toolbar{gap:8px} .toolbar .grp.view{width:100%} .toolbar .grp.view .seg{flex:1} .toolbar .grp.view .seg button{flex:1}
+  .pause-t{display:none} }
+@media (max-width:560px){ .app{gap:12px} .kpis{gap:8px} .kpi{padding:10px 11px} .kpi .k-title{min-height:0} .cmp b{font-size:14px} .scene{height:92vw;min-height:280px} .charts-main canvas{height:200px} .postsbox{grid-template-columns:1fr} .pagehead .btn{width:100%} }
+@media (max-width:560px){ .cmp{grid-template-columns:minmax(0,1fr) auto;gap:3px 8px} .cmp .bar{grid-column:1/-1;margin-bottom:4px}
+  .cmp>:nth-child(1){order:1} .cmp>:nth-child(3){order:2} .cmp>:nth-child(2){order:3} .cmp>:nth-child(4){order:4} .cmp>:nth-child(6){order:5} .cmp>:nth-child(5){order:6}
+  .hint .mouse{display:none} .hint .touch{display:inline} .hint{font-size:11.5px} }
+@media (max-width:360px){ .kpis{grid-template-columns:1fr} }
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
 </style>
 
+<header class="topbar">
+  <button class="iconbtn" id="menuBtn" aria-label="Меню" aria-expanded="false" aria-controls="drawer">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="2"/><path d="M12 10c0-4 1-6 4-6 2 0 3 2 2 4l-4 3M14 12c4 0 6 1 6 4 0 2-2 3-4 2l-3-4M12 14c0 4-1 6-4 6-2 0-3-2-2-4l4-3M10 12c-4 0-6-1-6-4 0-2 2-3 4-2l3 4"/></svg></span>
+    <span><b>Вытяжка сварочного цеха</b><small>цифровой двойник · МГТУ «СТАНКИН»</small></span></a>
+  <nav class="tabs" aria-label="Разделы">
+    <a href="index.html" aria-current="page">Двойник</a>
+    <a href="calc.html" >Расчёт (Excel)</a>
+    <a href="example.html" >Пример расчёта</a>
+  </nav>
+  <span class="grow"></span>
+  <span class="ver" title="Версия модели и дата сборки сайта">модель v1.7 · сборка 12.10.2026 17:08</span>
+  <a class="btn sm ghost dl" href="https://bliizi.github.io/ventilation/model_raschet.xlsx" title="Скачать книгу Excel со всеми листами и формулами">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Excel</span></a>
+</header>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" aria-label="Меню" hidden>
+  <div class="dh"><span class="label">Разделы сайта</span>
+    <button class="iconbtn" id="menuClose" aria-label="Закрыть меню"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <nav>
+    <a href="index.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>
+      <div><b>Цифровой двойник</b><span>3D-цех, живое сравнение двух систем управления на одной смене</span></div></a>
+    <a href="calc.html" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>
+      <div><b>Расчёт (Excel)</b><span>Все листы книги с формулами: нажмите на ячейку — увидите формулу</span></div></a>
+    <a href="example.html" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>
+      <div><b>Пример расчёта</b><span>3 поста, все формулы с подстановкой чисел и пояснениями</span></div></a>
+    <a href="index.html#notes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
+      <div><b>Примечания</b><span>Как читать итоги и графики, нормы, допущения</span></div></a>
+    <hr>
+    <a href="https://bliizi.github.io/ventilation/model_raschet.xlsx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+      <div><b>Скачать Excel</b><span>Модель_расчёт_v2.xlsx — формулы живые, можно менять исходные</span></div></a>
+  </nav>
+  <div class="foot">модель v1.7 · сборка 12.10.2026 17:08<br>Сайт, Excel и пример расчёта собираются из одного расчётного ядра — числа везде одинаковые.</div>
+</aside>
+<script>
+(() => {
+  const btn = document.getElementById('menuBtn'), dr = document.getElementById('drawer'), sc = document.getElementById('scrim'), cl = document.getElementById('menuClose');
+  let open = false;
+  function set(v) {
+    open = v; btn.setAttribute('aria-expanded', String(v));
+    if (v) { dr.hidden = false; sc.hidden = false; requestAnimationFrame(() => { dr.classList.add('show'); sc.classList.add('show'); }); cl.focus(); }
+    else { dr.classList.remove('show'); sc.classList.remove('show'); setTimeout(() => { if (!open) { dr.hidden = true; sc.hidden = true; } }, 230); btn.focus(); }
+  }
+  btn.onclick = () => set(!open); cl.onclick = () => set(false); sc.onclick = () => set(false);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && open) set(false); });
+  dr.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { if (a.getAttribute('href').startsWith('index.html#') && location.pathname.endsWith('index.html') || a.getAttribute('href') === '#') set(false); }));
+})();
+</script>
+
+
 <div class="app">
-  <header>
-    <h1>Цифровой двойник вытяжки<small>сварочные посты (от 1 до 8) · вид сварки и материал на каждом — из Методики 1997 · местная вытяжка + общеобменная</small></h1>
-    <div class="spacer"></div>
-    <div><div class="label">Показать в 3D</div>
+  <div class="pagehead">
+    <div>
+      <h1>Цифровой двойник вытяжки сварочного цеха</h1>
+      <p>Две системы управления работают на <b>одной и той же смене</b> с одинаковыми постами, сетью и вентилятором. Сравниваем, сколько уходит электроэнергии и тепла и держится ли воздух в норме.</p>
+    </div>
+    <button class="btn primary" id="notesBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>Примечания</button>
+  </div>
+
+  <div class="toolbar" role="toolbar" aria-label="Управление моделью">
+    <div class="grp view"><span class="label">3D</span>
       <div class="seg" id="viewSeg">
-        <button id="vB" aria-pressed="true" data-v="B">Предлагаемая система</button>
-        <button id="vA" aria-pressed="false" data-v="A">Промышленный стандарт</button>
+        <button id="vB" aria-pressed="true" data-v="B"><i class="dot" style="background:var(--new)"></i>Предлагаемая</button>
+        <button id="vA" aria-pressed="false" data-v="A"><i class="dot" style="background:var(--std)"></i>Стандарт</button>
       </div></div>
-    <div><div class="label">Скорость времени</div>
+    <div class="grp"><span class="label">Скорость</span>
       <div class="seg" id="speedSeg">
         <button aria-pressed="false" data-s="1">×1</button><button aria-pressed="true" data-s="10">×10</button>
         <button aria-pressed="false" data-s="60">×60</button><button aria-pressed="false" data-s="300">×300</button>
       </div></div>
-    <div><div class="label">Время смены</div><div class="clock" id="clock">00:00:00</div></div>
-    <button class="btn" id="pauseBtn">Пауза</button>
-    <button class="btn" id="resetBtn">Сначала</button>
-  </header>
+    <span class="grow"></span>
+    <div class="grp">
+      <div class="clockbox"><span class="label">Смена</span><span class="clock" id="clock">00:00:00</span></div>
+      <button class="btn sm" id="pauseBtn" aria-label="Пауза"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><span class="pause-t">Пауза</span></button>
+      <button class="btn sm" id="resetBtn" aria-label="Начать смену сначала"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5"/></svg><span class="pause-t">Сначала</span></button>
+    </div>
+  </div>
+
+  <section class="kpis" aria-label="Итоги с начала смены">
+    <div class="kpi">
+      <div class="k-title">Электроэнергия вентиляторов с начала смены, кВт·ч</div>
+      <div class="cmp"><span>Стандарт</span><div class="bar"><i id="beA" style="background:var(--std)"></i></div><b id="eA">0</b>
+        <span>Предлагаемая</span><div class="bar"><i id="beB" style="background:var(--new)"></i></div><b id="eB">0</b></div>
+      <div class="chip neutral" id="saveE">—</div>
+    </div>
+    <div class="kpi">
+      <div class="k-title">Тепло на подогрев наружного воздуха взамен удалённого, кВт·ч</div>
+      <div class="cmp"><span>Стандарт</span><div class="bar"><i id="bhA" style="background:var(--std)"></i></div><b id="hA">0</b>
+        <span>Предлагаемая</span><div class="bar"><i id="bhB" style="background:var(--new)"></i></div><b id="hB">0</b></div>
+      <div class="chip neutral" id="saveH">—</div>
+    </div>
+    <div class="kpi">
+      <div class="k-title">Доля времени, когда пост тянет лишний воздух (&gt; 110 % нормы)</div>
+      <div class="cmp"><span>Стандарт</span><div class="bar"><i id="boA" style="background:var(--std)"></i></div><b id="oA">0</b>
+        <span>Предлагаемая</span><div class="bar"><i id="boB" style="background:var(--new)"></i></div><b id="oB">0</b></div>
+      <div class="chip neutral" id="overChip">—</div>
+    </div>
+    <div class="kpi">
+      <div class="k-title">Загрязнение воздуха в цехе: максимум за смену, доля ПДК (1 = норма)</div>
+      <div class="cmp"><span>Стандарт</span><div class="bar"><i id="bmA" style="background:var(--std)"></i></div><b id="mA">0</b>
+        <span>Предлагаемая</span><div class="bar"><i id="bmB" style="background:var(--new)"></i></div><b id="mB">0</b></div>
+      <div class="now">Сейчас в цехе: <b id="mn">—</b></div>
+      <div class="chip neutral" id="airChip">—</div>
+    </div>
+  </section>
+  <p class="note" id="saving" hidden>—</p>
 
   <main>
     <div class="scene" id="scene">
-      <div class="badge" id="badge">Предлагаемая система</div>
-      <div class="legend3d">
-        <span><i style="background:var(--arc)"></i>сварочная дуга</span>
-        <span><i style="background:var(--air)"></i>поток воздуха (плотность ∝ расходу)</span>
-        <span>диск в разрезе воздуховода — заслонка</span>
+      <div class="badge" id="badge"><i style="background:var(--new)"></i>Предлагаемая система</div>
+      <div class="viewbtns" role="group" aria-label="Вид 3D">
+        <button class="btn" id="zIn" title="Приблизить" aria-label="Приблизить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button class="btn" id="zOut" title="Отдалить" aria-label="Отдалить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+        <span class="sep"></span>
+        <button class="btn" id="vAll" title="Весь цех" aria-label="Показать весь цех"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        <button class="btn" id="vTop" title="Вид сверху" aria-label="Вид сверху"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/></svg></button>
+      </div>
+      <div class="hint">
+        <span><i style="background:var(--arc)"></i>горит дуга</span>
+        <span><i style="background:var(--air)"></i>поток воздуха</span>
+        <span class="mouse">колесо — зум к курсору · двойной щелчок — приблизить точку · правая кнопка — сдвиг</span>
+        <span class="touch">два пальца — зум и сдвиг · двойное касание — приблизить</span>
       </div>
     </div>
     <aside class="side">
       <div class="card">
-        <div class="row" style="justify-content:space-between">
-          <span class="label">Режим работы постов</span>
+        <div class="sidehead">
+          <h2>Посты</h2>
           <div class="seg" id="autoSeg"><button aria-pressed="true" data-a="1">Смена (авто)</button><button aria-pressed="false" data-a="0">Вручную</button></div>
         </div>
+        <p class="note" style="margin-top:6px">Полоса — расход через пост сейчас, белая метка — норма. Зелёная — в норме, жёлтая — лишний воздух, красная — недобор.</p>
       </div>
-      <div class="card">
-        <div class="label">С начала смены</div>
-        <div class="cmp" style="margin-top:6px">
-          <span></span><span class="h">Пром. стандарт</span><span class="h">Предлагаемая</span>
-          <span>Вентиляторы, кВт·ч</span><b id="eA">0</b><b id="eB">0</b>
-          <span>Нагрев притока, кВт·ч</span><b id="hA">0</b><b id="hB">0</b>
-          <span>Худшее Σ C/ПДК, макс.</span><b id="mA">0</b><b id="mB">0</b>
-          <div class="save" id="saving">—</div>
-        </div>
-        <p class="note">Полная смена на скорости ×300 — около полутора минут. Пром. стандарт: заслонки «открыто/закрыто», постоянное разрежение, общеобменная — проектный расход по всем веществам. Предлагаемая: регулирование расхода каждого поста, сброс давления, общеобменная по выделениям процессов + датчики аэрозоля, NO₂ и CO (цель Σ C/ПДК ≤ 0,5).</p>
-      </div>
-      <div class="card cfg" id="roomCard">
-        <div class="label">Помещение (цех)</div>
-        <label>Длина, м<input type="number" id="roomL" min="3" max="500" step="1" value="48"></label>
-        <label>Ширина, м<input type="number" id="roomW" min="3" max="300" step="1" value="24"></label>
-        <label>Высота, м<input type="number" id="roomH" min="2.5" max="40" step="0.1" value="14.4"></label>
-        <p class="note" id="roomNote"></p>
-      </div>
-      <div id="posts"></div>
-      <div class="card sys">
-        <div class="label">Вентилятор и фильтр</div>
-        <div class="kv" style="margin-top:6px">
-          <div><b id="fanN">—</b><span>частота, об/мин</span></div>
-          <div><b id="fanP">—</b><span>давление, Па</span></div>
-          <div><b id="fanW">—</b><span>мощность, кВт</span></div>
-          <div><b id="qTot">—</b><span>местные отсосы, м³/ч</span></div>
-        </div>
-        <label class="label" for="foul" style="display:block;margin-top:8px">Загрязнение фильтра: <span id="foulV">×1,0</span></label>
-        <input type="range" id="foul" min="1" max="3" step="0.1" value="1">
-        <details style="margin-top:8px"><summary>Потери давления по элементам (Идельчик)</summary>
-          <label class="label" style="display:block;margin:6px 0 4px">Путь воздуха от поста: <select id="lossPost"></select></label>
-          <table class="subs"><thead><tr><th>Элемент</th><th>ζ / λl/d</th><th>Δp, Па</th></tr></thead><tbody id="lossBody"></tbody></table>
-          <p class="note">Сумма по пути = давлению вентилятора (проверяется автотестом). Тройник: ζ зависит от отношения расходов, может быть &lt; 0 (эжекция).</p>
-        </details>
-      </div>
-      <div class="card sys">
-        <div class="label">Воздух в цехе</div>
-        <div class="kv" style="margin-top:6px">
-          <div><b id="lgen">—</b><span>общеобменная, м³/ч</span></div>
-          <div><b id="mn">—</b><span>худшее Σ C/ПДК</span></div>
-          <div><b id="sens">—</b><span>датчик аэрозоля, мг/м³</span></div>
-          <div><b id="heat">—</b><span>нагрев притока, кВт</span></div>
-        </div>
-        <table class="subs" style="margin-top:8px"><thead><tr><th>Вещество</th><th>C, мг/м³</th><th>ПДК</th><th>C/ПДК</th></tr></thead><tbody id="subsBody"></tbody></table>
-        <p class="note" id="designNote"></p>
-      </div>
-      <p class="note">Удельные выделения — ГОСТ Р 56164-2014 (= Методика 1997, перечень Минприроды, п. 18); ПДК — СанПиН 1.2.3685-21 (ред. 2025); воздухообмен — СП 60.13330.2020 (ред. с изм. 1–6); местные сопротивления — Идельчик, 1992; нормы отсоса — ГОСТ 12.3.003-86. Отсосы — стационарные. Сеть и вентилятор подбираются автоматически под выбранные посты (геометрия условная). 88 автотестов.</p>
+      <div id="posts" class="postsbox"></div>
     </aside>
   </main>
 
-  <section class="trends">
-    <div class="trend"><div class="t"><span>Расход постов, доля уставки</span><span>— 100 %</span></div><canvas id="c1"></canvas></div>
-    <div class="trend"><div class="t"><span>Открытие заслонок, %</span><span>последние 15 мин</span></div><canvas id="c2"></canvas></div>
-    <div class="trend"><div class="t"><span>Вентилятор, об/мин</span><span id="c3l"></span></div><canvas id="c3"></canvas></div>
-    <div class="trend"><div class="t"><span>Худшее Σ C/ПДК в цехе</span><span>— ПДК (1) и цель (0,5)</span></div><canvas id="c4"></canvas></div>
+  <section aria-label="Главные графики">
+    <div class="sec-h"><h2>Главное: воздух и электроэнергия</h2><span class="note">последние 15 минут модельного времени · наведите на график, чтобы увидеть значения</span></div>
+    <div class="charts-main">
+      <div class="chart">
+        <div class="head"><h2>Сколько воздуха нужно и сколько тянут отсосы, м³/ч</h2>
+          <p class="q">Чем ближе линия к пунктиру, тем меньше лишнего воздуха — и меньше электроэнергии и тепла.</p>
+          <div class="legend"><span><i class="dash"></i>нужно по норме</span><span><i class="sw" style="background:var(--std)"></i>стандарт</span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span></div></div>
+        <canvas id="c1" aria-label="График расхода воздуха"></canvas>
+        <p class="read" id="r1">—</p>
+      </div>
+      <div class="chart">
+        <div class="head"><h2>Мощность вентилятора местной вытяжки, кВт</h2>
+          <p class="q">Закрашенная полоса между линиями — сэкономленная электроэнергия.</p>
+          <div class="legend"><span><i class="sw" style="background:var(--std)"></i>стандарт</span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span></div></div>
+        <canvas id="c2" aria-label="График мощности вентилятора"></canvas>
+        <p class="read" id="r2">—</p>
+      </div>
+    </div>
+    <details class="more" id="moreCharts">
+      <summary>Дополнительные графики: загрязнение, посты, заслонки, обороты</summary>
+      <div class="charts-more">
+        <div class="chart"><div class="head"><h2>Загрязнение воздуха в цехе, доля ПДК</h2>
+          <p class="q">Меньше 1 — в норме. Цех инерционный: концентрация меняется за десятки минут.</p>
+          <div class="legend"><span><i class="sw" style="background:var(--std)"></i>стандарт</span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span><span style="color:var(--crit)">— ПДК</span><span>- - цель 0,5</span></div></div>
+          <canvas id="c3"></canvas></div>
+        <div class="chart"><div class="head"><h2>Расход каждого поста, % нормы</h2>
+          <p class="q">100 % — ровно норма. Простаивающий пост — ноль. Система, выбранная для 3D.</p>
+          <div class="legend" id="lgPosts"></div></div><canvas id="c4"></canvas></div>
+        <div class="chart"><div class="head"><h2>Открытие заслонок, %</h2>
+          <p class="q">100 % — открыта полностью (0°), 0 % — закрыта (90°). Система, выбранная для 3D.</p>
+          <div class="legend" id="lgPosts2"></div></div><canvas id="c5"></canvas></div>
+        <div class="chart"><div class="head"><h2>Обороты вентилятора, об/мин</h2>
+          <p class="q">Мощность растёт примерно как куб оборотов — небольшое снижение даёт заметную экономию.</p>
+          <div class="legend"><span><i class="sw" style="background:var(--std)"></i>стандарт</span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span></div></div>
+          <canvas id="c6"></canvas></div>
+      </div>
+    </details>
+  </section>
+
+  <section aria-label="Подробности">
+    <div class="sec-h"><h2>Подробности расчёта</h2><a class="note" href="calc.html">все формулы — на странице «Расчёт» →</a></div>
+    <div class="details-grid">
+      <div class="card">
+        <details class="more" id="lossDetails"><summary>Вентилятор, фильтр и потери давления</summary>
+          <div class="kv">
+            <div><b id="fanN">—</b><span>обороты, об/мин</span></div>
+            <div><b id="fanP">—</b><span>давление, Па</span></div>
+            <div><b id="fanW">—</b><span>мощность из сети, кВт</span></div>
+            <div><b id="qTot">—</b><span>расход местных отсосов, м³/ч</span></div>
+          </div>
+          <label class="label" for="foul" style="display:block;margin-top:12px">Загрязнение фильтра: <span id="foulV">×1,0</span></label>
+          <input type="range" id="foul" min="1" max="3" step="0.1" value="1">
+          <label class="label" style="display:flex;align-items:center;gap:8px;margin:12px 0 4px">Путь воздуха от <select id="lossPost" style="width:auto"></select></label>
+          <div class="tbl"><table class="subs"><thead><tr><th>Элемент</th><th>ζ</th><th>Δp, Па</th></tr></thead><tbody id="lossBody"></tbody></table></div>
+          <p class="note" style="margin-top:6px">Сумма потерь по пути = давлению вентилятора (проверяется автотестом).</p>
+        </details>
+      </div>
+      <div class="card">
+        <details class="more" id="airDetails"><summary>Воздух в цехе и общеобменная</summary>
+          <div class="kv">
+            <div><b id="lgen">—</b><span>общеобменная, м³/ч</span></div>
+            <div><b id="sens">—</b><span>датчик аэрозоля, мг/м³</span></div>
+            <div><b id="heat">—</b><span>нагрев притока, кВт</span></div>
+          </div>
+          <div class="tbl"><table class="subs"><thead><tr><th>Вещество</th><th>C, мг/м³</th><th>ПДК</th><th>C/ПДК</th></tr></thead><tbody id="subsBody"></tbody></table></div>
+          <p class="note" id="designNote" style="margin-top:8px"></p>
+        </details>
+      </div>
+      <div class="card">
+        <details class="more" id="roomDetails"><summary>Размеры цеха</summary>
+          <div class="cfg">
+            <label>Длина, м<input type="number" id="roomL" min="3" max="500" step="1" value="48" inputmode="decimal"></label>
+            <label>Ширина, м<input type="number" id="roomW" min="3" max="300" step="1" value="24" inputmode="decimal"></label>
+            <label>Высота, м<input type="number" id="roomH" min="2.5" max="40" step="0.1" value="14.4" inputmode="decimal"></label>
+          </div>
+          <p class="note" id="roomNote" style="margin-top:8px"></p>
+        </details>
+      </div>
+    </div>
   </section>
 </div>
+
+<dialog id="notes" aria-labelledby="notesTitle">
+  <div class="notes-h"><h2 id="notesTitle">Примечания</h2><button class="btn sm" id="notesClose">Закрыть</button></div>
+  <div class="notes-b">
+    <h3>Что сравнивается</h3>
+    <p>Обе системы работают на одной и той же смене: одинаковые посты, одинаковое расписание сварки, одна сеть воздуховодов и один вентилятор.</p>
+    <ul>
+      <li><b>Промышленный стандарт</b> — так работают серийные системы (Plymovent, Nederman и др.): пост начал варить — заслонка открывается полностью, закончил — закрывается. Частотник держит постоянное разрежение в коллекторе. Общеобменная вентиляция всю смену работает на проектном расходе.</li>
+      <li><b>Предлагаемая система</b> — каждый работающий пост держит ровно норму расхода: датчик расхода и ПИ-регулятор подкручивают заслонку. Вентилятор снижает обороты, пока заслонка самого «трудного» поста не откроется полностью (сброс давления). При включении поста заслонка и вентилятор сразу встают на заранее рассчитанные значения (упреждение по сигналу тока). Общеобменная идёт за нагрузкой: по выделениям работающих процессов с коррекцией по датчикам аэрозоля, NO₂ и CO (цель — не выше 0,5 ПДК).</li>
+    </ul>
+    <h3>Как читать итоги вверху</h3>
+    <ul>
+      <li><b>Электроэнергия</b> — вентилятор местной вытяжки и вентилятор общеобменной вместе, с учётом КПД двигателя и частотника.</li>
+      <li><b>Тепло</b> — сколько тепла уходит на подогрев наружного воздуха, который заменяет удалённый. Δt = 18 − (−1,7) °C — средняя температура отопительного периода в Москве (СП 131.13330.2025, табл. 5.1).</li>
+      <li><b>Лишний воздух</b> — доля времени работы постов, когда через пост идёт больше 110 % нормы. Лишний воздух — это лишняя электроэнергия и лишнее тепло.</li>
+      <li><b>Загрязнение</b> — сумма C/ПДК по веществам однонаправленного действия (СП 60.13330.2020, п. 7.4.3); показана худшая группа. Меньше 1 — в норме.</li>
+      <li>Полосы в плитках сравнивают две системы между собой: длиннее полоса — больше значение.</li>
+    </ul>
+    <h3>Как читать графики</h3>
+    <ul>
+      <li><b>Сколько воздуха нужно и сколько тянут.</b> Пунктир — норма отсоса, умноженная на число работающих постов. У стандарта линия уходит выше пунктира, когда часть постов простаивает: открытые заслонки оставшихся постов тянут лишнее.</li>
+      <li><b>Мощность вентилятора.</b> Мгновенная электрическая мощность вентилятора местной вытяжки. Закрашенная полоса между линиями — экономия.</li>
+      <li><b>Загрязнение воздуха.</b> Цех инерционный: концентрация меняется за десятки минут (постоянная времени V/L, см. «Размеры цеха»).</li>
+      <li><b>Расход каждого поста</b> — в процентах от нормы; 100 % — ровно норма. Простаивающий пост показан нулём.</li>
+      <li><b>Открытие заслонок</b> — 100 % — открыта полностью (0°), 0 % — закрыта (90°).</li>
+      <li>Под главными графиками — строка «Сейчас»: те же значения в числах на текущий момент.</li>
+    </ul>
+    <h3>Управление 3D</h3>
+    <ul>
+      <li>Мышь: колесо — зум к точке под курсором, левая кнопка — поворот, правая — сдвиг, двойной щелчок — плавно приблизить точку.</li>
+      <li>Телефон и планшет: один палец — поворот, два пальца — зум и сдвиг, двойное касание — приблизить.</li>
+      <li>Кнопки справа: «+» и «−», «весь цех», «вид сверху». В карточке поста кнопка «Показать в 3D» подлетает к посту.</li>
+    </ul>
+    <h3>Как устроена модель</h3>
+    <ul>
+      <li>Выделения: ток → расход проволоки (α_р = 9,05 + 3,1·10⁻⁴·I·l/d²) → удельные выделения веществ (ГОСТ Р 56164-2014 = Методика 1997). Отсос ловит долю η (по умолчанию 0,8), остальное уходит в цех.</li>
+      <li>Воздухообмен: СП 60.13330.2020, прил. Г, ф. Г.2 — весь удаляемый воздух L, местные отсосы входят в него; общеобменная = L − L_мо.</li>
+      <li>Сеть: Δp = ζ·ρw²/2 на каждом элементе. Трение — Альтшуль; отводы, тройники, переходы, вход в зонт, заслонка — Идельчик, 1992 (диагр. 6-1, 7-4, 5-2, 3-6, 9-17). Расходы находятся решением системы уравнений сети на каждом шаге.</li>
+      <li>Вентилятор: характеристика при 1500 об/мин и законы подобия (ГОСТ 10921-2017); двигатель IE3 (ГОСТ IEC 60034-30-1-2016), КПД при неполной загрузке — по разделению потерь.</li>
+      <li>Воздуховоды подбираются из стандартного ряда (ВСН 353-86) на скорость 8–14 м/с.</li>
+      <li>Цех: V·dC/dt = m − L·(C − q_пр), шаг расчёта 1 с.</li>
+    </ul>
+    <h3>Нормы и источники</h3>
+    <ul>
+      <li>Норма отсоса сварочного стола — не менее 1500 м³/ч (ГОСТ 12.3.003-86, п. 2.11.1).</li>
+      <li>ПДК — СанПиН 1.2.3685-21 (ред. от 24.12.2025), табл. 2.1.</li>
+      <li>Воздухообмен — <a href="https://base.garant.ru/400536193/" target="_blank" rel="noopener">СП 60.13330.2020</a> с изменениями № 1–6.</li>
+      <li>Микроклимат — ГОСТ 12.1.005-88, табл. 1 (категория работ IIб).</li>
+      <li>Полный список с ссылками — лист «Источники» на странице <a href="calc.html">«Расчёт»</a>.</li>
+    </ul>
+    <h3>Допущения</h3>
+    <ul>
+      <li>Захват отсоса η = 0,8 — значение Методики при отсутствии данных; уточняется CFD-расчётом и замером.</li>
+      <li>Характеристики вентилятора, фильтра и частотника — демонстрационные, до паспортов оборудования. Геометрия сети условная.</li>
+      <li>Расписание сварки условное: швы 1–5 мин, паузы 1–7 мин, обед.</li>
+    </ul>
+    <p class="note" style="margin-top:14px">Расчётное ядро проверено 89 автотестами, независимым расчётом на Python и ручным расчётом в Excel (лист «8 Сверка»).</p>
+  </div>
+</dialog>
 
 <script>// Расчётное ядро vent-sim (собрано из src/engine/*.ts). Не редактировать вручную.
 (function(){
@@ -1628,13 +1944,14 @@ window.Engine = { RHO_AIR, NU_AIR, C_AIR, KE_STEEL, W_MIN_WELDING, Q_POST_MIN_M3
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const E = window.Engine;
+const $ = id => document.getElementById(id);
 let IDS = [];
-const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#c84fd0', '#e3b341', '#4cc3c9', '#e5625c', '#9aa86b'];
+const PALETTE = ['#4ea1ff', '#ff8a4c', '#e879f9', '#f2c94c', '#4cd3d9', '#ff6b6b', '#a3e635', '#fca5a5'];
 const COL = {};
 const MAX_POSTS = 8;
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-// ---------- состояние интерфейса
+// ---------- состояние
 const WIN = 900;
 const fmt = (v, d = 0) => (Number.isFinite(v) ? v : 0).toLocaleString('ru-RU', { minimumFractionDigits: d, maximumFractionDigits: d });
 const setPressed = (seg, btn) => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
@@ -1643,8 +1960,7 @@ const cfg = [
   { id: 'post2', process: 'mma', material: 'uoni1345', params: { B: 1.5 }, hood: 'table', eta: 0.8 },
   { id: 'post3', process: 'saw', material: 'an348a', params: { B: 6 }, hood: 'table', eta: 0.8 },
 ];
-const ui = { auto: true, view: 'B', speed: 10, paused: false, posts: {}, fouling: 1 };
-/** номера постов идут подряд; цвет — по номеру */
+const ui = { auto: true, view: 'B', speed: 10, paused: false, posts: {}, fouling: 1, openCfg: new Set() };
 function syncIds() {
   IDS = cfg.map((c, i) => (c.id = `post${i + 1}`));
   IDS.forEach((id, i) => { COL[id] = PALETTE[i % PALETTE.length]; if (!ui.posts[id]) ui.posts[id] = { on: false }; });
@@ -1667,17 +1983,15 @@ function build(kind) {
 const worstRatio = C => groups.reduce((w, mem) => Math.max(w, mem.reduce((a, s) => a + C[s.name] / s.pdk, 0)), 0);
 let A, B;
 function reset() { A = build('A'); B = build('B'); shift = E.makeSchedule(IDS, 8 * 3600, 7); applyFouling(); renderDesign(); warm(); }
-/** число постов изменилось: карточки, расчёт и 3D-сцена собираются заново */
 let scene3dReady = false;
-function changeLayout() { renderCards(); reset(); if (scene3dReady) build3d(); }
+function changeLayout() { renderCards(); reset(); if (scene3dReady) { build3d(); fitAll(false); } }
 function applyFouling() { for (const m of [A, B]) m.net.common[0].spec.fouling = ui.fouling; }
 function warm() { for (let i = 0; i < 1200; i++) for (const m of [A, B]) { m.last = m.sim.step(); m.hist.push(m.last); if (m.hist.length > WIN) m.hist.shift(); } }
 
-// ---------- карточки постов: выбор процесса, материала, параметров, отсоса
-const postsEl = document.getElementById('posts');
-// размеры цеха: воздухообмен по вредным веществам от них НЕ зависит (СП 60, прил. Г, ф. Г.2); объём определяет скорость роста концентрации
-function roomV() { const v = id => Math.max(0.1, +document.getElementById(id).value || 0); return v('roomL') * v('roomW') * v('roomH'); }
-['roomL', 'roomW', 'roomH'].forEach(id => document.getElementById(id).onchange = () => reset());
+// ---------- карточки постов
+const postsEl = $('posts');
+function roomV() { const v = id => Math.max(0.1, +$(id).value || 0); return v('roomL') * v('roomW') * v('roomH'); }
+['roomL', 'roomW', 'roomH'].forEach(id => $(id).onchange = () => reset());
 const PROCS = E.activeProcesses(), procGroups = [...new Set(PROCS.map(p => p.group))];
 const fmtN = v => String(v).replace('.', ',');
 function cardHtml(id, i) {
@@ -1686,41 +2000,42 @@ function cardHtml(id, i) {
   const matOpts = pr.materials.map(m => `<option value="${m.id}" ${m.id === c.material ? 'selected' : ''}>${m.name}${m.status === 'П' ? ' [сверить]' : m.status === 'ввести' ? ' [ввести показатели]' : ''}</option>`).join('');
   const hoodOpts = pr.hoods.map(h => `<option value="${h.id}" ${h.id === c.hood ? 'selected' : ''}>${h.label}</option>`).join('');
   const hoodNow = (pr.hoods.find(h => h.id === c.hood) ?? pr.hoods[0]).id;
-  const params = [...pr.params, ...(hoodNow === 'user' ? [E.P_Q] : [])].map(d => `<label>${d.label}, ${d.unit}<input type="number" data-p="${d.id}" min="${d.min}" max="${d.max}" step="${d.step}" value="${c.params?.[d.id] ?? d.def}"></label>`).join('');
+  const params = [...pr.params, ...(hoodNow === 'user' ? [E.P_Q] : [])].map(d => `<label>${d.label}, ${d.unit}<input type="number" inputmode="decimal" data-p="${d.id}" min="${d.min}" max="${d.max}" step="${d.step}" value="${c.params?.[d.id] ?? d.def}"></label>`).join('');
   const mat = pr.materials.find(m => m.id === c.material) ?? pr.materials[0];
-  const facts = mat.status === 'ввести' ? Object.keys(mat.factors).map(k => `<label>${E.SUBSTANCES[k].name}, ${pr.unit}<input type="number" data-f="${k}" min="0" step="0.001" value="${c.factorsOverride?.[k] ?? 0}"></label>`).join('') : '';
+  const facts = mat.status === 'ввести' ? Object.keys(mat.factors).map(k => `<label>${E.SUBSTANCES[k].name}, ${pr.unit}<input type="number" inputmode="decimal" data-f="${k}" min="0" step="0.001" value="${c.factorsOverride?.[k] ?? 0}"></label>`).join('') : '';
   return `
-  <div class="card post" id="card-${id}">
-    <h3><i style="background:${COL[id]}"></i>Пост ${i + 1}</h3>
-    <span class="pill" id="pill-${id}">простой</span>
-    <div class="cfg">
-      <label class="wide"><select data-k="process" aria-label="Процесс">${procOpts}</select></label>
-      <label class="wide"><select data-k="material" aria-label="Материал">${matOpts}</select></label>
-      ${params}${facts}
-      <label class="wide"><select data-k="hood" aria-label="Местный отсос">${hoodOpts}</select></label>
-      <label>Захват отсоса η (Методика: 0,8)<input type="number" data-k="eta" min="0.3" max="0.99" step="0.01" value="${c.eta ?? 0.8}"></label>
-    </div>
-    <div class="src" id="src-${id}"></div>
-    <div class="row"><button class="btn" id="tog-${id}" aria-pressed="false">Включить</button>${IDS.length > 1 ? `<button class="btn" id="del-${id}">Удалить пост</button>` : ''}</div>
-    <div class="kv">
-      <div><b id="q-${id}">—</b><span>расход, м³/ч</span></div>
-      <div><b id="o-${id}">—</b><span>открытие, %</span></div>
-      <div><b id="a-${id}">—</b><span>угол заслонки</span></div>
-    </div>
-    <div class="bar"><div id="bar-${id}"></div></div>
-  </div>`;
+  <article class="card post" id="card-${id}" style="--pc:${COL[id]}">
+    <div class="top"><h3>Пост ${i + 1}</h3><span class="proc" title="${pr.name}">${pr.name}</span><span class="pill" id="pill-${id}">простой</span></div>
+    <div class="flow"><b id="q-${id}">—</b><span>из <span id="qs-${id}">—</span> м³/ч</span><span class="dev" id="dev-${id}"></span></div>
+    <div class="gauge"><div id="bar-${id}"></div></div>
+    <div class="meta"><span>заслонка <b id="a-${id}">—</b></span><span>открыта <b id="o-${id}">—</b></span></div>
+    <div class="acts"><button class="btn sm" id="tog-${id}">Включить</button><button class="btn sm ghost" id="show-${id}">Показать в 3D</button></div>
+    <details class="cfgbox" id="cfg-${id}" ${ui.openCfg.has(id) ? 'open' : ''}><summary>Настроить пост: процесс, материал, режим</summary>
+      <div class="cfg">
+        <label class="wide"><select data-k="process" aria-label="Процесс">${procOpts}</select></label>
+        <label class="wide"><select data-k="material" aria-label="Материал">${matOpts}</select></label>
+        ${params}${facts}
+        <label class="wide"><select data-k="hood" aria-label="Местный отсос">${hoodOpts}</select></label>
+        <label>Захват отсоса η (Методика: 0,8)<input type="number" inputmode="decimal" data-k="eta" min="0.3" max="0.99" step="0.01" value="${c.eta ?? 0.8}"></label>
+      </div>
+      <div class="src" id="src-${id}"></div>
+      ${IDS.length > 1 ? `<button class="btn sm" id="del-${id}">Удалить пост</button>` : ''}
+    </details>
+  </article>`;
 }
 function renderCards() {
   postsEl.innerHTML = IDS.map((id, i) => cardHtml(id, i)).join('') +
-    `<div class="card"><button class="btn" id="addPost" ${IDS.length >= MAX_POSTS ? 'disabled' : ''}>+ Добавить сварочный пост</button>
-     <span class="note" style="margin-left:8px">постов: ${IDS.length} из ${MAX_POSTS}; сеть и вентилятор подбираются заново</span></div>`;
-  document.getElementById('addPost').onclick = () => { if (cfg.length >= MAX_POSTS) return;
+    `<div class="card"><button class="btn sm" id="addPost" ${IDS.length >= MAX_POSTS ? 'disabled' : ''}>+ Добавить пост</button>
+     <span class="note" style="margin-left:8px">${IDS.length} из ${MAX_POSTS}; сеть и вентилятор подбираются заново</span></div>`;
+  $('addPost').onclick = () => { if (cfg.length >= MAX_POSTS) return;
     cfg.push({ id: '', process: 'mag_co2', material: 'sv08g2s', params: { I: 225, d: 1.2 }, hood: 'table', eta: 0.8 }); syncIds(); changeLayout(); };
   IDS.forEach((id, i) => {
-    const card = document.getElementById(`card-${id}`), c = cfg[i];
-    document.getElementById(`tog-${id}`).onclick = () => { setAuto(false); ui.posts[id].on = !ui.posts[id].on; };
-    const del = document.getElementById(`del-${id}`);
-    if (del) del.onclick = () => { cfg.splice(i, 1); const st = IDS.map(x => ui.posts[x]); st.splice(i, 1); ui.posts = {}; syncIds(); IDS.forEach((x, k) => (ui.posts[x] = st[k])); changeLayout(); };
+    const card = $(`card-${id}`), c = cfg[i];
+    $(`cfg-${id}`).ontoggle = e => { e.target.open ? ui.openCfg.add(id) : ui.openCfg.delete(id); };
+    $(`tog-${id}`).onclick = () => { setAuto(false); ui.posts[id].on = !ui.posts[id].on; };
+    $(`show-${id}`).onclick = () => { focusPost(id); if (innerWidth < 980) $('scene').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+    const del = $(`del-${id}`);
+    if (del) del.onclick = () => { cfg.splice(i, 1); const st = IDS.map(x => ui.posts[x]); st.splice(i, 1); ui.posts = {}; ui.openCfg.clear(); syncIds(); IDS.forEach((x, k) => (ui.posts[x] = st[k])); changeLayout(); };
     card.querySelectorAll('select[data-k]').forEach(el => el.onchange = () => {
       const k = el.dataset.k;
       if (k === 'process') { const pr = E.processById(el.value); c.process = el.value; c.material = pr.materials[0].id; c.hood = pr.hoods[0].id; c.params = {}; c.factorsOverride = undefined; }
@@ -1731,69 +2046,79 @@ function renderCards() {
     card.querySelector('input[data-k="eta"]').onchange = e => { c.eta = Math.min(0.99, Math.max(0.3, +e.target.value)); reset(); };
     card.querySelectorAll('input[data-p]').forEach(el => el.onchange = () => {
       c.params = { ...(c.params ?? {}), [el.dataset.p]: +el.value };
-      // параметры, от которых зависит норма отсоса (площадь, проём, скорость), требуют пересборки сети; остальные действуют сразу
       if (['area', 'open', 'v', 'Q'].includes(el.dataset.p)) reset(); else renderDesign();
     });
     card.querySelectorAll('input[data-f]').forEach(el => el.onchange = () => { c.factorsOverride = { ...(c.factorsOverride ?? {}), [el.dataset.f]: +el.value }; reset(); });
   });
+  const lg = IDS.map((id, i) => `<span><i class="sw" style="background:${COL[id]}"></i>пост ${i + 1}</span>`).join('');
+  $('lgPosts').innerHTML = lg; $('lgPosts2').innerHTML = lg;
 }
 const KIND_RU = { duct: 'трение по длине', damper: 'заслонка', filter: 'фильтр', diffuser: 'переход на больший диаметр', teeSide: 'тройник: боковой вход', teeStraight: 'тройник: проход' };
 function renderLoss(m) {
-  const sel = document.getElementById('lossPost');
-  if (sel.options.length !== IDS.length) sel.innerHTML = IDS.map((id, i) => `<option value="${id}">Пост ${i + 1}</option>`).join('');
+  const sel = $('lossPost');
+  if (sel.options.length !== IDS.length) sel.innerHTML = IDS.map((id, i) => `<option value="${id}">поста ${i + 1}</option>`).join('');
   const sol = E.solve(m.net), br = E.lossBreakdown(m.net, sol), id = sel.value || IDS[0];
   const path = []; let sg = m.net.segments.find(x => x.id === id);
   while (sg) { path.push(sg.id); sg = sg.parent ? m.net.segments.find(x => x.id === sg.parent) : null; }
   path.push('common');
   const elOf = r => (r.seg === 'common' ? m.net.common : m.net.segments.find(x => x.id === r.seg).elements).find(e => e.id === r.id);
   const rows = br.filter(r => path.includes(r.seg)).map(r => { const e = elOf(r);
-    const name = (e.kind === 'local' || e.kind === 'bend') ? e.label : e.kind === 'damper' ? `заслонка, ${fmt(e.alpha)}°` : KIND_RU[e.kind] + (e.kind === 'duct' ? `, ${fmtN(e.l)} м` : '');
+    const name = (e.kind === 'local' || e.kind === 'bend') ? e.label : e.kind === 'damper' ? `заслонка, ${fmt(e.alpha)}°` : KIND_RU[e.kind] + (e.kind === 'duct' ? `, ${fmtN(e.l)} м, ⌀${fmt(e.d * 1000)}` : '');
     return `<tr><td>${name}</td><td>${e.kind === 'local' ? fmt(e.zeta, 2) : e.kind === 'bend' ? fmt(r.dp / Math.max(1e-9, 0.6 * (r.q / (Math.PI * e.d * e.d / 4)) ** 2), 2) : e.kind === 'damper' ? fmt(E.damperZeta(e.alpha), 2) : ''}</td><td>${fmt(r.dp, 1)}</td></tr>`; });
   const sum = br.filter(r => path.includes(r.seg)).reduce((a, r) => a + r.dp, 0);
-  document.getElementById('lossBody').innerHTML = rows.join('') + `<tr class="lim"><td>Итого по пути</td><td></td><td>${fmt(sum, 1)}</td></tr><tr><td>Давление вентилятора</td><td></td><td>${fmt(sol.pFan, 1)}</td></tr>`;
+  $('lossBody').innerHTML = rows.join('') + `<tr class="lim"><td>Итого по пути</td><td></td><td>${fmt(sum, 1)}</td></tr><tr><td>Давление вентилятора</td><td></td><td>${fmt(sol.pFan, 1)}</td></tr>`;
 }
 function renderDesign() {
   const d = E.designReport(cfg);
   IDS.forEach((id, i) => {
     const q = E.qminOf(cfg[i]), em = d.em[i], top = Object.entries(em).filter(([k]) => k !== 'aerosol').sort((a, b) => b[1] - a[1]).slice(0, 3);
-    document.getElementById(`src-${id}`).innerHTML = `Уставка отсоса ${fmt(E.qsetOf(cfg[i]))} м³/ч — ${q.source}<br>Выделение: ${top.map(([k, v]) => `${E.SUBSTANCES[k].name.split(' (')[0]} ${fmt(v * 3.6, 2)} г/ч`).join('; ') || 'нет (ввести показатели)'}`;
+    $(`src-${id}`).innerHTML = `Норма отсоса ${fmt(E.qsetOf(cfg[i]))} м³/ч — ${q.source}<br>Выделения: ${top.map(([k, v]) => `${E.SUBSTANCES[k].name.split(' (')[0]} ${fmt(v * 3.6, 2)} г/ч`).join('; ') || 'нет (ввести показатели)'}`;
   });
   const lim = report ? report.substances[0] : null;
   if (report) { const V = roomV(), L = report.Ltotal + 1e-9, tau = V / L * 60, perW = L / Math.max(1, IDS.length);
-    document.getElementById('roomNote').innerHTML = `Объём ${fmt(V)} м³. Воздухообмен по вредным веществам от объёма не зависит (СП 60.13330.2020, прил. Г, ф. Г.2; расчёт по кратности для рабочей зоны не допускается — п. 7.4.1). Объём задаёт инерцию цеха: постоянная времени V/L ≈ <b>${fmt(tau)} мин</b> — за это время концентрация проходит ≈ 63 % пути к новому значению после включения/выключения постов. Наружного воздуха на одного работающего: ${fmt(perW)} м³/ч (минимум 30–60 по СП 60, прил. В) — ${perW >= 60 ? 'выполняется' : 'проверить'}.`; }
-  document.getElementById('designNote').innerHTML = report ? `По СП 60.13330.2020 (все посты, C = ПДК): весь воздух <b>${fmt(report.Ltotal)} м³/ч</b> − местные отсосы ${fmt(report.Llev)} = общеобменная <b>${fmt(report.Ldesign)} м³/ч</b>, лимитирует: <b>${lim ? lim.name : '—'}</b>${report.mnCategory ? `; доля Mn в аэрозоле цеха ${fmt(report.mnShare * 100, 1)} % → ПДК Mn по категории «${report.mnCategory}»` : ''}. Вещества с пометкой «сверить» — ПДК по ГН, сверить по СанПиН.` : '';
+    $('roomNote').innerHTML = `Объём ${fmt(V)} м³. Воздухообмен по вредным веществам от объёма не зависит (СП 60.13330.2020, прил. Г, ф. Г.2; расчёт по кратности для рабочей зоны не допускается — п. 7.4.1). Объём задаёт инерцию цеха: постоянная времени V/L ≈ <b>${fmt(tau)} мин</b> — за это время концентрация проходит ≈ 63 % пути к новому значению. Наружного воздуха на одного работающего: ${fmt(perW)} м³/ч (минимум 30–60 по СП 60, прил. В) — ${perW >= 60 ? 'выполняется' : 'проверить'}.`; }
+  $('designNote').innerHTML = report ? `По СП 60.13330.2020 (все посты, C = ПДК): весь воздух <b>${fmt(report.Ltotal)} м³/ч</b> − местные отсосы ${fmt(report.Llev)} = общеобменная <b>${fmt(report.Ldesign)} м³/ч</b>, лимитирует: <b>${lim ? lim.name : '—'}</b>${report.mnCategory ? `; доля Mn в аэрозоле цеха ${fmt(report.mnShare * 100, 1)} % → ПДК Mn по категории «${report.mnCategory}»` : ''}. «Сверить» — ПДК по ГН, сверить по СанПиН.` : '';
 }
 renderCards();
 reset();
 function setAuto(v) {
   if (ui.auto && !v) { const t = B.sim.time(); for (const id of IDS) ui.posts[id].on = isOn(id, t); }
-  ui.auto = v; const seg = document.getElementById('autoSeg'); setPressed(seg, seg.querySelector(`[data-a="${v ? 1 : 0}"]`));
+  ui.auto = v; const seg = $('autoSeg'); setPressed(seg, seg.querySelector(`[data-a="${v ? 1 : 0}"]`));
 }
-document.getElementById('autoSeg').onclick = e => { const b = e.target.closest('button'); if (b) setAuto(b.dataset.a === '1'); };
-document.getElementById('viewSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.view = b.dataset.v; setPressed(e.currentTarget, b);
-  document.getElementById('badge').textContent = ui.view === 'B' ? 'Предлагаемая система' : 'Промышленный стандарт'; };
-document.getElementById('speedSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.speed = +b.dataset.s; setPressed(e.currentTarget, b); };
-document.getElementById('pauseBtn').onclick = e => { ui.paused = !ui.paused; e.target.textContent = ui.paused ? 'Продолжить' : 'Пауза'; };
-document.getElementById('resetBtn').onclick = () => reset();
-document.getElementById('foul').oninput = e => { ui.fouling = +e.target.value; document.getElementById('foulV').textContent = '×' + ui.fouling.toFixed(1).replace('.', ','); applyFouling(); };
+$('autoSeg').onclick = e => { const b = e.target.closest('button'); if (b) setAuto(b.dataset.a === '1'); };
+$('viewSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.view = b.dataset.v; setPressed(e.currentTarget, b);
+  $('badge').innerHTML = ui.view === 'B' ? '<i style="background:var(--new)"></i>Предлагаемая система' : '<i style="background:var(--std)"></i>Промышленный стандарт'; };
+$('speedSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.speed = +b.dataset.s; setPressed(e.currentTarget, b); };
+const PAUSE_SVG = $('pauseBtn').querySelector('svg').outerHTML, PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7z"/></svg>';
+$('pauseBtn').onclick = e => { ui.paused = !ui.paused; const b = e.currentTarget; b.innerHTML = (ui.paused ? PLAY_SVG : PAUSE_SVG) + `<span class="pause-t">${ui.paused ? 'Продолжить' : 'Пауза'}</span>`; b.setAttribute('aria-label', ui.paused ? 'Продолжить' : 'Пауза'); };
+$('resetBtn').onclick = () => reset();
+$('foul').oninput = e => { ui.fouling = +e.target.value; $('foulV').textContent = '×' + ui.fouling.toFixed(1).replace('.', ','); applyFouling(); };
+// примечания
+const notes = $('notes');
+$('notesBtn').onclick = () => notes.showModal();
+$('notesClose').onclick = () => notes.close();
+notes.addEventListener('click', e => { if (e.target === notes) notes.close(); });
+if (location.hash === '#notes') setTimeout(() => notes.showModal(), 50);
+addEventListener('hashchange', () => { if (location.hash === '#notes' && !notes.open) notes.showModal(); });
 
 // ---------- 3D сцена
-const host = document.getElementById('scene');
+const host = $('scene');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 host.prepend(renderer.domElement);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#0b1013');
-scene.fog = new THREE.FogExp2('#0b1013', 0.012);
-const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
+scene.background = new THREE.Color('#0a0f12');
+scene.fog = new THREE.FogExp2('#0a0f12', 0.012);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 300);
 camera.position.set(-9, 11, 19);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(2, 3.2, 0); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49;
+controls.target.set(2, 3.2, 0);
+Object.assign(controls, { enableDamping: true, dampingFactor: 0.09, zoomSpeed: 2.4, rotateSpeed: 0.8, panSpeed: 1.1, zoomToCursor: true, screenSpacePanning: true, minDistance: 2, maxDistance: 90, maxPolarAngle: Math.PI * 0.495 });
 scene.add(new THREE.HemisphereLight('#c9d6df', '#20272c', 0.9));
 const sun = new THREE.DirectionalLight('#ffffff', 1.1); sun.position.set(6, 14, 8); scene.add(sun);
 
 const M = {
-  floor: new THREE.MeshStandardMaterial({ color: '#2a3238', roughness: 0.95 }),
+  floor: new THREE.MeshStandardMaterial({ color: '#283037', roughness: 0.95 }),
   steel: new THREE.MeshStandardMaterial({ color: '#8d989f', metalness: 0.75, roughness: 0.35 }),
   duct: new THREE.MeshStandardMaterial({ color: '#9aa6ad', metalness: 0.6, roughness: 0.45, transparent: true, opacity: 0.32, depthWrite: false }),
   dark: new THREE.MeshStandardMaterial({ color: '#3b464d', metalness: 0.4, roughness: 0.6 }),
@@ -1804,7 +2129,7 @@ const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 22), M.floor); floor.ro
 const grid = new THREE.GridHelper(40, 40, '#3a464e', '#2c363c'); grid.position.y = 0.01; scene.add(grid);
 
 const Y_COLL = 5.2, Z = 0, STEP = 5.5;
-let rig = null, rotor = null, tail = [], X_END = 0;
+let rig = null, rotor = null, tail = [], X_END = 0, BOUNDS = { left: -10, right: 10 };
 const XS = {};
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const tube = (a, b, r, mat) => {
@@ -1814,6 +2139,12 @@ const tube = (a, b, r, mat) => {
 };
 const posts3d = {};
 const NP = 140;
+let labels = [];
+function addLabel(text, pos, cls = '', color = null) {
+  const el = document.createElement('div'); el.className = 'lbl3d ' + cls;
+  el.innerHTML = (color ? `<i style="background:${color}"></i>` : '') + text; host.appendChild(el);
+  labels.push({ el, pos }); return el;
+}
 function pathOf(id) {
   const pts = [...posts3d[id].path, ...tail];
   const seg = []; let L = 0; for (let i = 1; i < pts.length; i++) { const l = pts[i].distanceTo(pts[i - 1]); seg.push([pts[i - 1], pts[i], L, l]); L += l; }
@@ -1822,12 +2153,13 @@ function pathOf(id) {
 /** 3D-цех под текущее число постов: столы и отсосы вдоль коллектора, затем фильтр, вентилятор, выброс */
 function build3d() {
   if (rig) { scene.remove(rig); rig.traverse(o => { if (o.geometry && o.geometry.dispose) o.geometry.dispose(); }); }
+  labels.forEach(l => l.el.remove()); labels = [];
   rig = new THREE.Group(); scene.add(rig);
   for (const k of Object.keys(posts3d)) delete posts3d[k];
   const x0 = -((IDS.length - 1) * STEP) / 2 - 3;
   IDS.forEach((id, i) => (XS[id] = x0 + i * STEP));
   X_END = x0 + (IDS.length - 1) * STEP + 4;
-  for (const id of IDS) {
+  IDS.forEach((id, i) => {
     const x = XS[id];
     const table = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 1.4), M.dark); table.position.set(x, 0.45, Z + 1.2); rig.add(table);
     const work = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.15, 0.5), M.steel); work.position.set(x, 0.98, Z + 1.2); rig.add(work);
@@ -1835,7 +2167,7 @@ function build3d() {
     tube(V(x, 2.6, Z + 1.2), V(x, 3.0, Z + 1.2), 0.22, M.steel);
     tube(V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), 0.22, M.duct);
     tube(V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z), 0.22, M.duct);
-    const dPos = V(x, 4.35, Z + 0.3);   // заслонка: прозрачный корпус + диск на оси
+    const dPos = V(x, 4.35, Z + 0.3);
     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.36, 28, 1, true), M.duct); body.position.copy(dPos);
     body.quaternion.setFromUnitVectors(V(0, 1, 0), V(0, Y_COLL - 3.6, -0.6).normalize()); rig.add(body);
     const pivot = new THREE.Group(); pivot.position.copy(dPos); pivot.quaternion.copy(body.quaternion); rig.add(pivot);
@@ -1846,9 +2178,10 @@ function build3d() {
     const arc = new THREE.PointLight('#ffb347', 0, 6, 2); arc.position.set(x, 1.15, Z + 1.2); rig.add(arc);
     const spark = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), new THREE.MeshBasicMaterial({ color: '#fff2c4' })); spark.position.copy(arc.position); rig.add(spark);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.03, 8, 40), new THREE.MeshBasicMaterial({ color: COL[id] })); ring.rotation.x = Math.PI / 2; ring.position.set(x, 0.92, Z + 1.2); rig.add(ring);
-    posts3d[id] = { disk, arc, spark, path: [V(x, 1.4, Z + 1.2), V(x, 2.35, Z + 1.2), V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z)] };
-  }
-  tube(V(XS[IDS[0]] - 0.4, Y_COLL, Z), V(X_END, Y_COLL, Z), 0.36, M.duct);   // коллектор → фильтр → вентилятор → выброс
+    const lbl = addLabel(`Пост ${i + 1}`, V(x, 0.2, Z + 2.2), '', COL[id]);
+    posts3d[id] = { disk, arc, spark, lbl, path: [V(x, 1.4, Z + 1.2), V(x, 2.35, Z + 1.2), V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z)] };
+  });
+  tube(V(XS[IDS[0]] - 0.4, Y_COLL, Z), V(X_END, Y_COLL, Z), 0.36, M.duct);
   const filt = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.6, 1.8), M.filter); filt.position.set(X_END + 1.2, Y_COLL - 0.4, Z); rig.add(filt);
   tube(V(X_END + 2.2, Y_COLL, Z), V(X_END + 3.0, Y_COLL, Z), 0.36, M.duct);
   const fanHouse = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.7, 36), M.steel); fanHouse.rotation.x = Math.PI / 2; fanHouse.position.set(X_END + 3.9, Y_COLL, Z); rig.add(fanHouse);
@@ -1857,22 +2190,69 @@ function build3d() {
   const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.8, 24), new THREE.MeshStandardMaterial({ color: '#2f5f8a', roughness: 0.5 })); motor.rotation.x = Math.PI / 2; motor.position.set(X_END + 3.9, Y_COLL, Z - 0.75); rig.add(motor);
   tube(V(X_END + 3.9, Y_COLL + 0.9, Z), V(X_END + 3.9, Y_COLL + 4.5, Z), 0.36, M.duct);
   tail = [V(X_END, Y_COLL, Z), V(X_END + 3.9, Y_COLL, Z), V(X_END + 3.9, Y_COLL + 4.5, Z)];
-  for (const id of IDS) {   // частицы потока: «отсос → ветвь → коллектор → вентилятор → выброс»
+  addLabel('Коллектор', V((XS[IDS[0]] + X_END) / 2, Y_COLL + 0.6, Z), 'sys');
+  addLabel('Фильтр', V(X_END + 1.2, Y_COLL + 1.15, Z), 'sys');
+  addLabel('Вентилятор', V(X_END + 3.9, Y_COLL - 1.1, Z + 0.4), 'sys');
+  addLabel('Выброс', V(X_END + 3.9, Y_COLL + 4.9, Z), 'sys');
+  for (const id of IDS) {
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NP * 3), 3));
     const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: '#63b8db', size: 0.11, transparent: true, opacity: 0.85, depthWrite: false }));
     rig.add(pts);
     posts3d[id].pts = pts; posts3d[id].route = pathOf(id); posts3d[id].s = Float32Array.from({ length: NP }, () => Math.random());
   }
-  const left = XS[IDS[0]] - 2, right = X_END + 5, span = right - left;   // камера и пол — под весь цех
-  controls.target.set((left + right) / 2, 3.2, 0);
-  camera.position.set(controls.target.x - 9 - span * 0.05, 10 + span * 0.12, 13 + span * 0.42);
-  floor.scale.set(Math.max(1, (span + 10) / 40), 1, 1); floor.position.x = controls.target.x;
-  grid.position.x = controls.target.x; grid.scale.set(Math.max(1, (span + 10) / 40), 1, 1);
+  BOUNDS = { left: XS[IDS[0]] - 2, right: X_END + 5 };
+  const span = BOUNDS.right - BOUNDS.left, cx = (BOUNDS.left + BOUNDS.right) / 2;
+  floor.scale.set(Math.max(1, (span + 10) / 40), 1, 1); floor.position.x = cx;
+  grid.position.x = cx; grid.scale.set(Math.max(1, (span + 10) / 40), 1, 1);
+  controls.maxDistance = Math.max(40, span * 3);
 }
+// ---- камера: плавные перелёты
+let tw = null;
+const ease = k => k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+function flyTo(target, pos, dur = 0.7) {
+  tw = { t0: performance.now(), dur: dur * 1000, ft: controls.target.clone(), fp: camera.position.clone(), tt: target, tp: pos };
+}
+function stepTween(now) {
+  if (!tw) return;
+  const k = ease(Math.min(1, (now - tw.t0) / tw.dur));
+  controls.target.copy(tw.ft).lerp(tw.tt, k); camera.position.copy(tw.fp).lerp(tw.tp, k);
+  if (k >= 1) tw = null;
+}
+controls.addEventListener('start', () => { tw = null; });
+const VIEW_DIR = new THREE.Vector3(-0.32, 0.5, 0.8).normalize();
+function fitView() {
+  const span = BOUNDS.right - BOUNDS.left, tgt = V((BOUNDS.left + BOUNDS.right) / 2, 2.8, 0.4);
+  const vf = camera.fov * Math.PI / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
+  const dist = Math.max((span * 0.5) / Math.tan(hf / 2), 7 / Math.tan(vf / 2)) * 0.98;
+  return { tgt, dist };
+}
+function fitAll(anim = true) {
+  const { tgt, dist } = fitView(), pos = tgt.clone().addScaledVector(VIEW_DIR, dist);
+  if (anim) flyTo(tgt, pos); else { tw = null; controls.target.copy(tgt); camera.position.copy(pos); }
+}
+function topView() { const { tgt, dist } = fitView(); flyTo(tgt, tgt.clone().add(V(0, dist * 1.05, 0.01))); }
+function focusPost(id) { const t = V(XS[id] + 0.3, 2.6, Z + 0.7); flyTo(t, t.clone().addScaledVector(VIEW_DIR, 7.5)); }
+function dolly(f) {
+  const off = camera.position.clone().sub(controls.target), len = off.length();
+  const nl = Math.min(controls.maxDistance, Math.max(controls.minDistance, len * f));
+  flyTo(controls.target.clone(), controls.target.clone().add(off.setLength(nl)), 0.35);
+}
+$('zIn').onclick = () => dolly(0.6); $('zOut').onclick = () => dolly(1 / 0.6);
+$('vAll').onclick = () => fitAll(); $('vTop').onclick = () => topView();
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+renderer.domElement.addEventListener('dblclick', e => {
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects([rig, floor], true).find(h => h.object.isMesh);
+  if (!hit) return;
+  const off = camera.position.clone().sub(controls.target), nl = Math.max(controls.minDistance + 1, off.length() * 0.45);
+  flyTo(hit.point.clone(), hit.point.clone().add(off.setLength(nl)), 0.6);
+});
 build3d(); scene3dReady = true;
 function placeParticles(id, flow, dt) {
   const o = posts3d[id], { seg, L } = o.route, pos = o.pts.geometry.attributes.position;
-  const vis = Math.round(NP * Math.min(1, flow / 1800)); const speed = 0.4 + 6 * flow / 1500; // условная скорость отображения
+  const vis = Math.round(NP * Math.min(1, flow / 1800)); const speed = 0.4 + 6 * flow / 1500;
   for (let i = 0; i < NP; i++) {
     o.s[i] = (o.s[i] + speed * dt / L) % 1; let d = o.s[i] * L;
     let p = seg[seg.length - 1][1];
@@ -1883,25 +2263,74 @@ function placeParticles(id, flow, dt) {
   }
   pos.needsUpdate = true;
 }
-function resize() { const w = host.clientWidth, h = host.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+const tmpV = new THREE.Vector3();
+function placeLabels() {
+  const w = host.clientWidth, h = host.clientHeight;
+  for (const l of labels) {
+    tmpV.copy(l.pos).project(camera);
+    const vis = tmpV.z < 1 && Math.abs(tmpV.x) < 1.05 && Math.abs(tmpV.y) < 1.05;
+    l.el.style.display = vis ? '' : 'none';
+    if (vis) l.el.style.transform = `translate(${(tmpV.x * 0.5 + 0.5) * w}px, ${(-tmpV.y * 0.5 + 0.5) * h}px) translate(-50%,-100%)`;
+  }
+}
+let firstFit = true;
+function resize() { const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); if (firstFit) { fitAll(false); firstFit = false; } }
 new ResizeObserver(resize).observe(host); resize();
 
-// ---------- тренды (последние 15 минут модельного времени)
-const charts = ['c1', 'c2', 'c3', 'c4'].map(id => document.getElementById(id));
-function drawChart(cv, series, yMax, lines = []) {
+// ---------- графики (последние 15 минут модельного времени), с подсказкой при наведении
+function niceMax(v) { if (!(v > 0)) return 1; const p = 10 ** Math.floor(Math.log10(v)), m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p; }
+const fmtAx = (v, yMax) => yMax >= 10 ? fmt(v) : yMax >= 1 ? fmt(v, 1) : fmt(v, 2);
+function drawChart(cv, o) {
+  cv.__o = o;
   const dpr = Math.min(devicePixelRatio, 2), w = cv.clientWidth, h = cv.clientHeight;
-  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  if (!w || !h) return;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
-  const pl = 34, pb = 4, pt = 6, W = w - pl - 4, H = h - pt - pb;
-  g.font = '10.5px IBM Plex Mono, monospace'; g.fillStyle = css('--faint'); g.strokeStyle = css('--line'); g.lineWidth = 1;
-  for (let k = 0; k <= 2; k++) { const y = pt + H - H * k / 2; g.beginPath(); g.moveTo(pl, y); g.lineTo(pl + W, y); g.stroke();
-    const v = yMax * k / 2; g.fillText(yMax >= 10 ? String(Math.round(v)) : v.toFixed(2).replace('.', ','), 2, y + 3.5); }
-  for (const [v, c] of lines) { const y = pt + H - H * Math.min(v / yMax, 1); g.setLineDash([4, 4]); g.strokeStyle = c; g.beginPath(); g.moveTo(pl, y); g.lineTo(pl + W, y); g.stroke(); g.setLineDash([]); }
-  for (const s of series) {
-    g.strokeStyle = s.c; g.lineWidth = 2; g.beginPath();
-    s.d.forEach((v, i) => { const x = pl + W * (i + WIN - s.d.length) / (WIN - 1), y = pt + H - H * Math.min(Math.max(v, 0) / yMax, 1); i ? g.lineTo(x, y) : g.moveTo(x, y); });
-    g.stroke();
+  const all = o.series.flatMap(s => s.d).filter(Number.isFinite);
+  const yMax = o.yMax ?? niceMax(Math.max(o.yMin ?? 0, ...all, ...(o.lines ?? []).map(l => l.v)) * 1.08);
+  o._yMax = yMax;
+  const pl = 46, pr = 8, pt = 8, pb = 20, W = w - pl - pr, H = h - pt - pb;
+  o._g = { pl, pt, W, H };
+  const X = i => pl + W * i / (WIN - 1), Y = v => pt + H - H * Math.min(Math.max(v, 0) / yMax, 1);
+  g.font = '10.5px "IBM Plex Mono", monospace'; g.lineWidth = 1;
+  const nd = [4, 5, 3, 6, 2].find(k => { const st = yMax / k, p = 10 ** Math.floor(Math.log10(st)), mm = Math.round(st / p * 1000) / 1000; return [1, 2, 2.5, 5, 10].includes(mm); }) ?? 4;
+  for (let k = 0; k <= nd; k++) { const v = yMax * k / nd, y = Y(v); g.strokeStyle = css('--line'); g.beginPath(); g.moveTo(pl, y + .5); g.lineTo(pl + W, y + .5); g.stroke();
+    g.fillStyle = css('--faint'); g.textAlign = 'right'; g.fillText(fmtAx(v, yMax), pl - 6, y + 3.5); }
+  g.textAlign = 'center';
+  for (const [mins, lab] of [[15, '−15 мин'], [10, '−10'], [5, '−5'], [0, 'сейчас']]) { const x = X(WIN - 1 - mins * 60); g.fillStyle = css('--faint'); g.textAlign = mins === 15 ? 'left' : mins === 0 ? 'right' : 'center'; g.fillText(lab, x, h - 5); }
+  for (const l of o.lines ?? []) { const y = Y(l.v); g.setLineDash(l.dash ?? [5, 4]); g.strokeStyle = l.c; g.beginPath(); g.moveTo(pl, y); g.lineTo(pl + W, y); g.stroke(); g.setLineDash([]); }
+  const off = s => WIN - s.d.length;
+  if (o.band) { const [a, b] = o.band.map(k => o.series[k]); g.fillStyle = o.bandColor; g.beginPath();
+    a.d.forEach((v, i) => { const x = X(i + off(a)); i ? g.lineTo(x, Y(v)) : g.moveTo(x, Y(v)); });
+    for (let i = b.d.length - 1; i >= 0; i--) g.lineTo(X(i + off(b)), Y(b.d[i])); g.closePath(); g.fill(); }
+  for (const s of o.series) {
+    g.strokeStyle = s.c; g.lineWidth = s.w ?? 2; g.setLineDash(s.dash ?? []); g.lineJoin = 'round'; g.beginPath();
+    s.d.forEach((v, i) => { const x = X(i + off(s)), y = Y(v); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke(); g.setLineDash([]);
   }
+  const hi = cv.__hi;
+  const tip = cv.parentElement.querySelector('.tip');
+  if (hi != null && o.series[0].d.length) {
+    const i = Math.min(WIN - 1, Math.max(WIN - o.series[0].d.length, hi)), x = X(i);
+    g.strokeStyle = css('--muted'); g.globalAlpha = 0.6; g.beginPath(); g.moveTo(x, pt); g.lineTo(x, pt + H); g.stroke(); g.globalAlpha = 1;
+    const rows = o.series.map(s => { const v = s.d[i - off(s)]; if (!Number.isFinite(v)) return '';
+      g.fillStyle = s.c; g.beginPath(); g.arc(x, Y(v), 3.2, 0, 7); g.fill();
+      return `<div><i style="background:${s.c}"></i>${s.name}: <b>${fmt(v, o.dec ?? 0)}</b> ${o.unit ?? ''}</div>`; }).join('');
+    const ago = (WIN - 1 - i) / 60;
+    tip.innerHTML = `<div class="t">${ago < 0.05 ? 'сейчас' : `${fmt(ago, 1)} мин назад`}</div>${rows}`;
+    tip.hidden = false;
+    const cr = cv.getBoundingClientRect(), pr2 = cv.parentElement.getBoundingClientRect();
+    const left = cr.left - pr2.left + x, tw2 = tip.offsetWidth;
+    tip.style.left = Math.max(6, Math.min(pr2.width - tw2 - 6, left + (left > pr2.width / 2 ? -tw2 - 12 : 12))) + 'px';
+    tip.style.top = (cr.top - pr2.top + 8) + 'px';
+  } else if (tip) tip.hidden = true;
+}
+const CH = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'].map($);
+for (const cv of CH) {
+  const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; cv.parentElement.appendChild(tip);
+  const move = e => { const o = cv.__o; if (!o || !o._g) return; const r = cv.getBoundingClientRect(); cv.__hi = Math.round((e.clientX - r.left - o._g.pl) / o._g.W * (WIN - 1)); drawChart(cv, o); };
+  cv.addEventListener('pointermove', move); cv.addEventListener('pointerdown', move);
+  cv.addEventListener('pointerleave', () => { cv.__hi = null; if (cv.__o) drawChart(cv, cv.__o); });
 }
 
 // ---------- цикл
@@ -1917,55 +2346,85 @@ function tick(now) {
   if (s) {
     for (const id of IDS) {
       const o = posts3d[id], on = s.on[id];
-      o.disk.rotation.x = (90 - s.alpha[id]) * Math.PI / 180;   // 90° — диск поперёк потока (закрыта)
+      o.disk.rotation.x = (90 - s.alpha[id]) * Math.PI / 180;
       o.arc.intensity = on ? 3.2 + Math.random() * 2.4 : 0; o.spark.visible = on;
       placeParticles(id, s.Q[id], dtR * Math.min(ui.speed, 10) / 3);
     }
     rotor.rotation.z -= dtR * s.n / 60 * 2 * Math.PI * 0.05;
-    scene.fog.density = 0.006 + 0.025 * Math.min(worstRatio(s.C), 1.5);
+    scene.fog.density = 0.004 + 0.02 * Math.min(worstRatio(s.C), 1.5);
     if (frame++ % 6 === 0) updatePanel();
   }
-  controls.update(); renderer.render(scene, camera);
+  stepTween(now);
+  controls.update(); renderer.render(scene, camera); placeLabels();
   requestAnimationFrame(tick);
 }
+const setBar = (id, v, max) => { $(id).style.width = (max > 0 ? Math.min(100, v / max * 100) : 0) + '%'; };
+function chip(el, text, cls) { el.textContent = text; el.className = 'chip ' + cls; }
 function updatePanel() {
   const m = ui.view === 'B' ? B : A, s = m.last, t = s.t;
   const hh = Math.floor(t / 3600), mm = Math.floor(t % 3600 / 60), ss = Math.floor(t % 60);
-  document.getElementById('clock').textContent = [hh, mm, ss].map(v => String(v).padStart(2, '0')).join(':');
+  $('clock').textContent = [hh, mm, ss].map(v => String(v).padStart(2, '0')).join(':');
   IDS.forEach((id, i) => {
-    const on = s.on[id], pill = document.getElementById(`pill-${id}`), qs = m.params.posts[i].Qset * 3600;
-    pill.textContent = on ? 'работает' : 'простой'; pill.classList.toggle('on', on);
-    document.getElementById(`tog-${id}`).textContent = (ui.auto ? on : ui.posts[id].on) ? 'Остановить' : 'Включить';
-    document.getElementById(`q-${id}`).textContent = fmt(s.Q[id]);
-    document.getElementById(`o-${id}`).textContent = fmt(100 - s.alpha[id] / 0.9);
-    document.getElementById(`a-${id}`).textContent = fmt(s.alpha[id]) + '°';
-    document.getElementById(`bar-${id}`).style.width = Math.min(100, s.Q[id] / qs * 75) + '%';
+    const on = s.on[id], pill = $(`pill-${id}`), qs = m.params.posts[i].Qset * 3600, q = s.Q[id], r = q / qs;
+    pill.textContent = on ? 'варит' : 'простой'; pill.classList.toggle('on', on); $(`card-${id}`).classList.toggle('on', on);
+    $(`tog-${id}`).textContent = (ui.auto ? on : ui.posts[id].on) ? 'Остановить' : 'Включить';
+    $(`q-${id}`).textContent = fmt(q); $(`qs-${id}`).textContent = fmt(qs);
+    const dev = $(`dev-${id}`), cls = !on ? '' : r > 1.1 ? 'warn' : r < 0.95 ? 'crit' : 'ok';
+    dev.textContent = on ? `${r >= 1 ? '+' : '−'}${fmt(Math.abs(r - 1) * 100)} %` : 'закрыт'; dev.className = 'dev ' + cls;
+    const bar = $(`bar-${id}`); bar.style.width = Math.min(100, r / 1.5 * 100) + '%'; bar.className = cls;
+    $(`o-${id}`).textContent = fmt(100 - s.alpha[id] / 0.9) + ' %';
+    $(`a-${id}`).textContent = fmt(s.alpha[id]) + '°';
+    const o = posts3d[id]; if (o) o.lbl.classList.toggle('on', on);
   });
-  document.getElementById('fanN').textContent = fmt(s.n);
-  document.getElementById('fanP').textContent = fmt(s.pFan);
-  document.getElementById('fanW').textContent = fmt(s.P / 1000, 2);
-  document.getElementById('qTot').textContent = fmt(s.Qtot);
-  document.getElementById('lgen').textContent = fmt(s.Lgen);
-  const wr = worstRatio(s.C), mnEl = document.getElementById('mn'); mnEl.textContent = fmt(wr, 2); mnEl.classList.toggle('alert', wr > 1);
-  document.getElementById('sens').textContent = fmt(s.sensor, 2);
-  document.getElementById('heat').textContent = fmt(s.heat, 1);
-  if (document.querySelector('details[open] #lossBody') || frame % 60 === 0) renderLoss(m);
-  document.getElementById('subsBody').innerHTML = report.substances.map((x, k) => { const c = s.C[x.id] ?? 0, r = c / x.pdk;
+  $('fanN').textContent = fmt(s.n); $('fanP').textContent = fmt(s.pFan); $('fanW').textContent = fmt(s.P / 1000, 2); $('qTot').textContent = fmt(s.Qtot);
+  $('lgen').textContent = fmt(s.Lgen); $('sens').textContent = fmt(s.sensor, 2); $('heat').textContent = fmt(s.heat, 1);
+  const wr = worstRatio(s.C), mnEl = $('mn'); mnEl.textContent = fmt(wr, 2); mnEl.classList.toggle('alert', wr > 1);
+  if ($('lossDetails').open || frame % 60 === 0) renderLoss(m);
+  if ($('airDetails').open || frame % 60 === 0) $('subsBody').innerHTML = report.substances.map((x, k) => { const c = s.C[x.id] ?? 0, r = c / x.pdk;
     return `<tr class="${k === 0 ? 'lim' : ''}"><td>${E.SUBSTANCES[x.id].name.split(' (')[0]}${x.status === 'П' ? ' <span class="st">[сверить]</span>' : ''}</td><td>${fmt(c, 3)}</td><td>${fmtN(x.pdk)}</td><td class="${r > 1 ? 'alert' : ''}">${fmt(r, 2)}</td></tr>`; }).join('');
+  // итоги
   const rA = A.sim.result(Math.max(A.last.t, 1)), rB = B.sim.result(Math.max(B.last.t, 1));
-  document.getElementById('eA').textContent = fmt(rA.fanKWh + rA.genKWh, 2); document.getElementById('eB').textContent = fmt(rB.fanKWh + rB.genKWh, 2);
-  document.getElementById('hA').textContent = fmt(rA.heatKWh, 1); document.getElementById('hB').textContent = fmt(rB.heatKWh, 1);
-  document.getElementById('mA').textContent = fmt(rA.ratioMax, 2); document.getElementById('mB').textContent = fmt(rB.ratioMax, 2);
-  const sv = rA.heatKWh > 0 ? 1 - rB.heatKWh / rA.heatKWh : 0, se = (rA.fanKWh + rA.genKWh) > 0 ? 1 - (rB.fanKWh + rB.genKWh) / (rA.fanKWh + rA.genKWh) : 0;
-  document.getElementById('saving').textContent = t > 60 ? `Экономия: тепло ${fmt(sv * 100)} %, электроэнергия ${fmt(se * 100)} %` : 'Экономия появится через минуту модельного времени';
-  const h = m.hist;
-  drawChart(charts[0], IDS.map((id, i) => ({ c: COL[id], d: h.map(x => x.on[id] ? x.Q[id] / (m.params.posts[i].Qset * 3600) * 100 : 0) })), 140, [[100, css('--muted')]]);
-  drawChart(charts[1], IDS.map(id => ({ c: COL[id], d: h.map(x => 100 - x.alpha[id] / 0.9) })), 100);
-  drawChart(charts[2], [{ c: css('--std'), d: A.hist.map(x => x.n) }, { c: css('--ok'), d: B.hist.map(x => x.n) }], 1600);
-  document.getElementById('c3l').innerHTML = `<span style="color:var(--std)">стандарт</span> · <span style="color:var(--ok)">предлагаемая</span>`;
-  drawChart(charts[3], [{ c: css('--std'), d: A.hist.map(x => worstRatio(x.C)) }, { c: css('--ok'), d: B.hist.map(x => worstRatio(x.C)) }], 1.2, [[1, css('--crit')], [0.5, css('--muted')]]);
+  const eA = rA.fanKWh + rA.genKWh, eB = rB.fanKWh + rB.genKWh, ok = t > 60;
+  $('eA').textContent = fmt(eA, 2); $('eB').textContent = fmt(eB, 2); setBar('beA', eA, Math.max(eA, eB)); setBar('beB', eB, Math.max(eA, eB));
+  $('hA').textContent = fmt(rA.heatKWh, 1); $('hB').textContent = fmt(rB.heatKWh, 1); setBar('bhA', rA.heatKWh, Math.max(rA.heatKWh, rB.heatKWh)); setBar('bhB', rB.heatKWh, Math.max(rA.heatKWh, rB.heatKWh));
+  const oA = rA.overFlowShare * 100, oB = rB.overFlowShare * 100;
+  $('oA').textContent = fmt(oA, 1) + ' %'; $('oB').textContent = fmt(oB, 1) + ' %'; setBar('boA', oA, Math.max(oA, oB, 1)); setBar('boB', oB, Math.max(oA, oB, 1));
+  const mMax = Math.max(1.2, rA.ratioMax, rB.ratioMax);
+  $('mA').textContent = fmt(rA.ratioMax, 2); $('mB').textContent = fmt(rB.ratioMax, 2); setBar('bmA', rA.ratioMax, mMax); setBar('bmB', rB.ratioMax, mMax);
+  const se = eA > 0 ? 1 - eB / eA : 0, sh = rA.heatKWh > 0 ? 1 - rB.heatKWh / rA.heatKWh : 0;
+  if (!ok) { for (const k of ['saveE', 'saveH', 'overChip', 'airChip']) chip($(k), 'считается…', 'neutral'); }
+  else {
+    chip($('saveE'), se >= 0 ? `экономия ${fmt(se * 100)} %` : `перерасход ${fmt(-se * 100)} %`, se >= 0 ? '' : 'warn');
+    chip($('saveH'), sh >= 0 ? `экономия ${fmt(sh * 100)} %` : `перерасход ${fmt(-sh * 100)} %`, sh >= 0 ? '' : 'warn');
+    chip($('overChip'), oB < oA ? (oB > 0.05 ? `в ${fmt(oA / oB, 1)} раза реже` : 'лишнего воздуха нет') : 'без разницы', oB < oA ? '' : 'neutral');
+    chip($('airChip'), rB.ratioMax <= 1 ? 'обе в норме' : 'предлагаемая выше ПДК', rB.ratioMax <= 1 ? (rA.ratioMax <= 1 ? '' : 'warn') : 'crit');
+    if (rB.ratioMax <= 1 && rA.ratioMax > 1) chip($('airChip'), 'стандарт выше ПДК', 'warn');
+  }
+  $('saving').textContent = ok ? `Экономия: тепло ${fmt(sh * 100)} %, электроэнергия ${fmt(se * 100)} %` : 'Экономия появится через минуту модельного времени';
+  // графики
+  const QS = IDS.map((_, i) => B.params.posts[i].Qset * 3600);
+  const need = B.hist.map(x => IDS.reduce((a, id, i) => a + (x.on[id] ? QS[i] : 0), 0));
+  drawChart(CH[0], { unit: 'м³/ч', series: [
+    { name: 'нужно', c: css('--need'), d: need, dash: [6, 4], w: 1.5 },
+    { name: 'стандарт', c: css('--std'), d: A.hist.map(x => x.Qtot) },
+    { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => x.Qtot) }] });
+  drawChart(CH[1], { unit: 'кВт', dec: 2, band: [0, 1], bandColor: 'rgba(79,196,137,.14)', series: [
+    { name: 'стандарт', c: css('--std'), d: A.hist.map(x => x.P / 1000) },
+    { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => x.P / 1000) }] });
+  const nd = need[need.length - 1] ?? 0, qa = A.last.Qtot, qb = B.last.Qtot, pct = (q) => nd > 0 ? ` (${q >= nd ? '+' : '−'}${fmt(Math.abs(q / nd - 1) * 100)} %)` : '';
+  $('r1').innerHTML = nd > 0 ? `Сейчас нужно <b>${fmt(nd)}</b> м³/ч · стандарт тянет <b style="color:var(--std)">${fmt(qa)}</b>${pct(qa)} · предлагаемая <b style="color:var(--new)">${fmt(qb)}</b>${pct(qb)}`
+    : `Сейчас все посты простаивают: стандарт тянет <b style="color:var(--std)">${fmt(qa)}</b>, предлагаемая <b style="color:var(--new)">${fmt(qb)}</b> м³/ч`;
+  const pa = A.last.P / 1000, pb = B.last.P / 1000;
+  $('r2').innerHTML = `Сейчас: стандарт <b style="color:var(--std)">${fmt(pa, 2)}</b> кВт · предлагаемая <b style="color:var(--new)">${fmt(pb, 2)}</b> кВт${pa > 0.01 ? ` · ${pb <= pa ? 'меньше' : 'больше'} на <b>${fmt(Math.abs(1 - pb / pa) * 100)} %</b>` : ''}`;
+  if ($('moreCharts').open) {
+    const h = m.hist;
+    drawChart(CH[2], { dec: 2, unit: '× ПДК', yMin: 1.2, lines: [{ v: 1, c: css('--crit'), dash: [] }, { v: 0.5, c: css('--muted') }], series: [
+      { name: 'стандарт', c: css('--std'), d: A.hist.map(x => worstRatio(x.C)) }, { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => worstRatio(x.C)) }] });
+    drawChart(CH[3], { unit: '%', yMax: 150, lines: [{ v: 100, c: css('--muted') }], series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.on[id] ? x.Q[id] / (m.params.posts[i].Qset * 3600) * 100 : 0) })) });
+    drawChart(CH[4], { unit: '%', yMax: 100, series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => 100 - x.alpha[id] / 0.9) })) });
+    drawChart(CH[5], { unit: 'об/мин', yMax: 1600, series: [{ name: 'стандарт', c: css('--std'), d: A.hist.map(x => x.n) }, { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => x.n) }] });
+  }
 }
-// старт: прогон первых 20 минут смены, чтобы при открытии были данные
 updatePanel();
 requestAnimationFrame(tick);
 </script>

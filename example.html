@@ -1,0 +1,350 @@
+<title>Пример расчёта вентиляции</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Общие токены и верхняя панель для всех страниц сайта. Тёмная тема — сознательный выбор (пульт диспетчера). */
+:root{
+  --bg:#0d1216; --bg-2:#10171c; --panel:#151d23; --panel-2:#1b252c; --line:#26323b; --line-2:#33424d;
+  --fg:#e7edf0; --muted:#9caab4; --faint:#6b7a85;
+  --arc:#f2a93b; --air:#5bb6e0; --ok:#4fc489; --warn:#e6b84a; --crit:#ec6a63;
+  --std:#a88cf0; --new:#4fc489; --need:#e7edf0;
+  --display:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif; --body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --r:12px; --r-sm:8px; --topbar:56px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--body);margin:0;-webkit-font-smoothing:antialiased}
+a{color:var(--air)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--fg);font:500 13px var(--body);padding:7px 13px;border-radius:var(--r-sm);cursor:pointer;text-decoration:none;min-height:34px;transition:border-color .15s,background .15s}
+.btn:hover{border-color:var(--muted)}
+.btn:focus-visible,.iconbtn:focus-visible,.tabs a:focus-visible,.drawer a:focus-visible{outline:2px solid var(--air);outline-offset:2px}
+.btn.primary{background:var(--air);border-color:var(--air);color:#07131a}
+.btn.primary:hover{background:#7cc8eb}
+.btn.ghost{background:transparent}
+.btn.sm{padding:4px 10px;font-size:12.5px;min-height:30px}
+.btn svg{width:16px;height:16px;flex:none}
+.label{font:500 11px var(--body);color:var(--faint);text-transform:uppercase;letter-spacing:.08em}
+
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;display:flex;align-items:center;gap:12px;height:var(--topbar);padding-inline:12px 16px;background:rgba(13,18,22,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.iconbtn{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:10px;border:1px solid transparent;background:transparent;color:var(--fg);cursor:pointer;flex:none}
+.iconbtn:hover{background:var(--panel-2);border-color:var(--line)}
+.iconbtn svg{width:22px;height:22px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--fg);text-decoration:none;min-width:0}
+.brand .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(140deg,#1e3a4a,#173024);display:grid;place-items:center;border:1px solid var(--line-2);flex:none}
+.brand .logo svg{width:18px;height:18px;color:var(--air)}
+.brand b{font:600 15px/1.1 var(--display);white-space:nowrap}
+.brand small{display:block;font:400 11.5px var(--body);color:var(--muted);white-space:nowrap}
+.tabs{display:flex;gap:2px;margin-left:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
+.tabs a{color:var(--muted);text-decoration:none;font:500 13px var(--body);padding:6px 12px;border-radius:7px;white-space:nowrap}
+.tabs a:hover{color:var(--fg)}
+.tabs a[aria-current="page"]{background:var(--panel-2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-2)}
+.topbar .grow{flex:1}
+.topbar .ver{font:12px var(--mono);color:var(--faint);white-space:nowrap}
+.topbar .dl{white-space:nowrap}
+
+.scrim{position:fixed;inset:0;background:rgba(4,7,9,.6);z-index:60;opacity:0;transition:opacity .2s}
+.scrim.show{opacity:1}
+.drawer{position:fixed;top:0;bottom:0;left:0;z-index:61;width:min(340px,88vw);background:var(--bg-2);border-right:1px solid var(--line);padding:calc(env(safe-area-inset-top,0px) + 12px) 14px calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;flex-direction:column;gap:14px;transform:translateX(-100%);transition:transform .22s ease;overflow-y:auto}
+.drawer.show{transform:none}
+.drawer .dh{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.drawer nav{display:flex;flex-direction:column;gap:4px}
+.drawer nav a{display:flex;gap:12px;align-items:flex-start;padding:10px;border-radius:10px;color:var(--fg);text-decoration:none;border:1px solid transparent}
+.drawer nav a:hover{background:var(--panel);border-color:var(--line)}
+.drawer nav a[aria-current="page"]{background:var(--panel);border-color:var(--line-2)}
+.drawer nav a svg{width:20px;height:20px;flex:none;color:var(--air);margin-top:1px}
+.drawer nav a b{display:block;font:600 14px var(--display)}
+.drawer nav a span{display:block;font-size:12.5px;color:var(--muted);line-height:1.35}
+.drawer .foot{margin-top:auto;font-size:12px;color:var(--faint);line-height:1.5}
+.drawer hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
+@media (max-width:900px){ .tabs,.topbar .ver{display:none} }
+@media (max-width:520px){ .topbar .dl span{display:none} .brand small{display:none} }
+@media (prefers-reduced-motion:reduce){ .drawer,.scrim{transition:none} }
+</style>
+<style>
+.app{display:grid;grid-template-columns:260px minmax(0,1fr);gap:28px;padding-block:18px 40px;padding-inline:16px;max-width:1180px;margin:0 auto;align-items:start}
+.toc{position:sticky;top:calc(var(--topbar) + 16px);max-height:calc(100vh - var(--topbar) - 32px);overflow-y:auto;display:flex;flex-direction:column;gap:1px;scrollbar-width:thin}
+.toc .label{margin:0 0 8px 10px}
+.toc a{color:var(--muted);text-decoration:none;font-size:13px;line-height:1.35;padding:5px 10px;border-radius:7px;border-left:2px solid transparent}
+.toc a.l3{padding-left:22px;font-size:12.5px;color:var(--faint)}
+.toc a:hover{color:var(--fg);background:var(--panel)}
+.toc a.act{color:var(--fg);border-left-color:var(--air);background:var(--panel)}
+.tocm{display:none}
+article{min-width:0;max-width:780px}
+h1{font:600 clamp(22px,3vw,30px)/1.2 var(--display);margin:0 0 6px;text-wrap:balance;letter-spacing:-.01em}
+.lead{color:var(--muted);font-size:15px;margin:0 0 18px;max-width:68ch}
+article h2{font:600 21px/1.25 var(--display);margin:42px 0 12px;padding-top:14px;border-top:1px solid var(--line);text-wrap:balance;scroll-margin-top:calc(var(--topbar) + 12px)}
+article h3{font:600 16px/1.3 var(--display);margin:28px 0 8px;color:var(--fg);text-wrap:balance;scroll-margin-top:calc(var(--topbar) + 12px)}
+article h4{font:600 14.5px var(--display);margin:20px 0 6px}
+article p,article li{font-size:15.5px;line-height:1.65;color:#d5dde2}
+article p{margin:0 0 12px}
+article ul,article ol{padding-left:22px;margin:0 0 14px}
+article li{margin:0 0 5px}
+article strong{color:var(--fg);font-weight:600}
+.math{margin:14px 0 16px;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--air);border-radius:10px;overflow-x:auto;color:var(--fg);font-size:16px}
+.math mjx-container{margin:0!important}
+.tw{overflow-x:auto;margin:12px 0 18px;border:1px solid var(--line);border-radius:10px}
+.tw table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+.tw th{background:var(--panel-2);color:var(--muted);font-weight:500;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+.tw td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:#d5dde2}
+.tw tr:last-child td{border-bottom:0}
+.fresh{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:0 0 8px}
+.fresh summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;list-style:none}
+.fresh summary::-webkit-details-marker{display:none}
+.chip{font:600 12px var(--body);padding:3px 10px;border-radius:99px;background:rgba(79,196,137,.13);color:var(--ok);border:1px solid rgba(79,196,137,.35)}
+.chip.crit{background:rgba(236,106,99,.13);color:var(--crit);border-color:rgba(236,106,99,.4)}
+.fresh .s{color:var(--muted);font-size:13px}
+.fresh .more{color:var(--air);font-size:13px;margin-left:auto}
+.fresh table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+.fresh td{padding:5px 6px;border-top:1px solid var(--line)}
+.fresh td.n{text-align:right;font:500 13px var(--mono);white-space:nowrap}
+.fresh td.ok{color:var(--ok);white-space:nowrap} .fresh td.bad{color:var(--crit);font-weight:700}
+.see{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 6px}
+@media (max-width:920px){ .app{grid-template-columns:1fr;gap:12px} .toc{display:none} .tocm{display:block;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+  .tocm summary{cursor:pointer;font:600 14px var(--display)} .tocm nav{display:flex;flex-direction:column;margin-top:8px} .tocm a{color:var(--muted);text-decoration:none;padding:6px 4px;font-size:14px;border-top:1px solid var(--line)} .tocm a.l3{padding-left:18px;font-size:13px} }
+@media (max-width:560px){ article p,article li{font-size:15px} .math{padding:12px;font-size:14.5px} }
+</style>
+
+<header class="topbar">
+  <button class="iconbtn" id="menuBtn" aria-label="Меню" aria-expanded="false" aria-controls="drawer">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="2"/><path d="M12 10c0-4 1-6 4-6 2 0 3 2 2 4l-4 3M14 12c4 0 6 1 6 4 0 2-2 3-4 2l-3-4M12 14c0 4-1 6-4 6-2 0-3-2-2-4l4-3M10 12c-4 0-6-1-6-4 0-2 2-3 4-2l3 4"/></svg></span>
+    <span><b>Вытяжка сварочного цеха</b><small>цифровой двойник · МГТУ «СТАНКИН»</small></span></a>
+  <nav class="tabs" aria-label="Разделы">
+    <a href="index.html" >Двойник</a>
+    <a href="calc.html" >Расчёт (Excel)</a>
+    <a href="example.html" aria-current="page">Пример расчёта</a>
+  </nav>
+  <span class="grow"></span>
+  <span class="ver" title="Версия модели и дата сборки сайта">модель v1.7 · сборка 12.10.2026 17:08</span>
+  <a class="btn sm ghost dl" href="https://bliizi.github.io/ventilation/model_raschet.xlsx" title="Скачать книгу Excel со всеми листами и формулами">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Excel</span></a>
+</header>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" aria-label="Меню" hidden>
+  <div class="dh"><span class="label">Разделы сайта</span>
+    <button class="iconbtn" id="menuClose" aria-label="Закрыть меню"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <nav>
+    <a href="index.html" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>
+      <div><b>Цифровой двойник</b><span>3D-цех, живое сравнение двух систем управления на одной смене</span></div></a>
+    <a href="calc.html" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>
+      <div><b>Расчёт (Excel)</b><span>Все листы книги с формулами: нажмите на ячейку — увидите формулу</span></div></a>
+    <a href="example.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>
+      <div><b>Пример расчёта</b><span>3 поста, все формулы с подстановкой чисел и пояснениями</span></div></a>
+    <a href="index.html#notes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
+      <div><b>Примечания</b><span>Как читать итоги и графики, нормы, допущения</span></div></a>
+    <hr>
+    <a href="https://bliizi.github.io/ventilation/model_raschet.xlsx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+      <div><b>Скачать Excel</b><span>Модель_расчёт_v2.xlsx — формулы живые, можно менять исходные</span></div></a>
+  </nav>
+  <div class="foot">модель v1.7 · сборка 12.10.2026 17:08<br>Сайт, Excel и пример расчёта собираются из одного расчётного ядра — числа везде одинаковые.</div>
+</aside>
+<script>
+(() => {
+  const btn = document.getElementById('menuBtn'), dr = document.getElementById('drawer'), sc = document.getElementById('scrim'), cl = document.getElementById('menuClose');
+  let open = false;
+  function set(v) {
+    open = v; btn.setAttribute('aria-expanded', String(v));
+    if (v) { dr.hidden = false; sc.hidden = false; requestAnimationFrame(() => { dr.classList.add('show'); sc.classList.add('show'); }); cl.focus(); }
+    else { dr.classList.remove('show'); sc.classList.remove('show'); setTimeout(() => { if (!open) { dr.hidden = true; sc.hidden = true; } }, 230); btn.focus(); }
+  }
+  btn.onclick = () => set(!open); cl.onclick = () => set(false); sc.onclick = () => set(false);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && open) set(false); });
+  dr.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { if (a.getAttribute('href').startsWith('index.html#') && location.pathname.endsWith('index.html') || a.getAttribute('href') === '#') set(false); }));
+})();
+</script>
+
+<div class="app">
+  <nav class="toc" id="toc" aria-label="Содержание"><span class="label">Содержание</span><a class="l2" href="#h1">0. Исходные данные</a><a class="l2" href="#h2">1. Сколько дыма и сколько нужно воздуха</a><a class="l3" href="#h3">Шаг 1.1. Сколько граммов проволоки плавит дуга — коэффициент расплавления</a><a class="l3" href="#h4">Шаг 1.2. Расход проволоки</a><a class="l3" href="#h5">Шаг 1.3. Сколько выделяется марганца</a><a class="l3" href="#h6">Шаг 1.4. Сколько дыма уходит мимо отсоса</a><a class="l3" href="#h7">Шаг 1.5. Весь воздухообмен — СП 60.13330.2020, прил. Г, формула Г.2</a><a class="l3" href="#h8">Шаг 1.6. Проверка: что лимитирует</a><a class="l2" href="#h9">2. Потери давления в сети</a><a class="l3" href="#h10">2.1. Одна формула для любого элемента</a><a class="l3" href="#h11">2.2. Трение в прямой трубе</a><a class="l3" href="#h12">2.3. Вход в зонт отсоса</a><a class="l3" href="#h13">2.4. Отводы (Идельчик, диагр. 6-1, с. 277–278)</a><a class="l3" href="#h14">2.5. Заслонка (Идельчик, диагр. 9-17, кривая 2)</a><a class="l3" href="#h15">2.6. Переход на больший диаметр — диффузор (Идельчик, диагр. 5-2)</a><a class="l3" href="#h16">2.7. Тройники (Идельчик, диагр. 7-4; A — табл. 7-1)</a><a class="l3" href="#h17">2.8. Фильтр и выход</a><a class="l3" href="#h18">2.9. Все три пути — сумма = давлению вентилятора</a><a class="l2" href="#h19">3. Вентилятор и электроэнергия</a><a class="l3" href="#h20">3.1. Характеристика вентилятора</a><a class="l3" href="#h21">3.2. Законы подобия — вентилятор на других оборотах (ГОСТ 10921-2017, разд. 14)</a><a class="l3" href="#h22">3.3. Мощность на валу</a><a class="l3" href="#h23">3.4. КПД двигателя при неполной нагрузке (Копылов, разделение потерь)</a><a class="l3" href="#h24">3.5. Мощность из сети</a><a class="l2" href="#h25">4. Пусконаладка: почему углы 0° / 5° / 8° и 1417 об/мин</a><a class="l2" href="#h26">5. Регулирование: как система держит 1500 м³/ч во время смены</a><a class="l3" href="#h27">5.1. Датчики — откуда регулятор берёт цифры</a><a class="l3" href="#h28">5.2. Один шаг регулятора заслонки</a><a class="l3" href="#h29">5.3. Правило вентилятора (тоже каждую секунду)</a><a class="l3" href="#h30">5.4. Включение поста — упреждение</a><a class="l3" href="#h31">5.5. Почему важна скорость привода</a><a class="l2" href="#h32">6. Концентрация во времени, тепло и энергия за смену</a><a class="l3" href="#h33">6.1. Как меняется концентрация в цехе</a><a class="l3" href="#h34">6.2. Тепло на подогрев приточного воздуха</a><a class="l3" href="#h35">6.3. Электроэнергия вентилятора за смену</a><a class="l2" href="#h36">7. Что принято допущением и где проверить</a></nav>
+  <article>
+    <h1>Пример расчёта: 3 поста, все формулы с подстановкой</h1>
+    <p class="lead">Цех 48 × 24 × 14,4 м, три поста полуавтоматической сварки в CO₂ при 225 А. Каждая величина объяснена: что это, зачем и откуда взята. Те же формулы — в книге Excel на странице «Расчёт».</p>
+    <div class="see"><a class="btn sm" href="calc.html">Открыть Excel со всеми листами</a><a class="btn sm ghost" href="index.html">Посмотреть в 3D-двойнике</a></div>
+    <details class="fresh">
+      <summary><span class="chip ">числа сверены с программой: 17 из 17</span><span class="s">модель v1.7 · сборка 12.10.2026 17:08</span><span class="more">подробнее</span></summary>
+      <p class="s" style="margin:8px 0 0">При каждой сборке сайта ключевые числа этого текста сравниваются с результатом расчётного ядра. Если модель изменится, а текст нет — здесь появится «РАСХОДИТСЯ», и сборка подскажет, что обновить.</p>
+      <table><tbody><tr><td>Коэффициент расплавления α_р, г/(А·ч)</td><td class="n">9,777</td><td class="ok">совпадает</td></tr><tr><td>Расход проволоки B при 225 А, кг/ч</td><td class="n">2,20</td><td class="ok">совпадает</td></tr><tr><td>Весь воздухообмен L по СП 60, м³/ч</td><td class="n">12 601</td><td class="ok">совпадает</td></tr><tr><td>Общеобменная L − L_мо, м³/ч</td><td class="n">8 101</td><td class="ok">совпадает</td></tr><tr><td>Давление вентилятора, Па</td><td class="n">800,7</td><td class="ok">совпадает</td></tr><tr><td>Обороты вентилятора, об/мин</td><td class="n">1 417</td><td class="ok">совпадает</td></tr><tr><td>Расход местной вытяжки, м³/ч</td><td class="n">4 498</td><td class="ok">совпадает</td></tr><tr><td>Мощность на валу, Вт</td><td class="n">1 539</td><td class="ok">совпадает</td></tr><tr><td>Мощность из сети, Вт</td><td class="n">1 882</td><td class="ok">совпадает</td></tr><tr><td>Угол заслонки после ПИ-шага, °</td><td class="n">25,5</td><td class="ok">совпадает</td></tr><tr><td>Энергия смены: без регулирования, кВт·ч</td><td class="n">15,06</td><td class="ok">совпадает</td></tr><tr><td>Энергия смены: «открыто/закрыто», кВт·ч</td><td class="n">5,39</td><td class="ok">совпадает</td></tr><tr><td>Энергия смены: предлагаемая, кВт·ч</td><td class="n">4,97</td><td class="ok">совпадает</td></tr><tr><td>Тепло смены: без регулирования, кВт·ч</td><td class="n">665</td><td class="ok">совпадает</td></tr><tr><td>Тепло смены: предлагаемая + ОВ по постам, кВт·ч</td><td class="n">398</td><td class="ok">совпадает</td></tr><tr><td>Перерасход воздуха: «открыто/закрыто», %</td><td class="n">38,4</td><td class="ok">совпадает</td></tr><tr><td>Перерасход воздуха: предлагаемая, %</td><td class="n">2,6</td><td class="ok">совпадает</td></tr></tbody></table>
+    </details>
+    <details class="tocm"><summary>Содержание</summary><nav><a class="l2" href="#h1">0. Исходные данные</a><a class="l2" href="#h2">1. Сколько дыма и сколько нужно воздуха</a><a class="l3" href="#h3">Шаг 1.1. Сколько граммов проволоки плавит дуга — коэффициент расплавления</a><a class="l3" href="#h4">Шаг 1.2. Расход проволоки</a><a class="l3" href="#h5">Шаг 1.3. Сколько выделяется марганца</a><a class="l3" href="#h6">Шаг 1.4. Сколько дыма уходит мимо отсоса</a><a class="l3" href="#h7">Шаг 1.5. Весь воздухообмен — СП 60.13330.2020, прил. Г, формула Г.2</a><a class="l3" href="#h8">Шаг 1.6. Проверка: что лимитирует</a><a class="l2" href="#h9">2. Потери давления в сети</a><a class="l3" href="#h10">2.1. Одна формула для любого элемента</a><a class="l3" href="#h11">2.2. Трение в прямой трубе</a><a class="l3" href="#h12">2.3. Вход в зонт отсоса</a><a class="l3" href="#h13">2.4. Отводы (Идельчик, диагр. 6-1, с. 277–278)</a><a class="l3" href="#h14">2.5. Заслонка (Идельчик, диагр. 9-17, кривая 2)</a><a class="l3" href="#h15">2.6. Переход на больший диаметр — диффузор (Идельчик, диагр. 5-2)</a><a class="l3" href="#h16">2.7. Тройники (Идельчик, диагр. 7-4; A — табл. 7-1)</a><a class="l3" href="#h17">2.8. Фильтр и выход</a><a class="l3" href="#h18">2.9. Все три пути — сумма = давлению вентилятора</a><a class="l2" href="#h19">3. Вентилятор и электроэнергия</a><a class="l3" href="#h20">3.1. Характеристика вентилятора</a><a class="l3" href="#h21">3.2. Законы подобия — вентилятор на других оборотах (ГОСТ 10921-2017, разд. 14)</a><a class="l3" href="#h22">3.3. Мощность на валу</a><a class="l3" href="#h23">3.4. КПД двигателя при неполной нагрузке (Копылов, разделение потерь)</a><a class="l3" href="#h24">3.5. Мощность из сети</a><a class="l2" href="#h25">4. Пусконаладка: почему углы 0° / 5° / 8° и 1417 об/мин</a><a class="l2" href="#h26">5. Регулирование: как система держит 1500 м³/ч во время смены</a><a class="l3" href="#h27">5.1. Датчики — откуда регулятор берёт цифры</a><a class="l3" href="#h28">5.2. Один шаг регулятора заслонки</a><a class="l3" href="#h29">5.3. Правило вентилятора (тоже каждую секунду)</a><a class="l3" href="#h30">5.4. Включение поста — упреждение</a><a class="l3" href="#h31">5.5. Почему важна скорость привода</a><a class="l2" href="#h32">6. Концентрация во времени, тепло и энергия за смену</a><a class="l3" href="#h33">6.1. Как меняется концентрация в цехе</a><a class="l3" href="#h34">6.2. Тепло на подогрев приточного воздуха</a><a class="l3" href="#h35">6.3. Электроэнергия вентилятора за смену</a><a class="l2" href="#h36">7. Что принято допущением и где проверить</a></nav></details>
+    <h2 id="h1">0. Исходные данные</h2>
+<p>Считаем цех 48 × 24 × 14,4 м с тремя постами полуавтоматической сварки в CO₂, все три варят одновременно при 225 А. Ниже — все величины, которые входят в расчёт, и откуда они взяты.</p>
+<div class="tw"><table><thead><tr><th>Величина</th><th>Обозначение</th><th>Значение</th><th>Откуда</th></tr></thead><tbody><tr><td>Сварочный ток</td><td>I</td><td>225 А</td><td>режим сварки</td></tr><tr><td>Диаметр проволоки</td><td>d</td><td>1,2 мм</td><td>марка Св-08Г2С</td></tr><tr><td>Вылет проволоки</td><td>l</td><td>15 мм</td><td>режим сварки</td></tr><tr><td>Удельное выделение марганца</td><td>g</td><td>1,90 г на 1 кг проволоки</td><td>Методика 1997, табл. 1; ГОСТ Р 56164-2014</td></tr><tr><td>Доля дыма, которую ловит отсос</td><td>η</td><td>0,8</td><td>Методика 1997 (при отсутствии данных)</td></tr><tr><td>ПДК марганца в воздухе рабочей зоны</td><td>ПДК</td><td>0,2 мг/м³</td><td>СанПиН 1.2.3685-21, табл. 2.1</td></tr><tr><td>Марганец в наружном (приточном) воздухе</td><td>q_пр</td><td>0,001 мг/м³</td><td>СанПиН, табл. 1.1 (верхняя оценка)</td></tr><tr><td>Расход местного отсоса на пост</td><td>L_мо</td><td>1500 м³/ч</td><td>ГОСТ 12.3.003-86, п. 2.11.1</td></tr><tr><td>Плотность воздуха</td><td>ρ</td><td>1,2 кг/м³</td><td>ГОСТ 10921-2017</td></tr><tr><td>Кинематическая вязкость воздуха</td><td>ν</td><td>15,06·10⁻⁶ м²/с</td><td>Варгафтик, 1972 (20 °C)</td></tr><tr><td>Шероховатость стальной трубы</td><td>k_э</td><td>0,1 мм</td><td>Справочник проектировщика, 1992</td></tr><tr><td>Номинальные обороты вентилятора</td><td>n₀</td><td>1500 об/мин</td><td>паспорт (демо)</td></tr><tr><td>КПД вентилятора</td><td>η_в</td><td>0,65</td><td>паспорт (демо)</td></tr><tr><td>Двигатель</td><td>P_ном, η_ном</td><td>2,2 кВт; 0,867</td><td>ГОСТ IEC 60034-30-1 (класс IE3)</td></tr><tr><td>Температура внутри / снаружи</td><td>t_в / t_н</td><td>18 / −1,7 °C</td><td>СанПиН; СП 131.13330.2025, табл. 5.1 (Москва)</td></tr><tr><td>Объём цеха</td><td>V</td><td>48 · 24 · 14,4 = 16 589 м³</td><td>планировка</td></tr></tbody></table></div>
+<p><strong>Схема сети.</strong> Каждый пост: зонт → труба 200 мм, 6 м → отвод 90° → отвод 45° → заслонка → дальше в общий коллектор. Пост 1 самый дальний: его воздух проходит весь коллектор (участки 250, 315 и 400 мм). Посты 2 и 3 входят в коллектор сбоку через тройники. После коллектора весь воздух идёт через отвод, фильтр, вентилятор и выбросную трубу наружу.</p>
+<h2 id="h2">1. Сколько дыма и сколько нужно воздуха</h2>
+<p>Итог блока: три поста при 225 А выделяют 12,54 г/ч марганца, в цех уходит 2,51 г/ч, и для ПДК нужно удалять 12 601 м³/ч воздуха, из них общеобменная — 8 101 м³/ч.</p>
+<h3 id="h3">Шаг 1.1. Сколько граммов проволоки плавит дуга — коэффициент расплавления</h3>
+<p><strong>Зачем.</strong> Дым образуется из расплавленной проволоки, и Методика даёт выделения «на килограмм проволоки». Значит, сначала надо узнать, сколько проволоки расходуется в час. Это зависит от тока: больше ток — быстрее плавится проволока.</p>
+<div class="math">\[\alpha_\text{р} = 9{,}05 + 3{,}1\cdot10^{-4}\cdot\frac{I\cdot l}{d^2}\]</div>
+<ul><li>α_р — коэффициент расплавления, г/(А·ч): сколько граммов проволоки плавит каждый ампер за час;</li><li>I — сварочный ток, А;</li><li>l — вылет проволоки (длина от токоподвода до дуги), мм: чем длиннее, тем сильнее проволока разогревается током и быстрее плавится;</li><li>d — диаметр проволоки, мм;</li><li>9,05 и 3,1·10⁻⁴ — эмпирические коэффициенты для сварки в CO₂ (Соколов Г.Н. и др., ВолгГТУ, 2016, ф. 3.22).</li></ul>
+<p>Подстановка: α_р = 9,05 + 0,00031 · 225 · 15 / 1,2² = 9,05 + 0,00031 · 2343,75 = 9,05 + 0,727 = <strong>9,777 г/(А·ч)</strong>.</p>
+<h3 id="h4">Шаг 1.2. Расход проволоки</h3>
+<div class="math">\[B = \frac{\alpha_\text{р}\cdot I}{1000}\]</div>
+<ul><li>B — расход проволоки на одном посту, кг/ч;</li><li>делим на 1000, чтобы перевести граммы в килограммы.</li></ul>
+<p>B = 9,777 · 225 / 1000 = <strong>2,20 кг/ч</strong>. Для сравнения: при 175 А — 1,68 кг/ч, при 270 А — 2,68 кг/ч.</p>
+<h3 id="h5">Шаг 1.3. Сколько выделяется марганца</h3>
+<p><strong>Зачем.</strong> Из всех веществ сварочного дыма марганец опаснее всего по отношению к своей ПДК, поэтому он задаёт нужный воздух (проверка — в шаге 1.6).</p>
+<div class="math">\[G = g\cdot B\]</div>
+<ul><li>G — сколько марганца выделяет один пост, г/ч;</li><li>g — удельное выделение: 1,90 г марганца на каждый килограмм проволоки Св-08Г2С (Методика 1997, табл. 1).</li></ul>
+<p>G = 1,90 · 2,20 = <strong>4,18 г/ч</strong> с одного поста, с трёх — 12,54 г/ч.</p>
+<h3 id="h6">Шаг 1.4. Сколько дыма уходит мимо отсоса</h3>
+<p><strong>Зачем.</strong> Отсос ловит не всё. То, что он поймал, сразу уходит в трубу и наружу. Опасна для цеха только оставшаяся часть.</p>
+<div class="math">\[m = \sum_{\text{посты}} (1-\eta)\cdot G\]</div>
+<ul><li>m — марганец, который попадает в воздух цеха, мг/ч;</li><li>η = 0,8 — доля, которую ловит отсос; (1 − η) = 0,2 — доля, которая уходит в цех.</li></ul>
+<p>С одного поста: 0,2 · 4,18 = 0,836 г/ч. С трёх: m = 3 · 0,836 = <strong>2,508 г/ч = 2508 мг/ч</strong> (умножили на 1000, потому что ПДК дана в миллиграммах).</p>
+<h3 id="h7">Шаг 1.5. Весь воздухообмен — СП 60.13330.2020, прил. Г, формула Г.2</h3>
+<p><strong>Зачем.</strong> В установившемся режиме из цеха должно уходить столько марганца, сколько в него поступает. Уходит он вместе с удаляемым воздухом, а на место него идёт почти чистый наружный воздух. Вопрос — сколько воздуха нужно, чтобы концентрация в цехе держалась на ПДК.</p>
+<div class="math">\[L = L_{wz} + \frac{m - L_{wz}\,(q_{wz}-q_\text{пр})}{q_l - q_\text{пр}}\]</div>
+<ul><li>L — весь воздух, который надо удалять из цеха, м³/ч (местные отсосы + общеобменная вытяжка);</li><li>L_wz — воздух местных отсосов: 3 · 1500 = 4500 м³/ч;</li><li>q_wz — концентрация в воздухе рабочей зоны, который забирают отсосы; допустимо — ПДК = 0,2 мг/м³;</li><li>q_l — концентрация в воздухе, который удаляет общеобменная вытяжка; в цехе воздух перемешан, поэтому тоже 0,2 мг/м³;</li><li>q_пр = 0,001 мг/м³ — марганец в наружном воздухе, который подаётся взамен.</li></ul>
+<p>Подстановка:</p>
+<ol><li>Сколько марганца уносят сами отсосы из воздуха цеха: L_wz · (q_wz − q_пр) = 4500 · 0,199 = 895,5 мг/ч.</li><li>Сколько остаётся на общеобменную: 2508 − 895,5 = 1612,5 мг/ч.</li><li>Сколько для этого нужно воздуха: 1612,5 / 0,199 = 8101 м³/ч (каждый кубометр уносит 0,199 мг).</li><li>Весь воздух: L = 4500 + 8101 = <strong>12 601 м³/ч</strong>.</li></ol>
+<p>Общеобменная L_оо = L − L_wz = <strong>8 101 м³/ч</strong>.</p>
+<p><strong>Почему воздух отсосов вычитается.</strong> 80 % дыма отсос ловит прямо у шва. Но вместе с ним он забирает ещё и обычный воздух цеха — а в нём та же концентрация 0,2 мг/м³. Поэтому отсосы тоже участвуют в разбавлении.</p>
+<h3 id="h8">Шаг 1.6. Проверка: что лимитирует</h3>
+<p>Тот же расчёт делается для каждого вещества. Берётся наибольший расход (СП 60, п. 7.4.3).</p>
+<div class="tw"><table><thead><tr><th>Вещество</th><th>g, г/кг</th><th>В цех, мг/ч (3 поста)</th><th>ПДК, мг/м³</th><th>Нужно воздуха, м³/ч</th></tr></thead><tbody><tr><td><strong>Марганец</strong></td><td>1,90</td><td>2508</td><td>0,2</td><td><strong>12 601</strong></td></tr><tr><td>Оксид железа</td><td>7,67</td><td>10 122</td><td>6</td><td>≈ 1 690</td></tr><tr><td>Диоксид кремния</td><td>0,43</td><td>568</td><td>1</td><td>≈ 570</td></tr></tbody></table></div>
+<p>Марганцу нужно в 7 раз больше воздуха, чем железу, — он лимитирует. Если обеспечить марганец, остальные вещества окажутся с запасом.</p>
+<h2 id="h9">2. Потери давления в сети</h2>
+<p>Итог блока: чтобы протянуть по 1500 м³/ч через каждый пост, вентилятор должен создать 800,7 Па. Ровно столько теряется на пути каждого из трёх постов до выброса.</p>
+<p><strong>Зачем считать потери.</strong> Воздух в трубе трётся о стенки и тормозится на поворотах, сужениях и фильтре. На каждом элементе теряется часть давления. Вентилятор должен покрыть сумму этих потерь, иначе воздух не пойдёт. А если давления с запасом, лишнее гасится заслонками — это потерянная энергия.</p>
+<h3 id="h10">2.1. Одна формула для любого элемента</h3>
+<div class="math">\[\Delta p = \zeta \cdot \frac{\rho w^2}{2}, \qquad w = \frac{Q}{F}, \qquad F = \frac{\pi d^2}{4}\]</div>
+<ul><li>Δp — потеря давления на элементе, Па;</li><li>ζ («дзета») — коэффициент сопротивления элемента, без размерности: во сколько раз потеря больше динамического давления. У каждого типа элемента он свой (Идельчик, 1992);</li><li>ρw²/2 = p_д — динамическое давление, Па: «энергия движения» воздуха;</li><li>w — скорость воздуха, м/с; Q — расход, м³/с; F — площадь сечения трубы, м²; d — диаметр, м.</li></ul>
+<p><strong>Пример для ветви поста (d = 200 мм, 1500 м³/ч):</strong></p>
+<ol><li>Расход в секунду: Q = 1500 / 3600 = 0,4167 м³/с (в часе 3600 секунд).</li><li>Площадь: F = 3,1416 · 0,2² / 4 = 0,0314 м².</li><li>Скорость: w = 0,4167 / 0,0314 = 13,26 м/с.</li><li>Динамическое давление: p_д = 1,2 · 13,26² / 2 = <strong>105,4 Па</strong>.</li></ol>
+<p>В коллекторе другие диаметры и расходы, поэтому и скорости другие:</p>
+<div class="tw"><table><thead><tr><th>Участок</th><th>d, мм</th><th>Q, м³/ч</th><th>F, м²</th><th>w, м/с</th><th>p_д, Па</th></tr></thead><tbody><tr><td>Ветвь любого поста</td><td>200</td><td>1 500</td><td>0,0314</td><td>13,26</td><td>105,4</td></tr><tr><td>Коллектор после поста 1</td><td>250</td><td>1 500</td><td>0,0491</td><td>8,48</td><td>43,2</td></tr><tr><td>Коллектор после поста 2</td><td>315</td><td>3 000</td><td>0,0779</td><td>10,69</td><td>68,6</td></tr><tr><td>Магистраль после поста 3</td><td>400</td><td>4 500</td><td>0,1257</td><td>9,94</td><td>59,3</td></tr></tbody></table></div>
+<h3 id="h11">2.2. Трение в прямой трубе</h3>
+<p><strong>Зачем.</strong> Чем длиннее и уже труба, тем больше воздух трётся о стенки.</p>
+<div class="math">\[\zeta_\text{тр} = \lambda\cdot\frac{l}{d}, \qquad \lambda = 0{,}11\left(\frac{k_\text{э}}{d} + \frac{68}{Re}\right)^{0{,}25}, \qquad Re = \frac{w\cdot d}{\nu}\]</div>
+<ul><li>λ — коэффициент трения по формуле Альтшуля (Альтшуль А.Д., 1982);</li><li>l — длина участка, м;</li><li>k_э = 0,0001 м — шероховатость стенки стальной трубы (высота неровностей);</li><li>Re — число Рейнольдса: показывает, насколько течение вихревое. При Re &gt; 4000 течение турбулентное — у нас везде так;</li><li>ν = 15,06·10⁻⁶ м²/с — вязкость воздуха.</li></ul>
+<p>Пример, ветвь поста 6 м:</p>
+<ol><li>Re = 13,26 · 0,2 / 0,00001506 = 176 000.</li><li>k_э/d = 0,0001 / 0,2 = 0,0005; 68/Re = 68 / 176 000 = 0,000386.</li><li>λ = 0,11 · (0,0005 + 0,000386)^0,25 = 0,11 · 0,1725 = 0,0190.</li><li>ζ = 0,0190 · 6 / 0,2 = 0,569.</li><li>Δp = 0,569 · 105,4 = <strong>60,0 Па</strong>.</li></ol>
+<h3 id="h12">2.3. Вход в зонт отсоса</h3>
+<p>ζ = 0,2 — конический вход (Идельчик, диагр. 3-6, с. 127). Плавная воронка теряет мало; у трубы с острым краем было бы 0,5. Δp = 0,2 · 105,4 = <strong>21,1 Па</strong>.</p>
+<h3 id="h13">2.4. Отводы (Идельчик, диагр. 6-1, с. 277–278)</h3>
+<p><strong>Зачем.</strong> На повороте поток прижимается к наружной стенке и закручивается — теряется энергия.</p>
+<div class="math">\[\zeta_\text{отв} = k_\Delta\cdot k_{Re}\cdot A_1\cdot B_1\]</div>
+<ul><li>A₁ — влияние угла поворота (таблица): 45° → 0,60, 90° → 1,00;</li><li>B₁ — влияние радиуса изгиба: B₁ = 0,21/√(R/D) при R/D &gt; 1 и 0,21/(R/D)^2,5 при R/D ≤ 1. Чем плавнее изгиб, тем меньше;</li><li>k_Re — поправка на скорость: k_Re = 1,3 − 0,29·ln(Re·10⁻⁵);</li><li>k_Δ — поправка на шероховатость стенки: сотношение трения в шероховатой и гладкой трубе. При больших Re она равна 1 + (k_э/d)·10³.</li></ul>
+<p>Пример, отвод 90°, R/D = 1,5, d = 200 мм:</p>
+<ol><li>A₁ = 1,00.</li><li>B₁ = 0,21 / √1,5 = 0,1715.</li><li>k_Re = 1,3 − 0,29 · ln(1,76) = 1,3 − 0,29 · 0,565 = 1,136.</li><li>k_Δ: трение в гладкой трубе λ_гл = 1/(1,8·lg Re − 1,64)² = 0,01643; отношение 0,0190/0,01643 = 1,155. Re = 176 000 лежит между зонами Идельчика (1,6–2,5·10⁵), поэтому берётся промежуточное между 1,155 и 1,5: k_Δ = 1,229.</li><li>ζ = 1,229 · 1,136 · 1,00 · 0,1715 = 0,239.</li><li>Δp = 0,239 · 105,4 = <strong>25,2 Па</strong>.</li></ol>
+<p>Отвод 45°: то же, но A₁ = 0,60 → ζ = 0,144 → 15,2 Па. Отвод 90° с R/D = 1 (в торец коллектора): B₁ = 0,21 → ζ = 0,293 → 30,9 Па.</p>
+<h3 id="h14">2.5. Заслонка (Идельчик, диагр. 9-17, кривая 2)</h3>
+<p><strong>Зачем.</strong> Именно ею регулятор меняет сопротивление ветви и тем самым расход.</p>
+<div class="tw"><table><thead><tr><th>Угол, °</th><th>0</th><th>10</th><th>20</th><th>30</th><th>40</th><th>50</th><th>60</th><th>70</th></tr></thead><tbody><tr><td>ζ</td><td>0,2</td><td>0,52</td><td>1,54</td><td>4,50</td><td>11,0</td><td>29,0</td><td>105</td><td>625</td></tr></tbody></table></div>
+<p>Между точками — интерполяция в логарифмах: ζ(α) = ζ₁ · (ζ₂/ζ₁)^t, где t — доля пути от соседней точки. Пример, заслонка поста 3 на 8,0°: t = 0,8 → ζ = 0,2 · (0,52/0,2)^0,8 = 0,2 · 2,146 = 0,429 → Δp = 0,429 · 105,5 = <strong>45,3 Па</strong>. Значение для 0° (0,2) — допущение: кривая 2 его не даёт.</p>
+<h3 id="h15">2.6. Переход на больший диаметр — диффузор (Идельчик, диагр. 5-2)</h3>
+<p><strong>Зачем.</strong> Дальше по коллектору расход растёт, и труба расширяется. При расширении поток срывается со стенок, что даёт потери.</p>
+<div class="math">\[\zeta = \left(\zeta_2 - \zeta_\text{тр}(2)\right)\left(\frac{1-1/n}{0{,}5}\right)^{1{,}92} + \zeta_\text{тр}(n), \qquad n = \left(\frac{d_2}{d_1}\right)^2\]</div>
+<ul><li>n — во сколько раз увеличилась площадь;</li><li>ζ₂ — табличное значение Идельчика для n = 2 при данном угле раскрытия и Re;</li><li>ζ_тр = λ/(8·sin(α/2))·(1 − 1/n²) — трение внутри диффузора; α = 15° — угол раскрытия;</li><li>формула пересчитывает табличное значение на наше n — Идельчик, ф. (5-6), (5-7).</li></ul>
+<p>Пример, переход 200 → 250 мм: n = (250/200)² = 1,5625; ζ₂ = 0,0761; ζ_тр(2) = 0,0136; ζ_тр(n) = 0,0107. ζ = (0,0761 − 0,0136) · (0,36/0,5)^1,92 + 0,0107 = 0,0625 · 0,532 + 0,0107 = 0,044 → Δp = 0,044 · 105,4 = <strong>4,6 Па</strong>.</p>
+<h3 id="h16">2.7. Тройники (Идельчик, диагр. 7-4; A — табл. 7-1)</h3>
+<p><strong>Зачем.</strong> В тройнике сливаются два потока: идущий по коллектору («проход») и входящий сбоку от поста («бок»). Их потери зависят от доли бокового потока r. Именно через тройники посты влияют друг на друга.</p>
+<div class="math">\[\zeta_\text{бок} = A\left[1 + \left(r\frac{F_\text{с}}{F_\text{б}}\right)^2 - 2(1-r)^2\right], \qquad \zeta_\text{проход} = 1{,}55\,r - r^2, \qquad r = \frac{Q_\text{б}}{Q_\text{с}}\]</div>
+<ul><li>Q_б — расход бокового потока (от поста), Q_с — суммарный расход после слияния;</li><li>F_б, F_с — площади бокового и сборного каналов;</li><li>A = 1 при F_б/F_с ≤ 0,35, иначе max(0,9·(1 − r); 0,55);</li><li>оба ζ отнесены к p_д в сборном канале.</li></ul>
+<div class="tw"><table><thead><tr><th>Тройник</th><th>r</th><th>F_б/F_с</th><th>A</th><th>ζ</th><th>p_д сборного, Па</th><th>Δp, Па</th></tr></thead><tbody><tr><td>Пост 2 входит сбоку (коллектор 315)</td><td>1500/3000 = 0,50</td><td>0,403</td><td>0,55</td><td>0,55 · [1 + (0,5 · 2,48)² − 2 · 0,25] = 1,121</td><td>68,6</td><td>76,9</td></tr><tr><td>Пост 1 идёт проходом того же тройника</td><td>0,50</td><td>—</td><td>—</td><td>1,55 · 0,5 − 0,25 = 0,525</td><td>68,6</td><td>36,0</td></tr><tr><td>Пост 3 входит сбоку (магистраль 400)</td><td>1500/4500 = 0,333</td><td>0,25</td><td>1</td><td>1 · [1 + (0,333 · 4)² − 2 · 0,667²] = 1,889</td><td>59,3</td><td>112,1</td></tr><tr><td>Посты 1 + 2 идут проходом</td><td>0,333</td><td>—</td><td>—</td><td>1,55 · 0,333 − 0,111 = 0,406</td><td>59,3</td><td>24,1</td></tr></tbody></table></div>
+<h3 id="h17">2.8. Фильтр и выход</h3>
+<ul><li><strong>Фильтр:</strong> Δp = Δp_ном · Q/Q_ном = 400 · 4498/4500 = <strong>399,8 Па</strong>. В фильтре воздух просачивается через пористую среду, поэтому потеря растёт пропорционально расходу, а не его квадрату (закон Дарси; Ужов, Мягков, 1970). 400 Па при 4500 м³/ч — демо-значение до паспорта.</li><li><strong>Выход в атмосферу:</strong> ζ = 1 — вся энергия движения уносится струёй. Δp = 1 · 59,3 = <strong>59,3 Па</strong>.</li></ul>
+<h3 id="h18">2.9. Все три пути — сумма = давлению вентилятора</h3>
+<div class="tw"><table><thead><tr><th>Элемент</th><th>Путь поста 1, Па</th><th>Путь поста 2, Па</th><th>Путь поста 3, Па</th></tr></thead><tbody><tr><td>Зонт</td><td>21,1</td><td>21,1</td><td>21,1</td></tr><tr><td>Труба ветви 6 м</td><td>60,0</td><td>60,0</td><td>60,1</td></tr><tr><td>Отвод 90° + отвод 45°</td><td>25,2 + 15,1</td><td>25,3 + 15,2</td><td>25,3 + 15,2</td></tr><tr><td>Заслонка (угол)</td><td>21,3 (0°)</td><td>34,7 (5°)</td><td>45,3 (8°)</td></tr><tr><td>Отвод в торец + переход 200→250</td><td>30,9 + 4,6</td><td>—</td><td>—</td></tr><tr><td>Труба 250, 5 м + переход 250→315</td><td>16,4 + 2,3</td><td>—</td><td>—</td></tr><tr><td>Тройник у поста 2</td><td>36,0 (проход)</td><td>76,9 (бок)</td><td>—</td></tr><tr><td>Труба 315, 5 м + переход 315→400</td><td>18,9 + 2,8</td><td>18,9 + 2,8</td><td>—</td></tr><tr><td>Тройник у поста 3</td><td>24,1 (проход)</td><td>24,1 (проход)</td><td>112,1 (бок)</td></tr><tr><td>Магистраль 400, 10 м + отвод к фильтру</td><td>24,5 + 12,9</td><td>24,5 + 12,9</td><td>24,5 + 12,9</td></tr><tr><td>Фильтр</td><td>399,8</td><td>399,8</td><td>399,8</td></tr><tr><td>Выброс: труба 5 м + отвод + выход</td><td>12,2 + 12,9 + 59,3</td><td>12,2 + 12,9 + 59,3</td><td>12,2 + 12,9 + 59,3</td></tr><tr><td><strong>Итого</strong></td><td><strong>800,7</strong></td><td><strong>800,7</strong></td><td><strong>800,7</strong></td></tr></tbody></table></div>
+<p><strong>Как это читать.</strong> У поста 1 самый длинный путь, и его заслонка открыта полностью (21 Па — минимум). У поста 3 путь короче, давления вентилятора ему с запасом, и заслонка прикрыта до 8°, чтобы срезать лишнее. Иначе пост 3 тянул бы больше 1500, а пост 1 — меньше. Равенство сумм — закон сохранения энергии; автотест проверяет его с точностью 0,01 Па.</p>
+<h2 id="h19">3. Вентилятор и электроэнергия</h2>
+<p>Итог блока: на 1417 об/мин вентилятор даёт 4498 м³/ч при 800,7 Па, на валу тратится 1539 Вт, а из сети берётся 1882 Вт.</p>
+<h3 id="h20">3.1. Характеристика вентилятора</h3>
+<p><strong>Зачем.</strong> Вентилятор не даёт «любой расход при любом давлении». Чем больше расход, тем меньше давление он развивает. Эта зависимость — кривая из каталога, снятая при номинальных оборотах n₀ = 1500 об/мин (сейчас демо-значения, заменяются паспортом):</p>
+<div class="tw"><table><thead><tr><th>Q₀, м³/ч</th><th>0</th><th>2000</th><th>4000</th><th>5000</th><th>6000</th><th>7000</th></tr></thead><tbody><tr><td>p₀, Па</td><td>1400</td><td>1300</td><td>1050</td><td>850</td><td>550</td><td>150</td></tr></tbody></table></div>
+<p>Между точками — линейная интерполяция.</p>
+<h3 id="h21">3.2. Законы подобия — вентилятор на других оборотах (ГОСТ 10921-2017, разд. 14)</h3>
+<p><strong>Зачем.</strong> Частотник снижает обороты, а кривая дана только для 1500. Законы подобия пересчитывают её на любые обороты.</p>
+<div class="math">\[k = \frac{n}{n_0}, \qquad Q = k\cdot Q_0, \qquad p = k^2\cdot p_0, \qquad N = k^3\cdot N_0\]</div>
+<ul><li>n — фактические обороты; k — во сколько раз они ниже номинала;</li><li>расход падает как k, давление — как k², мощность — как k³. Поэтому снижение оборотов так сильно экономит: минус 20 % оборотов даёт минус 49 % мощности (0,8³ = 0,51).</li></ul>
+<p>Подстановка:</p>
+<ol><li>k = 1417 / 1500 = 0,9445.</li><li>Расход через вентилятор = сумма постов: 1499,3 + 1499,5 + 1499,5 = 4498 м³/ч (точность наладки ±1 м³/ч).</li><li>Пересчёт на каталожные обороты: Q₀ = 4498 / 0,9445 = 4762 м³/ч.</li><li>По кривой: 4762 лежит между 4000 (1050 Па) и 5000 (850 Па). p₀ = 1050 − (762/1000) · 200 = 897,5 Па.</li><li>Обратно на реальные обороты: p = 897,5 · 0,9445² = 897,5 · 0,8921 = <strong>800,7 Па</strong>.</li></ol>
+<p>Ровно столько же теряется в сети (блок 2). Значит, вентилятор и сеть сошлись в одной точке — это и есть рабочий режим.</p>
+<h3 id="h22">3.3. Мощность на валу</h3>
+<div class="math">\[N = \frac{Q\cdot p}{\eta_\text{в}}\]</div>
+<ul><li>N — мощность, которую двигатель отдаёт на вал вентилятора, Вт;</li><li>Q·p — полезная работа над воздухом (Q в м³/с, p в Па → Вт);</li><li>η_в = 0,65 — КПД вентилятора: часть мощности теряется на вихри и трение в самом вентиляторе.</li></ul>
+<p>N = (4498/3600) · 800,7 / 0,65 = 1,2495 · 800,7 / 0,65 = <strong>1539 Вт</strong>.</p>
+<h3 id="h23">3.4. КПД двигателя при неполной нагрузке (Копылов, разделение потерь)</h3>
+<p><strong>Зачем.</strong> Двигатель на 2,2 кВт сейчас нагружен не полностью, а его КПД зависит от загрузки. Потери делятся на постоянные (не зависят от нагрузки: трение, намагничивание) и переменные (нагрев обмоток, растут как квадрат нагрузки).</p>
+<div class="math">\[\Sigma P = P_\text{пост} + P_\text{пер}\cdot\beta^2, \qquad \beta = \frac{N}{P_\text{ном}}, \qquad \eta_\text{дв} = \frac{N}{N + \Sigma P}\]</div>
+<ol><li>Потери на номинале: 2200 · (1/0,867 − 1) = 337,5 Вт. Принято P_пост / P_пер = 0,5 → P_пост = 112,5 Вт, P_пер = 225 Вт.</li><li>Загрузка: β = 1539 / 2200 = 0,700.</li><li>Потери сейчас: 112,5 + 225 · 0,700² = 112,5 + 110,2 = 222,7 Вт.</li><li>КПД: η_дв = 1539 / (1539 + 222,7) = <strong>0,874</strong>.</li></ol>
+<h3 id="h24">3.5. Мощность из сети</h3>
+<div class="math">\[P_\text{эл} = \frac{N}{\eta_\text{дв}\cdot\eta_\text{ПЧ}}\]</div>
+<ul><li>η_ПЧ — КПД частотника, по типовой таблице: 0,92 при загрузке 0,5 и 0,94 при 0,75. Для 0,700 → 0,936 (до паспорта ПЧ).</li></ul>
+<p>P_эл = 1539 / (0,874 · 0,936) = <strong>1882 Вт</strong>. Это то, что покажет счётчик.</p>
+<h2 id="h25">4. Пусконаладка: почему углы 0° / 5° / 8° и 1417 об/мин</h2>
+<p>Итог блока: чтобы каждый пост получил ровно 1500 м³/ч при минимальных оборотах, заслонка дальнего поста 1 открыта полностью, а ближние посты 2 и 3 прикрыты на 5° и 8°.</p>
+<p><strong>Что было бы без наладки.</strong> Все заслонки открыты, вентилятор на 1500 об/мин. Воздух идёт туда, где путь легче: пост 3 получает 1650 м³/ч, пост 2 — 1622, дальний пост 1 — 1570. Всего 4843 м³/ч и 1,82 кВт на валу — на 8 % больше воздуха, чем нужно.</p>
+<p><strong>Как находится наладка</strong> (программа делает это перебором):</p>
+<ol><li>Берём обороты вентилятора n.</li><li>Для каждого поста подбираем угол заслонки, при котором он получает 1500 м³/ч.</li><li>Если все заслонки прикрыты — давления с запасом, снижаем n. Если даже открытой заслонке не хватает — повышаем.</li><li>Останавливаемся, когда одна заслонка ровно открыта, а её пост получает ровно 1500. Это и есть минимальные обороты.</li></ol>
+<p><strong>Почему именно такие углы.</strong> У всех трёх путей сумма потерь должна быть 800,7 Па (блок 2). У поста 3 сама труба короче, и «лишние» Па должна съесть заслонка:</p>
+<div class="tw"><table><thead><tr><th>Пост</th><th>Угол, °</th><th>ζ заслонки</th><th>Потеря на заслонке, Па</th><th>Почему</th></tr></thead><tbody><tr><td>1 (дальний)</td><td>0</td><td>0,20</td><td>21,3</td><td>самый длинный путь — запаса нет, заслонка открыта</td></tr><tr><td>2</td><td>5,2</td><td>0,33</td><td>34,7</td><td>путь короче, гасит 13 Па лишнего</td></tr><tr><td>3 (ближний)</td><td>8,0</td><td>0,43</td><td>45,3</td><td>самый короткий путь, гасит 24 Па лишнего</td></tr></tbody></table></div>
+<p>Углы маленькие, потому что сеть спроектирована почти сбалансированной: разница между путями всего 13–24 Па из 800.</p>
+<p><strong>Когда работает меньше постов,</strong> заслонки простаивающих закрываются, а обороты падают. Мощность падает примерно как куб расхода:</p>
+<div class="tw"><table><thead><tr><th>Работают</th><th>Обороты, об/мин</th><th>Углы 1 / 2 / 3</th><th>Весь расход, м³/ч</th><th>Мощность на валу, кВт</th></tr></thead><tbody><tr><td>Без регулирования</td><td>1500</td><td>0° / 0° / 0°</td><td>4 843</td><td>1,82</td></tr><tr><td>3 поста</td><td>1417</td><td>0° / 5° / 8°</td><td>4 498</td><td>1,54</td></tr><tr><td>2 поста</td><td>1120</td><td>0° / 5° / закрыта</td><td>3 023</td><td>0,75</td></tr><tr><td>1 пост</td><td>818</td><td>0° / закрыта / закрыта</td><td>1 541</td><td>0,23</td></tr></tbody></table></div>
+<p>Закрытая заслонка немного пропускает (в модели — утечка 20–30 м³/ч, допущение до паспорта). Поэтому расход чуть больше 1500 × число постов.</p>
+<h2 id="h26">5. Регулирование: как система держит 1500 м³/ч во время смены</h2>
+<p>Итог блока: каждую секунду регулятор сравнивает измеренный расход с 1500 и подкручивает заслонку, а вентилятор держит обороты такими, чтобы самая открытая заслонка была почти на 0°.</p>
+<h3 id="h27">5.1. Датчики — откуда регулятор берёт цифры</h3>
+<ul><li><strong>Датчик тока на сварочном кабеле</strong> — «дуга горит / не горит» и величина тока.</li><li><strong>Датчик перепада давления на входе отсоса</strong> — расход через пост. Воронка отсоса работает как расходомер: Q = F · √(2Δp / (ρ(1 + ζ))). При 1500 м³/ч перепад = (1 + 0,2) · 105,4 = 126 Па.</li><li><strong>Обратная связь привода</strong> — фактический угол заслонки.</li></ul>
+<h3 id="h28">5.2. Один шаг регулятора заслонки</h3>
+<div class="math">\[\ln\zeta_\text{нов} = \ln\zeta_\text{стар} + k_I\cdot e\cdot\Delta t, \qquad e = \frac{Q - Q_\text{уст}}{Q_\text{уст}}\]</div>
+<ul><li>e — относительная ошибка расхода: минус — воздуха мало, плюс — много;</li><li>Q_уст = 1500 м³/ч — уставка (норма стола);</li><li>k_I = 4 — «резкость» регулятора; подобрана в модели (блок 3, чувствительность);</li><li>Δt = 1 с — шаг расчёта.</li></ul>
+<p><strong>Почему в логарифме ζ, а не в градусах.</strong> От 0° до 20° ζ меняется с 0,2 до 1,5, а от 60° до 70° — со 105 до 625. Один и тот же поворот на 1° даёт совсем разный эффект. В логарифме шаг «на 10 % больше сопротивления» одинаков при любом угле — регулятор не дёргается и не тормозит.</p>
+<p><strong>Пример.</strong> Заслонка на 30° (ζ = 4,50), датчик показывает 1320 м³/ч.</p>
+<ol><li>Ошибка: e = (1320 − 1500) / 1500 = −0,12.</li><li>Поправка: k_I · e · Δt = 4 · (−0,12) · 1 = −0,48.</li><li>Новое сопротивление: ζ = 4,50 · e^(−0,48) = 4,50 · 0,619 = 2,79.</li><li>Перевод в угол по таблице Идельчика: 2,79 лежит между 20° (1,54) и 30° (4,50). Доля = ln(2,79/1,54) / ln(4,50/1,54) = 0,594 / 1,072 = 0,554 → угол = 20 + 0,554 · 10 = <strong>25,5°</strong>.</li><li>Команда приводу: открыть с 30° до 25,5°. Привод с ходом 10 с на 90° поворачивается на 9° в секунду — успевает за один шаг.</li><li>Через секунду новый замер. Цикл повторяется, пока расход не станет 1500 ± 2 %.</li></ol>
+<p>Воздуха больше нормы → e &gt; 0 → ζ растёт → заслонка прикрывается. Границы: ζ от 0,2 (0°) до 625 (70°).</p>
+<h3 id="h29">5.3. Правило вентилятора (тоже каждую секунду)</h3>
+<p><strong>Зачем.</strong> Если все заслонки прикрыты, вентилятор дует с запасом, а заслонки этот запас гасят — энергия уходит в тепло. Выгоднее снизить обороты.</p>
+<ul><li>Самая открытая из работающих заслонок прикрыта больше чем на 5° → обороты снижаются на 1 · (угол − 5) об/мин в секунду.</li><li>Она уже открыта (меньше 2°), а воздуха не хватает → обороты растут на 400 · дефицит об/мин в секунду (дефицит — доля недобора).</li></ul>
+<p>Пример: заслонки на 8°, 12° и 15°. Самая открытая — 8° &gt; 5°, значит обороты падают на 3 об/мин в секунду. Расходы при этом падают, и регуляторы заслонок их приоткрывают. Так продолжается, пока одна заслонка не откроется до 0–5°. Итог — режим из блока 4.</p>
+<h3 id="h30">5.4. Включение поста — упреждение</h3>
+<p>Когда датчик тока видит новую дугу, контроллер не ждёт датчик расхода:</p>
+<ul><li>заслонка сразу идёт на угол, на котором была в прошлый раз (контроллер запоминает ζ);</li><li>вентилятор сразу идёт на обороты, заранее рассчитанные для этого набора постов (таблица из блока 4).</li></ul>
+<p>Дальше регуляторы только доводят на 1–2°. В модели все посты выходят на 1500 ± 2 % за 2 минуты, а недобор длится не больше 20 с подряд (автотесты).</p>
+<h3 id="h31">5.5. Почему важна скорость привода</h3>
+<p>Расчёт смены при разном времени поворота заслонки на 90°:</p>
+<div class="tw"><table><thead><tr><th>Время хода, с</th><th>Доля времени с недобором (&lt; 95 %)</th><th>Марганец в цехе, среднее за смену, мг/м³ (ПДК 0,2)</th></tr></thead><tbody><tr><td>2,5</td><td>1,8 %</td><td>0,082</td></tr><tr><td>10</td><td>7,5 %</td><td>0,089</td></tr><tr><td>25</td><td>19,1 %</td><td>0,110</td></tr><tr><td>150</td><td>79 %</td><td><strong>0,266 — выше ПДК</strong></td></tr></tbody></table></div>
+<p>Сварка идёт отрезками по 1–5 минут. Медленный привод открывается почти столько же, сколько идёт шов, и дым уходит мимо отсоса. Отсюда требование: ход не более 10 с.</p>
+<h2 id="h32">6. Концентрация во времени, тепло и энергия за смену</h2>
+<p>Итог блока: цех набирает дым медленно (τ = 79 мин), за смену на подогрев воздуха уходит 519–665 кВт·ч тепла, а на вентилятор — от 4,97 до 15,06 кВт·ч электроэнергии в зависимости от режима.</p>
+<h3 id="h33">6.1. Как меняется концентрация в цехе</h3>
+<p><strong>Зачем.</strong> Формула СП 60 даёт концентрацию «через бесконечно долгое время». Для управления нужно знать, как быстро она туда придёт. Уравнение баланса: прирост марганца в цехе = поступление − удаление с воздухом.</p>
+<div class="math">\[V\frac{dC}{dt} = m - L\,(C - q_\text{пр}) \quad\Rightarrow\quad C(t) = q_\text{пр} + \frac{m}{L}\left(1 - e^{-t/\tau}\right), \qquad \tau = \frac{V}{L}\]</div>
+<ul><li>V = 16 589 м³ — объём цеха;</li><li>C — концентрация марганца в цехе, мг/м³; t — время, ч;</li><li>τ — постоянная времени цеха: за неё процесс проходит 63 % пути, за 3τ — 95 %.</li></ul>
+<p>Подстановка (чистый цех, включили 3 поста, L = 12 601 м³/ч):</p>
+<ol><li>τ = 16 589 / 12 601 = 1,32 ч = <strong>79 мин</strong>.</li><li>Предел: C∞ = 0,001 + 2508 / 12 601 = <strong>0,200 мг/м³</strong> — ровно ПДК, как и задумано в блоке 1.</li><li>Через 1 час: e^(−1/1,32) = 0,468 → C = 0,001 + 0,199 · (1 − 0,468) = <strong>0,107 мг/м³</strong>.</li><li>Через 4 часа (≈ 3τ): C = 0,001 + 0,199 · 0,952 = 0,190 мг/м³.</li></ol>
+<p><strong>Что это даёт управлению.</strong> Концентрация в цехе меняется за десятки минут, а не за секунды. Поэтому общеобменную можно снижать на коротких паузах без риска. Вот зачем в модели задаются размеры цеха: в потребный расход они не входят, но задают инерцию.</p>
+<h3 id="h34">6.2. Тепло на подогрев приточного воздуха</h3>
+<p><strong>Зачем.</strong> Весь воздух, который удалили из цеха, зимой надо заменить уличным и нагреть до 18 °C. Это самая большая статья затрат.</p>
+<div class="math">\[\Phi = \rho\cdot c\cdot L\cdot\Delta t\]</div>
+<ul><li>Φ — тепловая мощность на подогрев, кВт;</li><li>c = 1,005 кДж/(кг·°C) — теплоёмкость воздуха; ρ·c = 1,206 кДж/(м³·°C) (в СП 60, Г.2 — 1,2);</li><li>L — весь удаляемый воздух, м³/с;</li><li>Δt = 18 − (−1,7) = 19,7 °C — от средней температуры отопительного периода в Москве до температуры в цехе.</li></ul>
+<p>Без регулирования (всё время 12 601 м³/ч):</p>
+<ol><li>L = 12 601 / 3600 = 3,500 м³/с.</li><li>Φ = 1,206 · 3,500 · 19,7 = <strong>83,2 кВт</strong>.</li><li>За смену 8 ч: 83,2 · 8 = <strong>665 кВт·ч</strong>.</li></ol>
+<p>С регулированием местные отсосы в среднем за смену тянут только 1727 м³/ч (посты часть времени не варят). Добавляем постоянную общеобменную 8101:</p>
+<p>L = 8101 + 1727 = 9828 м³/ч → Φ = 1,206 · (9828/3600) · 19,7 = 64,9 кВт → 64,9 · 8 = <strong>519 кВт·ч</strong>.</p>
+<h3 id="h35">6.3. Электроэнергия вентилятора за смену</h3>
+<p>Без регулирования вентилятор все 8 ч работает на режиме наладки: 1,882 кВт · 8 ч = <strong>15,06 кВт·ч</strong>.</p>
+<p>С регулированием мощность меняется каждую секунду (посты включаются и выключаются). Энергия = сумма мощностей по 28 800 секундам смены — это считает программа, вручную не повторить.</p>
+<div class="math">\[E = \sum_{i=1}^{28\,800} P_\text{эл}(t_i)\cdot\Delta t\]</div>
+<div class="tw"><table><thead><tr><th>Режим местной вытяжки</th><th>Электроэнергия, кВт·ч</th><th>Средняя мощность, кВт</th><th>Средний расход, м³/ч</th><th>Тепло, кВт·ч</th><th>Перерасход &gt; 110 %, доля времени</th></tr></thead><tbody><tr><td>Без регулирования</td><td>15,06</td><td>1,88</td><td>4 498</td><td>665</td><td>0 %</td></tr><tr><td>«Открыто/закрыто» + частотник</td><td>5,39</td><td>0,67</td><td>1 872</td><td>527</td><td>38,4 %</td></tr><tr><td>Предлагаемая система</td><td>4,97</td><td>0,62</td><td>1 727</td><td>519</td><td>2,6 %</td></tr><tr><td>Предлагаемая + общеобменная по числу постов</td><td>4,97</td><td>0,62</td><td>1 727</td><td>398</td><td>2,6 %</td></tr></tbody></table></div>
+<p>Проверка тепла для «открыто/закрыто» вручную: (8101 + 1872) / 3600 · 1,206 · 19,7 · 8 = 527 кВт·ч — совпадает с программой.</p>
+<h2 id="h36">7. Что принято допущением и где проверить</h2>
+<p>Каждый шаг этого документа посчитан в книге «Модель_расчёт_v2.xlsx» формулами в ячейках, и лист «8 Сверка» сравнивает их с программой (все строки «ОК»).</p>
+<div class="tw"><table><thead><tr><th>Блок документа</th><th>Лист Excel</th></tr></thead><tbody><tr><td>0. Исходные данные</td><td>1 Исходные</td></tr><tr><td>1. Выделения и воздухообмен</td><td>2 Выделения, 3 СП 60</td></tr><tr><td>2. Потери в сети</td><td>4 Таблицы (заслонка, A₁, диффузор), 5 Потери</td></tr><tr><td>3. Вентилятор</td><td>6 Вентилятор</td></tr><tr><td>6. Тепло</td><td>7 Тепло</td></tr><tr><td>5–6. Динамика и смена</td><td>9 Результаты смены (итоги программы)</td></tr></tbody></table></div>
+<p><strong>Допущения — их надо называть самому:</strong></p>
+<div class="tw"><table><thead><tr><th>Что принято</th><th>Значение</th><th>Почему так</th><th>Чем заменить</th></tr></thead><tbody><tr><td>Захват отсоса</td><td>η = 0,8</td><td>Методика 1997 при отсутствии данных</td><td>CFD-расчёт и замер на столе</td></tr><tr><td>Воздух в цехе перемешан полностью</td><td>q_wz = q_l</td><td>стандартное допущение формулы Г.2</td><td>CFD-расчёт цеха</td></tr><tr><td>Заслонка при 0°</td><td>ζ = 0,2</td><td>кривая 2 Идельчика не даёт значения</td><td>паспорт или продувка на стенде</td></tr><tr><td>Характеристика заслонки</td><td>диагр. 9-17</td><td>справочник, сверено по книге</td><td>своя продувка</td></tr><tr><td>Вентилятор, фильтр, ПЧ</td><td>демо-кривая, 400 Па, типовой КПД</td><td>паспортов пока нет</td><td>паспорта выбранного оборудования</td></tr><tr><td>Расписание сварки</td><td>швы 1–5 мин, паузы 1–7 мин</td><td>типичный режим полуавтомата</td><td>запись тока с реального поста</td></tr></tbody></table></div>
+<p>Как проверена программа: ручной расчёт в Excel, независимый расчёт сети на Python (80 случаев, расхождение ≤ 0,004 м³/ч) и 89 автотестами.</p>
+  </article>
+</div>
+<script>window.MathJax = { tex: { inlineMath: [] }, svg: { fontCache: 'global' }, options: { enableMenu: false } };</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js" defer></script>
+<script>
+(() => {
+  const links = [...document.querySelectorAll('#toc a')], map = new Map(links.map(a => [a.getAttribute('href').slice(1), a]));
+  const io = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) { links.forEach(a => a.classList.remove('act')); const a = map.get(e.target.id); if (a) { a.classList.add('act'); a.scrollIntoView({ block: 'nearest' }); } } }, { rootMargin: '-70px 0px -70% 0px' });
+  document.querySelectorAll('article h2[id],article h3[id]').forEach(h => io.observe(h));
+  document.querySelectorAll('.tocm a').forEach(a => a.addEventListener('click', () => a.closest('details').open = false));
+})();
+</script>
