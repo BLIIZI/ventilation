@@ -1,0 +1,124 @@
+<title>Расчёт модели вентиляции</title>
+<!--FONTS-->
+<!--COMMON-->
+<style>
+.app{display:flex;flex-direction:column;gap:12px;padding-block:14px 28px;padding-inline:16px;max-width:1600px;margin:0 auto}
+h1{font:600 clamp(19px,2.3vw,24px)/1.2 var(--display);margin:0;text-wrap:balance}
+.pagehead{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;justify-content:space-between}
+.pagehead p{margin:4px 0 0;color:var(--muted);font-size:13.5px;max-width:80ch}
+.facts{display:flex;flex-wrap:wrap;gap:8px}
+.fact{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 11px;font-size:12.5px;color:var(--muted)}
+.fact b{color:var(--fg);font:500 13px var(--mono)}
+.fact.ok b{color:var(--ok)} .fact.crit b{color:var(--crit)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid rgba(0,0,0,.25)}
+.book{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.tabsbar{display:flex;gap:4px;overflow-x:auto;padding:8px;border-bottom:1px solid var(--line);scrollbar-width:thin;background:var(--bg-2)}
+.tabsbar button{flex:none;background:transparent;border:1px solid transparent;color:var(--muted);font:500 13px var(--body);padding:6px 11px;border-radius:8px;cursor:pointer;white-space:nowrap;min-height:32px}
+.tabsbar button:hover{color:var(--fg);background:var(--panel)}
+.tabsbar button[aria-selected="true"]{background:var(--panel-2);color:var(--fg);border-color:var(--line-2)}
+.tabsbar button:focus-visible{outline:2px solid var(--air);outline-offset:1px}
+.fbar{display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:center;gap:0;border-bottom:1px solid var(--line);font:13px var(--mono);background:var(--panel)}
+.fbar .addr{padding:7px 12px;border-right:1px solid var(--line);color:var(--fg);min-width:74px;text-align:center}
+.fbar .fx{padding:7px 10px;color:var(--air);font-style:italic;border-right:1px solid var(--line)}
+.fbar .ftext{padding:7px 12px;color:var(--fg);overflow-x:auto;white-space:nowrap;scrollbar-width:thin}
+.fbar .ftext .hint{color:var(--faint);font-family:var(--body)}
+.fbar .ftext .val{color:var(--muted)}
+.sheetwrap{overflow:auto;max-height:calc(100vh - 230px);min-height:320px;background:#fff;-webkit-overflow-scrolling:touch}
+/* лист — «бумага» Excel: светлый фон, чтобы заливки ячеек читались как в книге */
+table.xl{border-collapse:collapse;table-layout:fixed;font:12.5px/1.35 Calibri,"Carlito","Golos Text",system-ui,sans-serif;color:#1d2125;background:#fff;color-scheme:light}
+table.xl col.rn{width:40px}
+table.xl th{position:sticky;top:0;z-index:2;background:#eef1f3;color:#5b6670;font:500 11px var(--body);border:1px solid #d4d9dd;padding:3px 4px;text-align:center}
+table.xl tbody th{position:sticky;left:0;z-index:1;top:auto}
+table.xl th.corner{left:0;z-index:3}
+table.xl td{border:1px solid #e3e6e8;padding:3px 6px;vertical-align:top;white-space:nowrap;overflow:visible;cursor:cell;height:21px}
+table.xl td.w{white-space:normal;overflow-wrap:anywhere}
+table.xl td.n{text-align:right;font-variant-numeric:tabular-nums}
+table.xl td.b{font-weight:700} table.xl td.i{font-style:italic} table.xl td.big{font-size:15px}
+table.xl td.in{color:#0000ff} table.xl td.xl{color:#008000} table.xl td.nt{color:#555} table.xl td.hl a{color:#0563c1}
+table.xl td a{color:#0563c1}
+table.xl td.okv{color:#167a3e;font-weight:700}
+table.xl td.err{color:#c00}
+table.xl td.f{background-image:linear-gradient(135deg,transparent 0 calc(100% - 6px),rgba(91,182,224,.55) calc(100% - 6px))}
+table.xl td.cm{background-image:linear-gradient(225deg,#e0574f 0 5px,transparent 5px)}
+table.xl td.sel{outline:2px solid #1a73e8;outline-offset:-2px;position:relative;z-index:1}
+table.xl td.ref{box-shadow:inset 0 0 0 2px rgba(26,115,232,.45);background-color:rgba(26,115,232,.08)}
+.foot{font-size:12.5px;color:var(--muted)}
+.foot b{color:var(--fg)}
+@media (max-width:700px){ .sheetwrap{max-height:70vh} .fbar{grid-template-columns:auto minmax(0,1fr)} .fbar .fx{display:none} }
+</style>
+<!--NAV-->
+<div class="app">
+  <div class="pagehead">
+    <div>
+      <h1>Расчёт модели в Excel — все листы</h1>
+      <p>Та же книга, что скачивается кнопкой справа: каждое число здесь посчитано формулой. Нажмите на ячейку — в строке формул появится формула. Ячейки, на которые она ссылается, подсветятся. Синий шрифт — исходные данные, их можно менять в скачанной книге.</p>
+    </div>
+    <a class="btn primary" href="{{XLSX_URL}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Скачать Excel</a>
+  </div>
+  <div class="facts">
+    <span class="fact">листов <b>{{NSHEETS}}</b></span>
+    <span class="fact">формул <b>{{NFORM}}</b></span>
+    <span class="fact ok {{SVERKA_CLS}}">сверка с программой <b>{{SVERKA}} ОК</b></span>
+    <span class="fact">{{BUILD}}</span>
+  </div>
+  <div class="legend">
+    <span><i style="background:#fff2cc"></i><span style="color:#7aa0ff">синий шрифт</span> — исходные данные</span>
+    <span><i style="background:#d9e1f2"></i>заголовки таблиц</span>
+    <span><i style="background:#fce4d6"></i>итоги и проверки</span>
+    <span><i style="background:linear-gradient(135deg,#fff 0 60%,#5bb6e0 60%)"></i>в ячейке формула</span>
+  </div>
+  <div class="book">
+    <div class="tabsbar" role="tablist" aria-label="Листы книги">{{TABS}}</div>
+    <div class="fbar" aria-live="polite"><span class="addr" id="addr">—</span><span class="fx">fx</span><span class="ftext" id="ftext"><span class="hint">нажмите на ячейку, чтобы увидеть формулу</span></span></div>
+    <div class="sheetwrap" id="wrap">{{SHEETS}}</div>
+  </div>
+  <p class="foot">Книга собирается тем же скриптом, что и сайт: значения берутся из расчётного ядра программы (engine.json), затем книга пересчитывается, и лист <b>«8 Сверка»</b> сравнивает Excel с программой. Поэтому числа здесь, на странице двойника и в примере расчёта всегда одни и те же.</p>
+</div>
+<script>
+(() => {
+  const tabs = [...document.querySelectorAll('.tabsbar button')], wrap = document.getElementById('wrap');
+  const addr = document.getElementById('addr'), ftext = document.getElementById('ftext');
+  let cur = null, sel = null;
+  const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+  function show(id, push = true) {
+    tabs.forEach(b => b.setAttribute('aria-selected', String(b.dataset.s === id)));
+    document.querySelectorAll('.sheet').forEach(s => (s.hidden = s.id !== id));
+    cur = id; wrap.scrollTop = 0; wrap.scrollLeft = 0; clearSel();
+    const b = tabs.find(x => x.dataset.s === id); if (b) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (push) try { history.replaceState(null, '', '#' + id); } catch (e) {}
+  }
+  tabs.forEach(b => b.onclick = () => show(b.dataset.s));
+  document.querySelector('.tabsbar').addEventListener('keydown', e => {
+    const i = tabs.findIndex(b => b.dataset.s === cur);
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const j = (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length; show(tabs[j].dataset.s); tabs[j].focus(); e.preventDefault(); }
+  });
+  function clearSel() { document.querySelectorAll('td.sel,td.ref').forEach(td => td.classList.remove('sel', 'ref')); sel = null; addr.textContent = '—'; ftext.innerHTML = '<span class="hint">нажмите на ячейку, чтобы увидеть формулу</span>'; }
+  const colN = s => [...s].reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0);
+  function cellsIn(sheet, a, b) {
+    const pa = a.match(/([A-Z]+)(\d+)/), pb = (b || a).match(/([A-Z]+)(\d+)/); const out = [];
+    const c1 = Math.min(colN(pa[1]), colN(pb[1])), c2 = Math.max(colN(pa[1]), colN(pb[1])), r1 = Math.min(+pa[2], +pb[2]), r2 = Math.max(+pa[2], +pb[2]);
+    if ((c2 - c1 + 1) * (r2 - r1 + 1) > 400) return out;
+    sheet.querySelectorAll('td[data-a]').forEach(td => { const m = td.dataset.a.match(/([A-Z]+)(\d+)/), c = colN(m[1]), r = +m[2]; if (c >= c1 && c <= c2 && r >= r1 && r <= r2) out.push(td); });
+    return out;
+  }
+  wrap.addEventListener('click', e => {
+    const td = e.target.closest('td[data-a]'); if (!td || e.target.closest('a')) return;
+    document.querySelectorAll('td.sel,td.ref').forEach(x => x.classList.remove('sel', 'ref'));
+    td.classList.add('sel'); sel = td; addr.textContent = td.dataset.a;
+    const f = td.dataset.f, v = td.textContent.trim(), c = td.dataset.c;
+    if (f) {
+      ftext.innerHTML = esc(f) + (v ? ` <span class="val">  →  ${esc(v)}</span>` : '');
+      const sheet = td.closest('.sheet');
+      const noSheet = f.replace(/'[^']*'![$A-Z0-9:]+|[A-Za-zА-Яа-я0-9_]+![$A-Z0-9:]+/g, ' ').replace(/"[^"]*"/g, ' ');
+      for (const m of noSheet.matchAll(/\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?/g)) {
+        cellsIn(sheet, m[1] + m[2], m[3] ? m[3] + m[4] : null).forEach(x => x !== td && x.classList.add('ref'));
+      }
+    } else ftext.innerHTML = v ? esc(v) : '<span class="hint">пустая ячейка</span>';
+    if (c) ftext.innerHTML += ` <span class="hint">· примечание: ${esc(c)}</span>`;
+  });
+  const h = location.hash.slice(1);
+  show(tabs.some(b => b.dataset.s === h) ? h : tabs[0].dataset.s, false);
+})();
+</script>

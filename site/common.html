@@ -1,0 +1,109 @@
+<style>
+/* Общие токены и верхняя панель для всех страниц сайта. Тёмная тема — сознательный выбор (пульт диспетчера). */
+:root{
+  --bg:#0d1216; --bg-2:#10171c; --panel:#151d23; --panel-2:#1b252c; --line:#26323b; --line-2:#33424d;
+  --fg:#e7edf0; --muted:#9caab4; --faint:#6b7a85;
+  --arc:#f2a93b; --air:#5bb6e0; --ok:#4fc489; --warn:#e6b84a; --crit:#ec6a63;
+  --std:#a88cf0; --new:#4fc489; --need:#e7edf0;
+  --display:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif; --body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --r:12px; --r-sm:8px; --topbar:56px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--body);margin:0;-webkit-font-smoothing:antialiased}
+a{color:var(--air)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--fg);font:500 13px var(--body);padding:7px 13px;border-radius:var(--r-sm);cursor:pointer;text-decoration:none;min-height:34px;transition:border-color .15s,background .15s}
+.btn:hover{border-color:var(--muted)}
+.btn:focus-visible,.iconbtn:focus-visible,.tabs a:focus-visible,.drawer a:focus-visible{outline:2px solid var(--air);outline-offset:2px}
+.btn.primary{background:var(--air);border-color:var(--air);color:#07131a}
+.btn.primary:hover{background:#7cc8eb}
+.btn.ghost{background:transparent}
+.btn.sm{padding:4px 10px;font-size:12.5px;min-height:30px}
+.btn svg{width:16px;height:16px;flex:none}
+.label{font:500 11px var(--body);color:var(--faint);text-transform:uppercase;letter-spacing:.08em}
+
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;display:flex;align-items:center;gap:12px;height:var(--topbar);padding-inline:12px 16px;background:rgba(13,18,22,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.iconbtn{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:10px;border:1px solid transparent;background:transparent;color:var(--fg);cursor:pointer;flex:none}
+.iconbtn:hover{background:var(--panel-2);border-color:var(--line)}
+.iconbtn svg{width:22px;height:22px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--fg);text-decoration:none;min-width:0}
+.brand .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(140deg,#1e3a4a,#173024);display:grid;place-items:center;border:1px solid var(--line-2);flex:none}
+.brand .logo svg{width:18px;height:18px;color:var(--air)}
+.brand b{font:600 15px/1.1 var(--display);white-space:nowrap}
+.brand small{display:block;font:400 11.5px var(--body);color:var(--muted);white-space:nowrap}
+.tabs{display:flex;gap:2px;margin-left:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
+.tabs a{color:var(--muted);text-decoration:none;font:500 13px var(--body);padding:6px 12px;border-radius:7px;white-space:nowrap}
+.tabs a:hover{color:var(--fg)}
+.tabs a[aria-current="page"]{background:var(--panel-2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-2)}
+.topbar .grow{flex:1}
+.topbar .ver{font:12px var(--mono);color:var(--faint);white-space:nowrap}
+.topbar .dl{white-space:nowrap}
+
+.scrim{position:fixed;inset:0;background:rgba(4,7,9,.6);z-index:60;opacity:0;transition:opacity .2s}
+.scrim.show{opacity:1}
+.drawer{position:fixed;top:0;bottom:0;left:0;z-index:61;width:min(340px,88vw);background:var(--bg-2);border-right:1px solid var(--line);padding:calc(env(safe-area-inset-top,0px) + 12px) 14px calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;flex-direction:column;gap:14px;transform:translateX(-100%);transition:transform .22s ease;overflow-y:auto}
+.drawer.show{transform:none}
+.drawer .dh{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.drawer nav{display:flex;flex-direction:column;gap:4px}
+.drawer nav a{display:flex;gap:12px;align-items:flex-start;padding:10px;border-radius:10px;color:var(--fg);text-decoration:none;border:1px solid transparent}
+.drawer nav a:hover{background:var(--panel);border-color:var(--line)}
+.drawer nav a[aria-current="page"]{background:var(--panel);border-color:var(--line-2)}
+.drawer nav a svg{width:20px;height:20px;flex:none;color:var(--air);margin-top:1px}
+.drawer nav a b{display:block;font:600 14px var(--display)}
+.drawer nav a span{display:block;font-size:12.5px;color:var(--muted);line-height:1.35}
+.drawer .foot{margin-top:auto;font-size:12px;color:var(--faint);line-height:1.5}
+.drawer hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
+@media (max-width:900px){ .tabs,.topbar .ver{display:none} }
+@media (max-width:520px){ .topbar .dl span{display:none} .brand small{display:none} }
+@media (prefers-reduced-motion:reduce){ .drawer,.scrim{transition:none} }
+</style>
+<header class="topbar">
+  <button class="iconbtn" id="menuBtn" aria-label="Меню" aria-expanded="false" aria-controls="drawer">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="index.html"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="2"/><path d="M12 10c0-4 1-6 4-6 2 0 3 2 2 4l-4 3M14 12c4 0 6 1 6 4 0 2-2 3-4 2l-3-4M12 14c0 4-1 6-4 6-2 0-3-2-2-4l4-3M10 12c-4 0-6-1-6-4 0-2 2-3 4-2l3 4"/></svg></span>
+    <span><b>Вытяжка сварочного цеха</b><small>цифровой двойник · МГТУ «СТАНКИН»</small></span></a>
+  <nav class="tabs" aria-label="Разделы">
+    <a href="index.html" {{CUR_index}}>Двойник</a>
+    <a href="calc.html" {{CUR_calc}}>Расчёт (Excel)</a>
+    <a href="example.html" {{CUR_example}}>Пример расчёта</a>
+  </nav>
+  <span class="grow"></span>
+  <span class="ver" title="Версия модели и дата сборки сайта">{{BUILD}}</span>
+  <a class="btn sm ghost dl" href="{{XLSX_URL}}" title="Скачать книгу Excel со всеми листами и формулами">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Excel</span></a>
+</header>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" aria-label="Меню" hidden>
+  <div class="dh"><span class="label">Разделы сайта</span>
+    <button class="iconbtn" id="menuClose" aria-label="Закрыть меню"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <nav>
+    <a href="index.html" {{CUR_index}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>
+      <div><b>Цифровой двойник</b><span>3D-цех, живое сравнение двух систем управления на одной смене</span></div></a>
+    <a href="calc.html" {{CUR_calc}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>
+      <div><b>Расчёт (Excel)</b><span>Все листы книги с формулами: нажмите на ячейку — увидите формулу</span></div></a>
+    <a href="example.html" {{CUR_example}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>
+      <div><b>Пример расчёта</b><span>3 поста, все формулы с подстановкой чисел и пояснениями</span></div></a>
+    <a href="index.html#notes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
+      <div><b>Примечания</b><span>Как читать итоги и графики, нормы, допущения</span></div></a>
+    <hr>
+    <a href="{{XLSX_URL}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+      <div><b>Скачать Excel</b><span>Модель_расчёт_v2.xlsx — формулы живые, можно менять исходные</span></div></a>
+  </nav>
+  <div class="foot">{{BUILD}}<br>Сайт, Excel и пример расчёта собираются из одного расчётного ядра — числа везде одинаковые.</div>
+</aside>
+<script>
+(() => {
+  const btn = document.getElementById('menuBtn'), dr = document.getElementById('drawer'), sc = document.getElementById('scrim'), cl = document.getElementById('menuClose');
+  let open = false;
+  function set(v) {
+    open = v; btn.setAttribute('aria-expanded', String(v));
+    if (v) { dr.hidden = false; sc.hidden = false; requestAnimationFrame(() => { dr.classList.add('show'); sc.classList.add('show'); }); cl.focus(); }
+    else { dr.classList.remove('show'); sc.classList.remove('show'); setTimeout(() => { if (!open) { dr.hidden = true; sc.hidden = true; } }, 230); btn.focus(); }
+  }
+  btn.onclick = () => set(!open); cl.onclick = () => set(false); sc.onclick = () => set(false);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && open) set(false); });
+  dr.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { if (a.getAttribute('href').startsWith('index.html#') && location.pathname.endsWith('index.html') || a.getAttribute('href') === '#') set(false); }));
+})();
+</script>
