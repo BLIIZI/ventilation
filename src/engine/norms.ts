@@ -100,3 +100,19 @@ export function sp60Supply(m: number, Lwz: number, qwz: number, qin: number, ql 
 }
 /** Общеобменная вытяжка сверх местных отсосов, не меньше 0 */
 export const sp60General = (m: number, Lwz: number, qwz: number, qin: number, ql = qwz) => Math.max(0, sp60Supply(m, Lwz, qwz, qin, ql) - Lwz);
+
+// ---------- Подбор диаметров воздуховодов
+/** Ряд наружных диаметров круглых воздуховодов из унифицированных деталей, м — ВСН 353-86 «Проектирование и применение воздуховодов из унифицированных деталей» [С] */
+export const DUCT_D_STD = [0.1, 0.125, 0.16, 0.2, 0.25, 0.315, 0.355, 0.4, 0.45, 0.5, 0.56, 0.63, 0.71, 0.8, 0.9, 1.0, 1.12, 1.25, 1.4, 1.6, 1.8, 2.0];
+/** Транспортная скорость в воздуховодах от сварочных постов 8–14 м/с — Боломатов В.Н., «АВОК», 2021, № 3, табл. 4 [С].
+ *  (СП 60.13330.2020, табл. Л.4 — 4–8 м/с — для пылегазоудаления не применяется: п. 1.2 исключает его из области СП 60.) Целевая 12 м/с [А]. */
+export const W_TRANSPORT = { min: 8, max: 14, target: 12 };
+/** Подбор диаметра: из стандартного ряда — тот, у которого скорость в пределах 8–14 м/с и ближе всего к целевой;
+ *  если такого нет (очень малый или очень большой расход) — наименьший с w ≤ w_max, иначе наибольший. */
+export function pickDuctD(Qm3h: number, w = W_TRANSPORT): number {
+  const vel = (d: number) => Qm3h / 3600 / (Math.PI * d * d / 4);
+  let best = -1, bestDev = Infinity;
+  for (const d of DUCT_D_STD) { const v = vel(d); if (v >= w.min && v <= w.max && Math.abs(v - w.target) < bestDev) { best = d; bestDev = Math.abs(v - w.target); } }
+  if (best > 0) return best;
+  return DUCT_D_STD.find(d => vel(d) <= w.max) ?? DUCT_D_STD[DUCT_D_STD.length - 1];
+}

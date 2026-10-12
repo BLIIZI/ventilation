@@ -1,7 +1,7 @@
 // Демонстрационная сеть: 3 поста на общем коллекторе, фильтр, вентилятор.
 // ВНИМАНИЕ: геометрия и характеристика вентилятора — [Д] условные, для проверки ядра.
 import type { Network, Element } from './network.ts';
-import { IE3_4P_GOST } from './norms.ts';
+import { IE3_4P_GOST, pickDuctD, W_TRANSPORT } from './norms.ts';
 import { HOOD_CONE_ZETA, EXIT_ZETA } from './fittings.ts';
 
 /** Сборка сети «посты вдоль коллектора» с поэлементным учётом местных сопротивлений (Идельчик, 1992):
@@ -50,7 +50,7 @@ export function demoNetwork(): Network {
 /** Демонстрационная характеристика вентилятора (полное давление, Па, при 1500 об/мин) [Д] — заменяется каталогом */
 export const DEMO_FAN: Array<[number, number]> = [[0, 1400], [2000, 1300], [4000, 1050], [5000, 850], [6000, 550], [7000, 150]];
 
-/** Генератор сети на N постов: посты вдоль коллектора, диаметры подбираются на скорость ≈ 12 м/с при расчётном расходе.
+/** Генератор сети на N постов: посты вдоль коллектора, диаметры — стандартный ряд, скорость 8–14 м/с (ближе к 12) при расчётном расходе.
  *  [Д] Геометрия условная; вентилятор масштабируется по расходу (характеристика демо-вентилятора × N/3). */
 export function makeNetwork(N: number, Qpost = 1500, wDesign = 12): Network {
   return makeNetworkFor(Array(N).fill(Qpost), 1, wDesign);
@@ -64,9 +64,9 @@ export function pickMotor(maxShaftW: number) {
   return { motorW: m[0], motorEta: m[1] };
 }
 
-/** Сеть под произвольные расходы постов (м³/ч): диаметры — на ≈ 12 м/с, вентилятор — демо-характеристика × k (k подбирается в plant.ts). [Д] */
+/** Сеть под произвольные расходы постов (м³/ч): диаметры — из стандартного ряда (ВСН 353-86) со скоростью 8–14 м/с, ближе к 12 м/с, вентилятор — демо-характеристика × k (k подбирается в plant.ts). [Д] */
 export function makeNetworkFor(Qposts: number[], fanScale = 1, wDesign = 12): Network {
-  const dFor = (Qm3h: number) => Math.max(0.1, Math.round(Math.sqrt(4 * (Qm3h / 3600) / (Math.PI * wDesign)) * 1000 / 5) * 5 / 1000);
+  const dFor = (Qm3h: number) => pickDuctD(Qm3h, { ...W_TRANSPORT, target: wDesign });   // стандартный ряд ВСН 353-86, скорость 8–14 м/с
   const q = Qposts.map(x => Math.max(x, 50));
   let cum = 0; const dColl = q.map(x => dFor((cum += x)));
   const dPost = q.map(dFor);

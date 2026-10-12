@@ -53,6 +53,7 @@ export interface SimParams {
   // Вариант: 0,4 — коэффициент гравитационного оседания по Методике 1997, разд. 2.3 [Н]
   // объём м³; общеобменная м³/с (постоянная) или по потребности: LgenMin + LgenPerPost·(число работающих постов); Δt, °C
   damperStroke: number;  // время полного хода привода 0→90°, с
+  closeDelay?: number;   // задержка закрытия заслонки после окончания сварки, с (Infinity — не закрывать в паузах) [исследование]
   fanRamp: number;       // время разгона ЧП 0→nMax, с
   nMax: number; nMin: number;
   pSet?: number;         // уставка разрежения в коллекторе для режима onoff, Па
@@ -141,6 +142,7 @@ export function createSimulator(net: Network, p: SimParams) {
   const dAlphaMax = 90 / p.damperStroke * p.dt, dnMax = p.nMax / p.fanRamp * p.dt;
 
   let t = 0;
+  const offT: Record<string, number> = {}; ids.forEach(id => (offT[id] = Infinity));
   function step(): Sample {
     const on: Record<string, boolean> = {}; ids.forEach(id => (on[id] = p.schedule(id, t)));
     const anyOn = ids.some(id => on[id]);
@@ -157,7 +159,13 @@ export function createSimulator(net: Network, p: SimParams) {
     }
     if (p.mode === 'adaptive') {
       for (const ps of p.posts) {
-        if (!on[ps.id]) { target[ps.id] = 90; lnZ[ps.id] = memZ[ps.id]; continue; }
+        if (!on[ps.id]) {
+          offT[ps.id] += p.dt;
+          // задержка закрытия: в короткой паузе заслонка остаётся на последнем угле (сразу готова к следующему шву)
+          if (offT[ps.id] < (p.closeDelay ?? 0)) { target[ps.id] = alpha[ps.id]; continue; }
+          target[ps.id] = 90; lnZ[ps.id] = memZ[ps.id]; continue;
+        }
+        offT[ps.id] = 0;
         // ПИ в пространстве ln ζ: линеаризует нелинейную характеристику заслонки
         const e = sol ? (Q(ps.id) - ps.Qset) / ps.Qset : 0;
         lnZ[ps.id] = Math.min(Math.log(damperZeta(70)), Math.max(Math.log(damperZeta(0)), lnZ[ps.id] + (p.kI ?? 1.5) * e * p.dt));

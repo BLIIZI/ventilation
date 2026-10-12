@@ -78,6 +78,8 @@ test('Недостижимый расход — понятное предупр�
 import { bendZeta, bendKRe, bendKDelta, bendZetaRough, lambdaSmooth, suddenExpansionZeta, diffuserZeta, diffuserZetaN2, teeSideZeta, teeStraightZeta, teeA } from '../src/engine/fittings.ts';
 import { lossBreakdown, solve as solveNet } from '../src/engine/network.ts';
 import { lambdaAltshul as lam } from '../src/engine/physics.ts';
+import { pickDuctD, DUCT_D_STD } from '../src/engine/norms.ts';
+import { makeNetworkFor } from '../src/engine/demo-network.ts';
 test('Отвод по Идельчику (диагр. 6-1): ζ_м = A₁·B₁; A₁ из таблицы (45° → 0,60; 90° → 1,00); B₁ = 0,21/(R/D)^0,5 при R/D > 1', () => {
   assert.ok(Math.abs(bendZeta(90, 1) - 0.21) < 1e-12);
   assert.ok(Math.abs(bendZeta(90, 1.5) - 0.21 / Math.sqrt(1.5)) < 1e-12);
@@ -130,4 +132,11 @@ test('Энергетический баланс: на каждом пути «о
     assert.ok(Math.abs(sum - s.pFan) < 0.01, `${h}: Σ потерь ${sum.toFixed(3)} против p вент. ${s.pFan.toFixed(3)}`);
   }
   for (const k of ['local', 'diffuser', 'teeSide', 'teeStraight', 'damper', 'duct', 'filter']) assert.ok(br.some(r => r.kind === k), k);
+});
+test('Подбор диаметра: стандартный ряд ВСН 353-86, скорость 8–14 м/с (ближе к 12): 1500 → 200, 3000 → 315, 4500 → 355; для 300…150 000 м³/ч всегда в пределах', () => {
+  const v = (Q: number, d: number) => Q / 3600 / (Math.PI * d * d / 4);
+  assert.equal(pickDuctD(1500), 0.2); assert.equal(pickDuctD(3000), 0.315); assert.equal(pickDuctD(4500), 0.355);
+  for (let Q = 300; Q <= 150000; Q *= 1.07) { const d = pickDuctD(Q); assert.ok(DUCT_D_STD.includes(d)); const w = v(Q, d); assert.ok(w >= 8 - 1e-9 && w <= 14 + 1e-9, `Q ${Q.toFixed(0)}: d ${d}, w ${w.toFixed(2)}`); }
+  const net = makeNetworkFor([1500, 1500, 1500]);
+  for (const s of net.segments) for (const e of s.elements as any[]) if (e.d) assert.ok(DUCT_D_STD.includes(e.d), `${s.id} ${e.d}`);
 });

@@ -281,6 +281,22 @@ function sp60Supply(m        , Lwz        , qwz        , qin        , ql = qwz) 
 /** Общеобменная вытяжка сверх местных отсосов, не меньше 0 */
 const sp60General = (m        , Lwz        , qwz        , qin        , ql = qwz) => Math.max(0, sp60Supply(m, Lwz, qwz, qin, ql) - Lwz);
 
+// ---------- Подбор диаметров воздуховодов
+/** Ряд наружных диаметров круглых воздуховодов из унифицированных деталей, м — ВСН 353-86 «Проектирование и применение воздуховодов из унифицированных деталей» [С] */
+const DUCT_D_STD = [0.1, 0.125, 0.16, 0.2, 0.25, 0.315, 0.355, 0.4, 0.45, 0.5, 0.56, 0.63, 0.71, 0.8, 0.9, 1.0, 1.12, 1.25, 1.4, 1.6, 1.8, 2.0];
+/** Транспортная скорость в воздуховодах от сварочных постов 8–14 м/с — Боломатов В.Н., «АВОК», 2021, № 3, табл. 4 [С].
+ *  (СП 60.13330.2020, табл. Л.4 — 4–8 м/с — для пылегазоудаления не применяется: п. 1.2 исключает его из области СП 60.) Целевая 12 м/с [А]. */
+const W_TRANSPORT = { min: 8, max: 14, target: 12 };
+/** Подбор диаметра: из стандартного ряда — тот, у которого скорость в пределах 8–14 м/с и ближе всего к целевой;
+ *  если такого нет (очень малый или очень большой расход) — наименьший с w ≤ w_max, иначе наибольший. */
+function pickDuctD(Qm3h        , w = W_TRANSPORT)         {
+  const vel = (d        ) => Qm3h / 3600 / (Math.PI * d * d / 4);
+  let best = -1, bestDev = Infinity;
+  for (const d of DUCT_D_STD) { const v = vel(d); if (v >= w.min && v <= w.max && Math.abs(v - w.target) < bestDev) { best = d; bestDev = Math.abs(v - w.target); } }
+  if (best > 0) return best;
+  return DUCT_D_STD.find(d => vel(d) <= w.max) ?? DUCT_D_STD[DUCT_D_STD.length - 1];
+}
+
 
 // ---- physics.ts
 // Физические зависимости. Внутри — СИ: м, м³/с, Па, кг/м³.
@@ -759,6 +775,7 @@ function balance(net         , req                        , nMin = 300, nMax = 1
                                                                                         
                                                                                                                          
                                                                
+                                                                                                                                  
                                                       
                              
                                                                                 
@@ -847,6 +864,7 @@ function createSimulator(net         , p           ) {
   const dAlphaMax = 90 / p.damperStroke * p.dt, dnMax = p.nMax / p.fanRamp * p.dt;
 
   let t = 0;
+  const offT                         = {}; ids.forEach(id => (offT[id] = Infinity));
   function step()         {
     const on                          = {}; ids.forEach(id => (on[id] = p.schedule(id, t)));
     const anyOn = ids.some(id => on[id]);
@@ -863,7 +881,13 @@ function createSimulator(net         , p           ) {
     }
     if (p.mode === 'adaptive') {
       for (const ps of p.posts) {
-        if (!on[ps.id]) { target[ps.id] = 90; lnZ[ps.id] = memZ[ps.id]; continue; }
+        if (!on[ps.id]) {
+          offT[ps.id] += p.dt;
+          // задержка закрытия: в короткой паузе заслонка остаётся на последнем угле (сразу готова к следующему шву)
+          if (offT[ps.id] < (p.closeDelay ?? 0)) { target[ps.id] = alpha[ps.id]; continue; }
+          target[ps.id] = 90; lnZ[ps.id] = memZ[ps.id]; continue;
+        }
+        offT[ps.id] = 0;
         // ПИ в пространстве ln ζ: линеаризует нелинейную характеристику заслонки
         const e = sol ? (Q(ps.id) - ps.Qset) / ps.Qset : 0;
         lnZ[ps.id] = Math.min(Math.log(damperZeta(70)), Math.max(Math.log(damperZeta(0)), lnZ[ps.id] + (p.kI ?? 1.5) * e * p.dt));
@@ -1087,7 +1111,7 @@ function demoNetwork()          {
 /** Демонстрационная характеристика вентилятора (полное давление, Па, при 1500 об/мин) [Д] — заменяется каталогом */
 const DEMO_FAN                          = [[0, 1400], [2000, 1300], [4000, 1050], [5000, 850], [6000, 550], [7000, 150]];
 
-/** Генератор сети на N постов: посты вдоль коллектора, диаметры подбираются на скорость ≈ 12 м/с при расчётном расходе.
+/** Генератор сети на N постов: посты вдоль коллектора, диаметры — стандартный ряд, скорость 8–14 м/с (ближе к 12) при расчётном расходе.
  *  [Д] Геометрия условная; вентилятор масштабируется по расходу (характеристика демо-вентилятора × N/3). */
 function makeNetwork(N        , Qpost = 1500, wDesign = 12)          {
   return makeNetworkFor(Array(N).fill(Qpost), 1, wDesign);
@@ -1101,9 +1125,9 @@ function pickMotor(maxShaftW        ) {
   return { motorW: m[0], motorEta: m[1] };
 }
 
-/** Сеть под произвольные расходы постов (м³/ч): диаметры — на ≈ 12 м/с, вентилятор — демо-характеристика × k (k подбирается в plant.ts). [Д] */
+/** Сеть под произвольные расходы постов (м³/ч): диаметры — из стандартного ряда (ВСН 353-86) со скоростью 8–14 м/с, ближе к 12 м/с, вентилятор — демо-характеристика × k (k подбирается в plant.ts). [Д] */
 function makeNetworkFor(Qposts          , fanScale = 1, wDesign = 12)          {
-  const dFor = (Qm3h        ) => Math.max(0.1, Math.round(Math.sqrt(4 * (Qm3h / 3600) / (Math.PI * wDesign)) * 1000 / 5) * 5 / 1000);
+  const dFor = (Qm3h        ) => pickDuctD(Qm3h, { ...W_TRANSPORT, target: wDesign });   // стандартный ряд ВСН 353-86, скорость 8–14 м/с
   const q = Qposts.map(x => Math.max(x, 50));
   let cum = 0; const dColl = q.map(x => dFor((cum += x)));
   const dPost = q.map(dFor);
@@ -1596,7 +1620,7 @@ const MIXED_EXAMPLE               = [
 ];
 
 
-window.Engine = { RHO_AIR, NU_AIR, C_AIR, KE_STEEL, W_MIN_WELDING, Q_POST_MIN_M3H, ETA_LEV_DEFAULT, K_SETTLE, SV08G2S, FC12, PDK_MN_WELD_LE20, PDK_MN_WELD_20_30, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, alphaMelt, wireRate, ACTUATOR_TIMES_GOST7192, IE3_4P_GOST, MOTOR_LOSS_RATIO, motorEfficiency, sp60Supply, sp60General, AIR, m3h, toM3h, area, velocity, dynPressure, lambdaAltshul, ductLoss, BUTTERFLY_ROUND, damperZeta, damperAngleForZeta, VFD_EFF, electricPower, fanPressure, fanPower, filterLoss, bendA1, bendB1, bendZeta, lambdaSmooth, bendKRe, bendKDelta, bendZetaRough, suddenExpansionZeta, diffuserZetaN2, diffuserZeta, suddenContractionZeta, HOOD_CONE_ZETA, SHARP_ENTRY_ZETA, EXIT_ZETA, teeSideZeta, teeA, teeStraightZeta, elemLoss, lossBreakdown, solve, setDamper, balance, interp, createSimulator, simulate, chainNetwork, demoNetwork, DEMO_FAN, makeNetwork, IE3_4P, pickMotor, makeNetworkFor, I_BASE, B_BASE, genVentByFormula, feedforwardTable, makeSchedule, commissioning, shiftParams, WIRE_12, makeShift, MN, AER, designLgen, shift4, pdkOf, SUBSTANCES, mnCategory, P_Q, PROCESSES, processById, ENABLED_GROUPS, activeProcesses, paramsOf, emissionOf, qminOf, qsetOf, designReport, buildPlant, MIXED_EXAMPLE };
+window.Engine = { RHO_AIR, NU_AIR, C_AIR, KE_STEEL, W_MIN_WELDING, Q_POST_MIN_M3H, ETA_LEV_DEFAULT, K_SETTLE, SV08G2S, FC12, PDK_MN_WELD_LE20, PDK_MN_WELD_20_30, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, alphaMelt, wireRate, ACTUATOR_TIMES_GOST7192, IE3_4P_GOST, MOTOR_LOSS_RATIO, motorEfficiency, sp60Supply, sp60General, DUCT_D_STD, W_TRANSPORT, pickDuctD, AIR, m3h, toM3h, area, velocity, dynPressure, lambdaAltshul, ductLoss, BUTTERFLY_ROUND, damperZeta, damperAngleForZeta, VFD_EFF, electricPower, fanPressure, fanPower, filterLoss, bendA1, bendB1, bendZeta, lambdaSmooth, bendKRe, bendKDelta, bendZetaRough, suddenExpansionZeta, diffuserZetaN2, diffuserZeta, suddenContractionZeta, HOOD_CONE_ZETA, SHARP_ENTRY_ZETA, EXIT_ZETA, teeSideZeta, teeA, teeStraightZeta, elemLoss, lossBreakdown, solve, setDamper, balance, interp, createSimulator, simulate, chainNetwork, demoNetwork, DEMO_FAN, makeNetwork, IE3_4P, pickMotor, makeNetworkFor, I_BASE, B_BASE, genVentByFormula, feedforwardTable, makeSchedule, commissioning, shiftParams, WIRE_12, makeShift, MN, AER, designLgen, shift4, pdkOf, SUBSTANCES, mnCategory, P_Q, PROCESSES, processById, ENABLED_GROUPS, activeProcesses, paramsOf, emissionOf, qminOf, qsetOf, designReport, buildPlant, MIXED_EXAMPLE };
 })();
 </script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
