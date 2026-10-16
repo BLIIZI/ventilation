@@ -807,8 +807,9 @@ function updatePanel() {
     pill.textContent = on ? 'варит' : 'простой'; pill.classList.toggle('on', on); $(`card-${id}`).classList.toggle('on', on);
     $(`tog-${id}`).textContent = (ui.auto ? on : ui.posts[id].on) ? 'Остановить' : 'Включить';
     $(`q-${id}`).textContent = fmt(q); $(`qs-${id}`).textContent = fmt(qs);
-    const dev = $(`dev-${id}`), cls = !on ? '' : r > 1.1 ? 'warn' : r < 0.95 ? 'crit' : 'ok';
-    dev.textContent = on ? `${r >= 1 ? '+' : '−'}${fmt(Math.abs(r - 1) * 100)} %` : 'закрыт'; dev.className = 'dev ' + cls;
+    const idleDraw = !on && s.alpha[id] < 89;   // простой, но заслонка не закрыта — пост тянет воздух впустую (стандарт)
+    const dev = $(`dev-${id}`), cls = idleDraw ? 'warn' : !on ? '' : r > 1.1 ? 'warn' : r < 0.95 ? 'crit' : 'ok';
+    dev.textContent = on ? `${r >= 1 ? '+' : '−'}${fmt(Math.abs(r - 1) * 100)} %` : idleDraw ? 'впустую' : 'закрыт'; dev.className = 'dev ' + cls;
     const bar = $(`bar-${id}`); bar.style.width = Math.min(100, r / 1.5 * 100) + '%'; bar.className = cls;
     $(`o-${id}`).textContent = fmt(openPct(s.alpha[id])) + ' %';
     $(`a-${id}`).textContent = fmt(s.alpha[id]) + '°';
