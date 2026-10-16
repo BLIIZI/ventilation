@@ -1409,7 +1409,7 @@ function buildPlant(cfg             )                                           
   // ---- вещества и расчётная ОВ
   const d = designReport(posts);
   const duration = cfg.duration ?? 8 * 3600;
-  const frac = cfg.frac ?? 0.5;
+  const frac = cfg.frac ?? 0.8;
   const limSub = [...d.groups.get(d.limiting) ?? []].sort((a, c) => d.esc[c.name] / c.pdk - d.esc[a.name] / a.pdk)[0]?.name ?? 'mn';
   const Ld = Math.max(d.Ld, m3h(500));
   const gen                      = cfg.gen ? {

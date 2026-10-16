@@ -18,6 +18,7 @@ VERSION = 'v1.7'
 MSK = datetime.timezone(datetime.timedelta(hours=3))
 BUILD = f'модель {VERSION} · сборка {datetime.datetime.now(MSK):%d.%m.%Y %H:%M}'
 esc = html.escape
+SKEL = '<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
 
 # ---------- общий верх страницы
 common = (SITE / 'common.html').read_text()
@@ -42,7 +43,7 @@ def build_index():
     eng = (WEB / 'engine.js').read_text()
     assert '/*ENGINE*/' in t
     t = t.replace('/*ENGINE*/', eng)
-    (WEB / 'index.html').write_text(t)
+    (WEB / 'index.html').write_text(SKEL + t)
     return len(t)
 
 # ---------- 2. Excel -> HTML
@@ -149,7 +150,7 @@ def build_calc():
     page = page.replace('{{TABS}}', ''.join(tabs)).replace('{{SHEETS}}', ''.join(sheets))
     page = page.replace('{{XLSX_URL}}', XLSX_URL).replace('{{NSHEETS}}', str(len(tabs))).replace('{{NFORM}}', str(nform))
     page = page.replace('{{SVERKA}}', f'{ok} из {tot}').replace('{{SVERKA_CLS}}', '' if ok == tot else 'crit').replace('{{BUILD}}', BUILD)
-    (WEB / 'calc.html').write_text(page)
+    (WEB / 'calc.html').write_text(SKEL + page)
     shutil.copy(XLSX, WEB / XLSX_NAME)
     return len(tabs), nform, ok, tot
 
@@ -246,7 +247,7 @@ def build_example():
     page = page.replace('{{TOC}}', toc_html).replace('{{BODY}}', body).replace('{{CHECKS}}', rows)
     page = page.replace('{{NOK}}', str(len(res) - len(bad))).replace('{{NALL}}', str(len(res))).replace('{{CHK_CLS}}', '' if not bad else 'crit')
     page = page.replace('{{BUILD}}', BUILD).replace('{{TESTS}}', str(count_tests()))
-    (WEB / 'example.html').write_text(page)
+    (WEB / 'example.html').write_text(SKEL + page)
     return res, bad
 
 if __name__ == '__main__':

@@ -1,0 +1,522 @@
+<title>Цифровой двойник вытяжки</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Пульт диспетчера цеха: тёмная панель, 3D-сцена слева, карточки постов справа, ленты трендов снизу. Единая тёмная тема (как SCADA) — выбрана сознательно. */
+:root{
+  --bg:#0f1418; --panel:#161d23; --panel-2:#1c252c; --line:#2a353e; --fg:#e6ebee; --muted:#93a1ab; --faint:#5f6e78;
+  --arc:#f2a93b; --air:#63b8db; --ok:#5cc28a; --warn:#e3b341; --crit:#e5625c;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --std:#a48be8;
+  --display:"Golos Text",system-ui,sans-serif; --body:"Golos Text",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--body);margin:0}
+.app{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100%;gap:10px;padding:10px 16px;box-sizing:border-box}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
+h1{font:600 17px/1.2 var(--display);margin:0;letter-spacing:.01em;text-wrap:balance}
+h1 small{display:block;font:400 12px var(--body);color:var(--muted);letter-spacing:0}
+.spacer{flex:1}
+.seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:2px}
+.seg button{background:none;border:0;color:var(--muted);font:500 12.5px var(--body);padding:6px 10px;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}
+.seg button:focus-visible,.btn:focus-visible{outline:2px solid var(--air);outline-offset:1px}
+.btn{background:var(--panel-2);border:1px solid var(--line);color:var(--fg);font:500 12.5px var(--body);padding:6px 12px;border-radius:7px;cursor:pointer}
+.clock{font:500 13px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.label{font:500 11px var(--body);color:var(--faint);text-transform:uppercase;letter-spacing:.07em}
+main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:10px;min-height:0}
+.scene{position:relative;background:#0b1013;border:1px solid var(--line);border-radius:10px;overflow:hidden;min-height:320px}
+.scene canvas{display:block;width:100%;height:100%}
+.legend3d{position:absolute;left:12px;bottom:10px;display:flex;flex-wrap:wrap;gap:6px 14px;font:12px var(--body);color:var(--muted);pointer-events:none}
+.legend3d i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.badge{position:absolute;left:12px;top:10px;font:500 12px var(--body);background:rgba(15,20,24,.82);border:1px solid var(--line);padding:5px 9px;border-radius:7px}
+.side{display:flex;flex-direction:column;gap:8px;overflow:auto;min-height:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.post{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
+.post h3{margin:0;font:600 14px var(--display);display:flex;align-items:center;gap:8px}
+.post h3 i{width:10px;height:10px;border-radius:50%}
+.pill{font:500 11.5px var(--body);padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.pill.on{color:#1a1206;background:var(--arc);border-color:var(--arc)}
+.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 10px;grid-column:1/-1}
+.kv div{display:flex;flex-direction:column}
+.kv b{font:500 15px var(--mono);font-variant-numeric:tabular-nums}
+.kv span{font-size:11px;color:var(--muted)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;grid-column:1/-1}
+.bar{height:4px;background:var(--panel-2);border-radius:3px;overflow:hidden;grid-column:1/-1}
+.bar > div{height:100%;background:var(--air);width:0}
+.sys .kv{grid-template-columns:repeat(2,minmax(0,1fr))}
+input[type=range]{width:100%;accent-color:var(--air)}
+.cmp{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px 10px;font-variant-numeric:tabular-nums;align-items:baseline}
+.cmp b{font:500 14px var(--mono);text-align:right}
+.cmp .h{font:500 11px var(--body);color:var(--muted);text-align:right}
+.save{grid-column:1/-1;margin-top:6px;font:500 13px var(--body);color:var(--ok)}
+.trends{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.trend{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px 6px}
+.trend .t{display:flex;justify-content:space-between;gap:8px;font:500 12px var(--body);color:var(--muted)}
+.trend canvas{width:100%;height:120px;display:block}
+.note{font-size:11.5px;color:var(--faint)}
+.alert{color:var(--crit)}
+select,input[type=number]{background:var(--panel-2);border:1px solid var(--line);color:var(--fg);font:13px var(--body);border-radius:6px;padding:4px 6px;min-width:0}
+select{max-width:100%}
+.cfg{display:grid;grid-template-columns:1fr;gap:5px;grid-column:1/-1}
+.cfg label{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.cfg label.wide{grid-template-columns:1fr}
+.src{font-size:11px;color:var(--faint);grid-column:1/-1}
+.subs{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.subs td,.subs th{padding:3px 4px;border-bottom:1px solid var(--line);text-align:right}
+.subs th{color:var(--faint);font-weight:500}
+.subs td:first-child,.subs th:first-child{text-align:left}
+.subs tr.lim td{color:var(--warn)}
+.subs .st{color:var(--faint);font-size:10.5px}
+details summary{cursor:pointer;color:var(--muted);font-size:12px}
+@media (max-width:980px){
+  html,body{height:auto}
+  .app{height:auto}
+  main{grid-template-columns:1fr}
+  .scene{height:58vw;min-height:280px}
+  .trends{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:560px){ .trends{grid-template-columns:1fr} .kv{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (prefers-reduced-motion:reduce){ *{scroll-behavior:auto} }
+</style>
+
+<div class="app">
+  <header>
+    <h1>Цифровой двойник вытяжки<small>сварочные посты (от 1 до 8) · вид сварки и материал на каждом — из Методики 1997 · местная вытяжка + общеобменная</small></h1>
+    <div class="spacer"></div>
+    <div><div class="label">Показать в 3D</div>
+      <div class="seg" id="viewSeg">
+        <button id="vB" aria-pressed="true" data-v="B">Предлагаемая система</button>
+        <button id="vA" aria-pressed="false" data-v="A">Промышленный стандарт</button>
+      </div></div>
+    <div><div class="label">Скорость времени</div>
+      <div class="seg" id="speedSeg">
+        <button aria-pressed="false" data-s="1">×1</button><button aria-pressed="true" data-s="10">×10</button>
+        <button aria-pressed="false" data-s="60">×60</button><button aria-pressed="false" data-s="300">×300</button>
+      </div></div>
+    <div><div class="label">Время смены</div><div class="clock" id="clock">00:00:00</div></div>
+    <button class="btn" id="pauseBtn">Пауза</button>
+    <button class="btn" id="resetBtn">Сначала</button>
+  </header>
+
+  <main>
+    <div class="scene" id="scene">
+      <div class="badge" id="badge">Предлагаемая система</div>
+      <div class="legend3d">
+        <span><i style="background:var(--arc)"></i>сварочная дуга</span>
+        <span><i style="background:var(--air)"></i>поток воздуха (плотность ∝ расходу)</span>
+        <span>диск в разрезе воздуховода — заслонка</span>
+      </div>
+    </div>
+    <aside class="side">
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="label">Режим работы постов</span>
+          <div class="seg" id="autoSeg"><button aria-pressed="true" data-a="1">Смена (авто)</button><button aria-pressed="false" data-a="0">Вручную</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="label">С начала смены</div>
+        <div class="cmp" style="margin-top:6px">
+          <span></span><span class="h">Пром. стандарт</span><span class="h">Предлагаемая</span>
+          <span>Вентиляторы, кВт·ч</span><b id="eA">0</b><b id="eB">0</b>
+          <span>Нагрев притока, кВт·ч</span><b id="hA">0</b><b id="hB">0</b>
+          <span>Худшее Σ C/ПДК, макс.</span><b id="mA">0</b><b id="mB">0</b>
+          <div class="save" id="saving">—</div>
+        </div>
+        <p class="note">Полная смена на скорости ×300 — около полутора минут. Пром. стандарт: заслонки «открыто/закрыто», постоянное разрежение, общеобменная — проектный расход по всем веществам. Предлагаемая: регулирование расхода каждого поста, сброс давления, общеобменная по выделениям процессов + датчики аэрозоля, NO₂ и CO (цель Σ C/ПДК ≤ 0,5).</p>
+      </div>
+      <div class="card cfg" id="roomCard">
+        <div class="label">Помещение (цех)</div>
+        <label>Длина, м<input type="number" id="roomL" min="3" max="500" step="1" value="48"></label>
+        <label>Ширина, м<input type="number" id="roomW" min="3" max="300" step="1" value="24"></label>
+        <label>Высота, м<input type="number" id="roomH" min="2.5" max="40" step="0.1" value="14.4"></label>
+        <p class="note" id="roomNote"></p>
+      </div>
+      <div id="posts"></div>
+      <div class="card sys">
+        <div class="label">Вентилятор и фильтр</div>
+        <div class="kv" style="margin-top:6px">
+          <div><b id="fanN">—</b><span>частота, об/мин</span></div>
+          <div><b id="fanP">—</b><span>давление, Па</span></div>
+          <div><b id="fanW">—</b><span>мощность, кВт</span></div>
+          <div><b id="qTot">—</b><span>местные отсосы, м³/ч</span></div>
+        </div>
+        <label class="label" for="foul" style="display:block;margin-top:8px">Загрязнение фильтра: <span id="foulV">×1,0</span></label>
+        <input type="range" id="foul" min="1" max="3" step="0.1" value="1">
+        <details style="margin-top:8px"><summary>Потери давления по элементам (Идельчик)</summary>
+          <label class="label" style="display:block;margin:6px 0 4px">Путь воздуха от поста: <select id="lossPost"></select></label>
+          <table class="subs"><thead><tr><th>Элемент</th><th>ζ / λl/d</th><th>Δp, Па</th></tr></thead><tbody id="lossBody"></tbody></table>
+          <p class="note">Сумма по пути = давлению вентилятора (проверяется автотестом). Тройник: ζ зависит от отношения расходов, может быть &lt; 0 (эжекция).</p>
+        </details>
+      </div>
+      <div class="card sys">
+        <div class="label">Воздух в цехе</div>
+        <div class="kv" style="margin-top:6px">
+          <div><b id="lgen">—</b><span>общеобменная, м³/ч</span></div>
+          <div><b id="mn">—</b><span>худшее Σ C/ПДК</span></div>
+          <div><b id="sens">—</b><span>датчик аэрозоля, мг/м³</span></div>
+          <div><b id="heat">—</b><span>нагрев притока, кВт</span></div>
+        </div>
+        <table class="subs" style="margin-top:8px"><thead><tr><th>Вещество</th><th>C, мг/м³</th><th>ПДК</th><th>C/ПДК</th></tr></thead><tbody id="subsBody"></tbody></table>
+        <p class="note" id="designNote"></p>
+      </div>
+      <p class="note">Удельные выделения — ГОСТ Р 56164-2014 (= Методика 1997, перечень Минприроды, п. 18); ПДК — СанПиН 1.2.3685-21 (ред. 2025); воздухообмен — СП 60.13330.2020 (ред. с изм. 1–6); местные сопротивления — Идельчик, 1992; нормы отсоса — ГОСТ 12.3.003-86. Отсосы — стационарные. Сеть и вентилятор подбираются автоматически под выбранные посты (геометрия условная). 88 автотестов.</p>
+    </aside>
+  </main>
+
+  <section class="trends">
+    <div class="trend"><div class="t"><span>Расход постов, доля уставки</span><span>— 100 %</span></div><canvas id="c1"></canvas></div>
+    <div class="trend"><div class="t"><span>Открытие заслонок, %</span><span>последние 15 мин</span></div><canvas id="c2"></canvas></div>
+    <div class="trend"><div class="t"><span>Вентилятор, об/мин</span><span id="c3l"></span></div><canvas id="c3"></canvas></div>
+    <div class="trend"><div class="t"><span>Худшее Σ C/ПДК в цехе</span><span>— ПДК (1) и цель (0,5)</span></div><canvas id="c4"></canvas></div>
+  </section>
+</div>
+
+<script>/*ENGINE*/</script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+const E = window.Engine;
+let IDS = [];
+const PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#c84fd0', '#e3b341', '#4cc3c9', '#e5625c', '#9aa86b'];
+const COL = {};
+const MAX_POSTS = 8;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ---------- состояние интерфейса
+const WIN = 900;
+const fmt = (v, d = 0) => (Number.isFinite(v) ? v : 0).toLocaleString('ru-RU', { minimumFractionDigits: d, maximumFractionDigits: d });
+const setPressed = (seg, btn) => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+const cfg = [
+  { id: 'post1', process: 'mag_co2', material: 'sv08g2s', params: { I: 225, d: 1.2 }, hood: 'table', eta: 0.8 },
+  { id: 'post2', process: 'mma', material: 'uoni1345', params: { B: 1.5 }, hood: 'table', eta: 0.8 },
+  { id: 'post3', process: 'saw', material: 'an348a', params: { B: 6 }, hood: 'table', eta: 0.8 },
+];
+const ui = { auto: true, view: 'B', speed: 10, paused: false, posts: {}, fouling: 1 };
+/** номера постов идут подряд; цвет — по номеру */
+function syncIds() {
+  IDS = cfg.map((c, i) => (c.id = `post${i + 1}`));
+  IDS.forEach((id, i) => { COL[id] = PALETTE[i % PALETTE.length]; if (!ui.posts[id]) ui.posts[id] = { on: false }; });
+}
+syncIds();
+let shift = E.makeSchedule(IDS, 8 * 3600, 7);
+const isOn = (id, t) => ui.auto ? shift(id, t % (8 * 3600)) : ui.posts[id].on;
+
+// ---------- две модели параллельно: A — пром. стандарт, B — предлагаемая (сеть и вентилятор подбираются под посты)
+let report = null, groups = [];
+function build(kind) {
+  const pl = E.buildPlant({ posts: cfg, V: roomV(), lev: kind === 'B' ? 'adaptive' : 'onoff', gen: kind === 'B' ? 'fffb' : 'const', gasSensors: ['no2', 'co'] });
+  const p = pl.params; p.record = undefined; p.duration = 1e12; p.schedule = isOn;
+  if (kind === 'A') p.nFF = undefined;
+  report = pl.report;
+  const g = new Map(); for (const s of p.substances) if (Number.isFinite(s.pdk)) { const k = s.group ?? s.name; if (!g.has(k)) g.set(k, []); g.get(k).push(s); }
+  groups = [...g.values()];
+  return { sim: E.createSimulator(pl.net, p), net: pl.net, last: null, hist: [], params: p };
+}
+const worstRatio = C => groups.reduce((w, mem) => Math.max(w, mem.reduce((a, s) => a + C[s.name] / s.pdk, 0)), 0);
+let A, B;
+function reset() { A = build('A'); B = build('B'); shift = E.makeSchedule(IDS, 8 * 3600, 7); applyFouling(); renderDesign(); warm(); }
+/** число постов изменилось: карточки, расчёт и 3D-сцена собираются заново */
+let scene3dReady = false;
+function changeLayout() { renderCards(); reset(); if (scene3dReady) build3d(); }
+function applyFouling() { for (const m of [A, B]) m.net.common[0].spec.fouling = ui.fouling; }
+function warm() { for (let i = 0; i < 1200; i++) for (const m of [A, B]) { m.last = m.sim.step(); m.hist.push(m.last); if (m.hist.length > WIN) m.hist.shift(); } }
+
+// ---------- карточки постов: выбор процесса, материала, параметров, отсоса
+const postsEl = document.getElementById('posts');
+// размеры цеха: воздухообмен по вредным веществам от них НЕ зависит (СП 60, прил. Г, ф. Г.2); объём определяет скорость роста концентрации
+function roomV() { const v = id => Math.max(0.1, +document.getElementById(id).value || 0); return v('roomL') * v('roomW') * v('roomH'); }
+['roomL', 'roomW', 'roomH'].forEach(id => document.getElementById(id).onchange = () => reset());
+const PROCS = E.activeProcesses(), procGroups = [...new Set(PROCS.map(p => p.group))];
+const fmtN = v => String(v).replace('.', ',');
+function cardHtml(id, i) {
+  const c = cfg[i], pr = E.processById(c.process);
+  const procOpts = procGroups.map(g => `<optgroup label="${g}">${PROCS.filter(p => p.group === g).map(p => `<option value="${p.id}" ${p.id === c.process ? 'selected' : ''}>${p.name}</option>`).join('')}</optgroup>`).join('');
+  const matOpts = pr.materials.map(m => `<option value="${m.id}" ${m.id === c.material ? 'selected' : ''}>${m.name}${m.status === 'П' ? ' [сверить]' : m.status === 'ввести' ? ' [ввести показатели]' : ''}</option>`).join('');
+  const hoodOpts = pr.hoods.map(h => `<option value="${h.id}" ${h.id === c.hood ? 'selected' : ''}>${h.label}</option>`).join('');
+  const hoodNow = (pr.hoods.find(h => h.id === c.hood) ?? pr.hoods[0]).id;
+  const params = [...pr.params, ...(hoodNow === 'user' ? [E.P_Q] : [])].map(d => `<label>${d.label}, ${d.unit}<input type="number" data-p="${d.id}" min="${d.min}" max="${d.max}" step="${d.step}" value="${c.params?.[d.id] ?? d.def}"></label>`).join('');
+  const mat = pr.materials.find(m => m.id === c.material) ?? pr.materials[0];
+  const facts = mat.status === 'ввести' ? Object.keys(mat.factors).map(k => `<label>${E.SUBSTANCES[k].name}, ${pr.unit}<input type="number" data-f="${k}" min="0" step="0.001" value="${c.factorsOverride?.[k] ?? 0}"></label>`).join('') : '';
+  return `
+  <div class="card post" id="card-${id}">
+    <h3><i style="background:${COL[id]}"></i>Пост ${i + 1}</h3>
+    <span class="pill" id="pill-${id}">простой</span>
+    <div class="cfg">
+      <label class="wide"><select data-k="process" aria-label="Процесс">${procOpts}</select></label>
+      <label class="wide"><select data-k="material" aria-label="Материал">${matOpts}</select></label>
+      ${params}${facts}
+      <label class="wide"><select data-k="hood" aria-label="Местный отсос">${hoodOpts}</select></label>
+      <label>Захват отсоса η (Методика: 0,8)<input type="number" data-k="eta" min="0.3" max="0.99" step="0.01" value="${c.eta ?? 0.8}"></label>
+    </div>
+    <div class="src" id="src-${id}"></div>
+    <div class="row"><button class="btn" id="tog-${id}" aria-pressed="false">Включить</button>${IDS.length > 1 ? `<button class="btn" id="del-${id}">Удалить пост</button>` : ''}</div>
+    <div class="kv">
+      <div><b id="q-${id}">—</b><span>расход, м³/ч</span></div>
+      <div><b id="o-${id}">—</b><span>открытие, %</span></div>
+      <div><b id="a-${id}">—</b><span>угол заслонки</span></div>
+    </div>
+    <div class="bar"><div id="bar-${id}"></div></div>
+  </div>`;
+}
+function renderCards() {
+  postsEl.innerHTML = IDS.map((id, i) => cardHtml(id, i)).join('') +
+    `<div class="card"><button class="btn" id="addPost" ${IDS.length >= MAX_POSTS ? 'disabled' : ''}>+ Добавить сварочный пост</button>
+     <span class="note" style="margin-left:8px">постов: ${IDS.length} из ${MAX_POSTS}; сеть и вентилятор подбираются заново</span></div>`;
+  document.getElementById('addPost').onclick = () => { if (cfg.length >= MAX_POSTS) return;
+    cfg.push({ id: '', process: 'mag_co2', material: 'sv08g2s', params: { I: 225, d: 1.2 }, hood: 'table', eta: 0.8 }); syncIds(); changeLayout(); };
+  IDS.forEach((id, i) => {
+    const card = document.getElementById(`card-${id}`), c = cfg[i];
+    document.getElementById(`tog-${id}`).onclick = () => { setAuto(false); ui.posts[id].on = !ui.posts[id].on; };
+    const del = document.getElementById(`del-${id}`);
+    if (del) del.onclick = () => { cfg.splice(i, 1); const st = IDS.map(x => ui.posts[x]); st.splice(i, 1); ui.posts = {}; syncIds(); IDS.forEach((x, k) => (ui.posts[x] = st[k])); changeLayout(); };
+    card.querySelectorAll('select[data-k]').forEach(el => el.onchange = () => {
+      const k = el.dataset.k;
+      if (k === 'process') { const pr = E.processById(el.value); c.process = el.value; c.material = pr.materials[0].id; c.hood = pr.hoods[0].id; c.params = {}; c.factorsOverride = undefined; }
+      else c[k] = el.value;
+      if (k === 'material') c.factorsOverride = undefined;
+      renderCards(); reset();
+    });
+    card.querySelector('input[data-k="eta"]').onchange = e => { c.eta = Math.min(0.99, Math.max(0.3, +e.target.value)); reset(); };
+    card.querySelectorAll('input[data-p]').forEach(el => el.onchange = () => {
+      c.params = { ...(c.params ?? {}), [el.dataset.p]: +el.value };
+      // параметры, от которых зависит норма отсоса (площадь, проём, скорость), требуют пересборки сети; остальные действуют сразу
+      if (['area', 'open', 'v', 'Q'].includes(el.dataset.p)) reset(); else renderDesign();
+    });
+    card.querySelectorAll('input[data-f]').forEach(el => el.onchange = () => { c.factorsOverride = { ...(c.factorsOverride ?? {}), [el.dataset.f]: +el.value }; reset(); });
+  });
+}
+const KIND_RU = { duct: 'трение по длине', damper: 'заслонка', filter: 'фильтр', diffuser: 'переход на больший диаметр', teeSide: 'тройник: боковой вход', teeStraight: 'тройник: проход' };
+function renderLoss(m) {
+  const sel = document.getElementById('lossPost');
+  if (sel.options.length !== IDS.length) sel.innerHTML = IDS.map((id, i) => `<option value="${id}">Пост ${i + 1}</option>`).join('');
+  const sol = E.solve(m.net), br = E.lossBreakdown(m.net, sol), id = sel.value || IDS[0];
+  const path = []; let sg = m.net.segments.find(x => x.id === id);
+  while (sg) { path.push(sg.id); sg = sg.parent ? m.net.segments.find(x => x.id === sg.parent) : null; }
+  path.push('common');
+  const elOf = r => (r.seg === 'common' ? m.net.common : m.net.segments.find(x => x.id === r.seg).elements).find(e => e.id === r.id);
+  const rows = br.filter(r => path.includes(r.seg)).map(r => { const e = elOf(r);
+    const name = (e.kind === 'local' || e.kind === 'bend') ? e.label : e.kind === 'damper' ? `заслонка, ${fmt(e.alpha)}°` : KIND_RU[e.kind] + (e.kind === 'duct' ? `, ${fmtN(e.l)} м` : '');
+    return `<tr><td>${name}</td><td>${e.kind === 'local' ? fmt(e.zeta, 2) : e.kind === 'bend' ? fmt(r.dp / Math.max(1e-9, 0.6 * (r.q / (Math.PI * e.d * e.d / 4)) ** 2), 2) : e.kind === 'damper' ? fmt(E.damperZeta(e.alpha), 2) : ''}</td><td>${fmt(r.dp, 1)}</td></tr>`; });
+  const sum = br.filter(r => path.includes(r.seg)).reduce((a, r) => a + r.dp, 0);
+  document.getElementById('lossBody').innerHTML = rows.join('') + `<tr class="lim"><td>Итого по пути</td><td></td><td>${fmt(sum, 1)}</td></tr><tr><td>Давление вентилятора</td><td></td><td>${fmt(sol.pFan, 1)}</td></tr>`;
+}
+function renderDesign() {
+  const d = E.designReport(cfg);
+  IDS.forEach((id, i) => {
+    const q = E.qminOf(cfg[i]), em = d.em[i], top = Object.entries(em).filter(([k]) => k !== 'aerosol').sort((a, b) => b[1] - a[1]).slice(0, 3);
+    document.getElementById(`src-${id}`).innerHTML = `Уставка отсоса ${fmt(E.qsetOf(cfg[i]))} м³/ч — ${q.source}<br>Выделение: ${top.map(([k, v]) => `${E.SUBSTANCES[k].name.split(' (')[0]} ${fmt(v * 3.6, 2)} г/ч`).join('; ') || 'нет (ввести показатели)'}`;
+  });
+  const lim = report ? report.substances[0] : null;
+  if (report) { const V = roomV(), L = report.Ltotal + 1e-9, tau = V / L * 60, perW = L / Math.max(1, IDS.length);
+    document.getElementById('roomNote').innerHTML = `Объём ${fmt(V)} м³. Воздухообмен по вредным веществам от объёма не зависит (СП 60.13330.2020, прил. Г, ф. Г.2; расчёт по кратности для рабочей зоны не допускается — п. 7.4.1). Объём задаёт инерцию цеха: постоянная времени V/L ≈ <b>${fmt(tau)} мин</b> — за это время концентрация проходит ≈ 63 % пути к новому значению после включения/выключения постов. Наружного воздуха на одного работающего: ${fmt(perW)} м³/ч (минимум 30–60 по СП 60, прил. В) — ${perW >= 60 ? 'выполняется' : 'проверить'}.`; }
+  document.getElementById('designNote').innerHTML = report ? `По СП 60.13330.2020 (все посты, C = ПДК): весь воздух <b>${fmt(report.Ltotal)} м³/ч</b> − местные отсосы ${fmt(report.Llev)} = общеобменная <b>${fmt(report.Ldesign)} м³/ч</b>, лимитирует: <b>${lim ? lim.name : '—'}</b>${report.mnCategory ? `; доля Mn в аэрозоле цеха ${fmt(report.mnShare * 100, 1)} % → ПДК Mn по категории «${report.mnCategory}»` : ''}. Вещества с пометкой «сверить» — ПДК по ГН, сверить по СанПиН.` : '';
+}
+renderCards();
+reset();
+function setAuto(v) {
+  if (ui.auto && !v) { const t = B.sim.time(); for (const id of IDS) ui.posts[id].on = isOn(id, t); }
+  ui.auto = v; const seg = document.getElementById('autoSeg'); setPressed(seg, seg.querySelector(`[data-a="${v ? 1 : 0}"]`));
+}
+document.getElementById('autoSeg').onclick = e => { const b = e.target.closest('button'); if (b) setAuto(b.dataset.a === '1'); };
+document.getElementById('viewSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.view = b.dataset.v; setPressed(e.currentTarget, b);
+  document.getElementById('badge').textContent = ui.view === 'B' ? 'Предлагаемая система' : 'Промышленный стандарт'; };
+document.getElementById('speedSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.speed = +b.dataset.s; setPressed(e.currentTarget, b); };
+document.getElementById('pauseBtn').onclick = e => { ui.paused = !ui.paused; e.target.textContent = ui.paused ? 'Продолжить' : 'Пауза'; };
+document.getElementById('resetBtn').onclick = () => reset();
+document.getElementById('foul').oninput = e => { ui.fouling = +e.target.value; document.getElementById('foulV').textContent = '×' + ui.fouling.toFixed(1).replace('.', ','); applyFouling(); };
+
+// ---------- 3D сцена
+const host = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+host.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0b1013');
+scene.fog = new THREE.FogExp2('#0b1013', 0.012);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
+camera.position.set(-9, 11, 19);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(2, 3.2, 0); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49;
+scene.add(new THREE.HemisphereLight('#c9d6df', '#20272c', 0.9));
+const sun = new THREE.DirectionalLight('#ffffff', 1.1); sun.position.set(6, 14, 8); scene.add(sun);
+
+const M = {
+  floor: new THREE.MeshStandardMaterial({ color: '#2a3238', roughness: 0.95 }),
+  steel: new THREE.MeshStandardMaterial({ color: '#8d989f', metalness: 0.75, roughness: 0.35 }),
+  duct: new THREE.MeshStandardMaterial({ color: '#9aa6ad', metalness: 0.6, roughness: 0.45, transparent: true, opacity: 0.32, depthWrite: false }),
+  dark: new THREE.MeshStandardMaterial({ color: '#3b464d', metalness: 0.4, roughness: 0.6 }),
+  filter: new THREE.MeshStandardMaterial({ color: '#56646d', metalness: 0.5, roughness: 0.5 }),
+  disk: new THREE.MeshStandardMaterial({ color: '#d9e1e5', metalness: 0.8, roughness: 0.25 }),
+};
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 22), M.floor); floor.rotation.x = -Math.PI / 2; scene.add(floor);
+const grid = new THREE.GridHelper(40, 40, '#3a464e', '#2c363c'); grid.position.y = 0.01; scene.add(grid);
+
+const Y_COLL = 5.2, Z = 0, STEP = 5.5;
+let rig = null, rotor = null, tail = [], X_END = 0;
+const XS = {};
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const tube = (a, b, r, mat) => {
+  const v = new THREE.Vector3().subVectors(b, a), L = v.length();
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L, 24, 1, true), mat);
+  m.position.copy(a).addScaledVector(v, 0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().normalize()); rig.add(m); return m;
+};
+const posts3d = {};
+const NP = 140;
+function pathOf(id) {
+  const pts = [...posts3d[id].path, ...tail];
+  const seg = []; let L = 0; for (let i = 1; i < pts.length; i++) { const l = pts[i].distanceTo(pts[i - 1]); seg.push([pts[i - 1], pts[i], L, l]); L += l; }
+  return { seg, L };
+}
+/** 3D-цех под текущее число постов: столы и отсосы вдоль коллектора, затем фильтр, вентилятор, выброс */
+function build3d() {
+  if (rig) { scene.remove(rig); rig.traverse(o => { if (o.geometry && o.geometry.dispose) o.geometry.dispose(); }); }
+  rig = new THREE.Group(); scene.add(rig);
+  for (const k of Object.keys(posts3d)) delete posts3d[k];
+  const x0 = -((IDS.length - 1) * STEP) / 2 - 3;
+  IDS.forEach((id, i) => (XS[id] = x0 + i * STEP));
+  X_END = x0 + (IDS.length - 1) * STEP + 4;
+  for (const id of IDS) {
+    const x = XS[id];
+    const table = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 1.4), M.dark); table.position.set(x, 0.45, Z + 1.2); rig.add(table);
+    const work = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.15, 0.5), M.steel); work.position.set(x, 0.98, Z + 1.2); rig.add(work);
+    const hood = new THREE.Mesh(new THREE.ConeGeometry(0.75, 0.6, 28, 1, true), M.steel); hood.position.set(x, 2.35, Z + 1.2); rig.add(hood);
+    tube(V(x, 2.6, Z + 1.2), V(x, 3.0, Z + 1.2), 0.22, M.steel);
+    tube(V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), 0.22, M.duct);
+    tube(V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z), 0.22, M.duct);
+    const dPos = V(x, 4.35, Z + 0.3);   // заслонка: прозрачный корпус + диск на оси
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.36, 28, 1, true), M.duct); body.position.copy(dPos);
+    body.quaternion.setFromUnitVectors(V(0, 1, 0), V(0, Y_COLL - 3.6, -0.6).normalize()); rig.add(body);
+    const pivot = new THREE.Group(); pivot.position.copy(dPos); pivot.quaternion.copy(body.quaternion); rig.add(pivot);
+    for (const off of [-0.18, 0.18]) { const fl = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.025, 8, 32), M.steel); fl.rotation.x = Math.PI / 2; fl.position.y = off; pivot.add(fl); }
+    const disk = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.025, 32), M.disk); pivot.add(disk);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 8), M.dark); shaft.rotation.z = Math.PI / 2; pivot.add(shaft);
+    const act = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.22), new THREE.MeshStandardMaterial({ color: '#e0a23a', roughness: 0.6 })); act.position.set(0.46, 0, 0); pivot.add(act);
+    const arc = new THREE.PointLight('#ffb347', 0, 6, 2); arc.position.set(x, 1.15, Z + 1.2); rig.add(arc);
+    const spark = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), new THREE.MeshBasicMaterial({ color: '#fff2c4' })); spark.position.copy(arc.position); rig.add(spark);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.03, 8, 40), new THREE.MeshBasicMaterial({ color: COL[id] })); ring.rotation.x = Math.PI / 2; ring.position.set(x, 0.92, Z + 1.2); rig.add(ring);
+    posts3d[id] = { disk, arc, spark, path: [V(x, 1.4, Z + 1.2), V(x, 2.35, Z + 1.2), V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z)] };
+  }
+  tube(V(XS[IDS[0]] - 0.4, Y_COLL, Z), V(X_END, Y_COLL, Z), 0.36, M.duct);   // коллектор → фильтр → вентилятор → выброс
+  const filt = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.6, 1.8), M.filter); filt.position.set(X_END + 1.2, Y_COLL - 0.4, Z); rig.add(filt);
+  tube(V(X_END + 2.2, Y_COLL, Z), V(X_END + 3.0, Y_COLL, Z), 0.36, M.duct);
+  const fanHouse = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.7, 36), M.steel); fanHouse.rotation.x = Math.PI / 2; fanHouse.position.set(X_END + 3.9, Y_COLL, Z); rig.add(fanHouse);
+  rotor = new THREE.Group(); rotor.position.set(X_END + 3.9, Y_COLL, Z + 0.37); rig.add(rotor);
+  for (let i = 0; i < 6; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.82, 0.04), M.disk); b.position.y = 0.42; const g = new THREE.Group(); g.rotation.z = i * Math.PI / 3; g.add(b); rotor.add(g); }
+  const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.8, 24), new THREE.MeshStandardMaterial({ color: '#2f5f8a', roughness: 0.5 })); motor.rotation.x = Math.PI / 2; motor.position.set(X_END + 3.9, Y_COLL, Z - 0.75); rig.add(motor);
+  tube(V(X_END + 3.9, Y_COLL + 0.9, Z), V(X_END + 3.9, Y_COLL + 4.5, Z), 0.36, M.duct);
+  tail = [V(X_END, Y_COLL, Z), V(X_END + 3.9, Y_COLL, Z), V(X_END + 3.9, Y_COLL + 4.5, Z)];
+  for (const id of IDS) {   // частицы потока: «отсос → ветвь → коллектор → вентилятор → выброс»
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NP * 3), 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: '#63b8db', size: 0.11, transparent: true, opacity: 0.85, depthWrite: false }));
+    rig.add(pts);
+    posts3d[id].pts = pts; posts3d[id].route = pathOf(id); posts3d[id].s = Float32Array.from({ length: NP }, () => Math.random());
+  }
+  const left = XS[IDS[0]] - 2, right = X_END + 5, span = right - left;   // камера и пол — под весь цех
+  controls.target.set((left + right) / 2, 3.2, 0);
+  camera.position.set(controls.target.x - 9 - span * 0.05, 10 + span * 0.12, 13 + span * 0.42);
+  floor.scale.set(Math.max(1, (span + 10) / 40), 1, 1); floor.position.x = controls.target.x;
+  grid.position.x = controls.target.x; grid.scale.set(Math.max(1, (span + 10) / 40), 1, 1);
+}
+build3d(); scene3dReady = true;
+function placeParticles(id, flow, dt) {
+  const o = posts3d[id], { seg, L } = o.route, pos = o.pts.geometry.attributes.position;
+  const vis = Math.round(NP * Math.min(1, flow / 1800)); const speed = 0.4 + 6 * flow / 1500; // условная скорость отображения
+  for (let i = 0; i < NP; i++) {
+    o.s[i] = (o.s[i] + speed * dt / L) % 1; let d = o.s[i] * L;
+    let p = seg[seg.length - 1][1];
+    for (const [a, b, s0, l] of seg) if (d <= s0 + l) { p = a.clone().lerp(b, (d - s0) / l); break; }
+    const j = (i * 7919) % 100 / 100 - 0.5;
+    if (i < vis) pos.setXYZ(i, p.x + j * 0.18, p.y + ((i * 31) % 10 / 10 - 0.5) * 0.18, p.z + ((i * 17) % 10 / 10 - 0.5) * 0.18);
+    else pos.setXYZ(i, 0, -50, 0);
+  }
+  pos.needsUpdate = true;
+}
+function resize() { const w = host.clientWidth, h = host.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(host); resize();
+
+// ---------- тренды (последние 15 минут модельного времени)
+const charts = ['c1', 'c2', 'c3', 'c4'].map(id => document.getElementById(id));
+function drawChart(cv, series, yMax, lines = []) {
+  const dpr = Math.min(devicePixelRatio, 2), w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const pl = 34, pb = 4, pt = 6, W = w - pl - 4, H = h - pt - pb;
+  g.font = '10.5px IBM Plex Mono, monospace'; g.fillStyle = css('--faint'); g.strokeStyle = css('--line'); g.lineWidth = 1;
+  for (let k = 0; k <= 2; k++) { const y = pt + H - H * k / 2; g.beginPath(); g.moveTo(pl, y); g.lineTo(pl + W, y); g.stroke();
+    const v = yMax * k / 2; g.fillText(yMax >= 10 ? String(Math.round(v)) : v.toFixed(2).replace('.', ','), 2, y + 3.5); }
+  for (const [v, c] of lines) { const y = pt + H - H * Math.min(v / yMax, 1); g.setLineDash([4, 4]); g.strokeStyle = c; g.beginPath(); g.moveTo(pl, y); g.lineTo(pl + W, y); g.stroke(); g.setLineDash([]); }
+  for (const s of series) {
+    g.strokeStyle = s.c; g.lineWidth = 2; g.beginPath();
+    s.d.forEach((v, i) => { const x = pl + W * (i + WIN - s.d.length) / (WIN - 1), y = pt + H - H * Math.min(Math.max(v, 0) / yMax, 1); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+  }
+}
+
+// ---------- цикл
+let acc = 0, prev = performance.now(), frame = 0;
+function tick(now) {
+  const dtR = Math.min((now - prev) / 1000, 0.1); prev = now;
+  if (!ui.paused) {
+    acc += dtR * ui.speed; let k = 0;
+    while (acc >= 1 && k < 40) { for (const m of [A, B]) { m.last = m.sim.step(); m.hist.push(m.last); if (m.hist.length > WIN) m.hist.shift(); } acc -= 1; k++; }
+    if (k === 40) acc = 0;
+  }
+  const m = ui.view === 'B' ? B : A, s = m.last;
+  if (s) {
+    for (const id of IDS) {
+      const o = posts3d[id], on = s.on[id];
+      o.disk.rotation.x = (90 - s.alpha[id]) * Math.PI / 180;   // 90° — диск поперёк потока (закрыта)
+      o.arc.intensity = on ? 3.2 + Math.random() * 2.4 : 0; o.spark.visible = on;
+      placeParticles(id, s.Q[id], dtR * Math.min(ui.speed, 10) / 3);
+    }
+    rotor.rotation.z -= dtR * s.n / 60 * 2 * Math.PI * 0.05;
+    scene.fog.density = 0.006 + 0.025 * Math.min(worstRatio(s.C), 1.5);
+    if (frame++ % 6 === 0) updatePanel();
+  }
+  controls.update(); renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+function updatePanel() {
+  const m = ui.view === 'B' ? B : A, s = m.last, t = s.t;
+  const hh = Math.floor(t / 3600), mm = Math.floor(t % 3600 / 60), ss = Math.floor(t % 60);
+  document.getElementById('clock').textContent = [hh, mm, ss].map(v => String(v).padStart(2, '0')).join(':');
+  IDS.forEach((id, i) => {
+    const on = s.on[id], pill = document.getElementById(`pill-${id}`), qs = m.params.posts[i].Qset * 3600;
+    pill.textContent = on ? 'работает' : 'простой'; pill.classList.toggle('on', on);
+    document.getElementById(`tog-${id}`).textContent = (ui.auto ? on : ui.posts[id].on) ? 'Остановить' : 'Включить';
+    document.getElementById(`q-${id}`).textContent = fmt(s.Q[id]);
+    document.getElementById(`o-${id}`).textContent = fmt(100 - s.alpha[id] / 0.9);
+    document.getElementById(`a-${id}`).textContent = fmt(s.alpha[id]) + '°';
+    document.getElementById(`bar-${id}`).style.width = Math.min(100, s.Q[id] / qs * 75) + '%';
+  });
+  document.getElementById('fanN').textContent = fmt(s.n);
+  document.getElementById('fanP').textContent = fmt(s.pFan);
+  document.getElementById('fanW').textContent = fmt(s.P / 1000, 2);
+  document.getElementById('qTot').textContent = fmt(s.Qtot);
+  document.getElementById('lgen').textContent = fmt(s.Lgen);
+  const wr = worstRatio(s.C), mnEl = document.getElementById('mn'); mnEl.textContent = fmt(wr, 2); mnEl.classList.toggle('alert', wr > 1);
+  document.getElementById('sens').textContent = fmt(s.sensor, 2);
+  document.getElementById('heat').textContent = fmt(s.heat, 1);
+  if (document.querySelector('details[open] #lossBody') || frame % 60 === 0) renderLoss(m);
+  document.getElementById('subsBody').innerHTML = report.substances.map((x, k) => { const c = s.C[x.id] ?? 0, r = c / x.pdk;
+    return `<tr class="${k === 0 ? 'lim' : ''}"><td>${E.SUBSTANCES[x.id].name.split(' (')[0]}${x.status === 'П' ? ' <span class="st">[сверить]</span>' : ''}</td><td>${fmt(c, 3)}</td><td>${fmtN(x.pdk)}</td><td class="${r > 1 ? 'alert' : ''}">${fmt(r, 2)}</td></tr>`; }).join('');
+  const rA = A.sim.result(Math.max(A.last.t, 1)), rB = B.sim.result(Math.max(B.last.t, 1));
+  document.getElementById('eA').textContent = fmt(rA.fanKWh + rA.genKWh, 2); document.getElementById('eB').textContent = fmt(rB.fanKWh + rB.genKWh, 2);
+  document.getElementById('hA').textContent = fmt(rA.heatKWh, 1); document.getElementById('hB').textContent = fmt(rB.heatKWh, 1);
+  document.getElementById('mA').textContent = fmt(rA.ratioMax, 2); document.getElementById('mB').textContent = fmt(rB.ratioMax, 2);
+  const sv = rA.heatKWh > 0 ? 1 - rB.heatKWh / rA.heatKWh : 0, se = (rA.fanKWh + rA.genKWh) > 0 ? 1 - (rB.fanKWh + rB.genKWh) / (rA.fanKWh + rA.genKWh) : 0;
+  document.getElementById('saving').textContent = t > 60 ? `Экономия: тепло ${fmt(sv * 100)} %, электроэнергия ${fmt(se * 100)} %` : 'Экономия появится через минуту модельного времени';
+  const h = m.hist;
+  drawChart(charts[0], IDS.map((id, i) => ({ c: COL[id], d: h.map(x => x.on[id] ? x.Q[id] / (m.params.posts[i].Qset * 3600) * 100 : 0) })), 140, [[100, css('--muted')]]);
+  drawChart(charts[1], IDS.map(id => ({ c: COL[id], d: h.map(x => 100 - x.alpha[id] / 0.9) })), 100);
+  drawChart(charts[2], [{ c: css('--std'), d: A.hist.map(x => x.n) }, { c: css('--ok'), d: B.hist.map(x => x.n) }], 1600);
+  document.getElementById('c3l').innerHTML = `<span style="color:var(--std)">стандарт</span> · <span style="color:var(--ok)">предлагаемая</span>`;
+  drawChart(charts[3], [{ c: css('--std'), d: A.hist.map(x => worstRatio(x.C)) }, { c: css('--ok'), d: B.hist.map(x => worstRatio(x.C)) }], 1.2, [[1, css('--crit')], [0.5, css('--muted')]]);
+}
+// старт: прогон первых 20 минут смены, чтобы при открытии были данные
+updatePanel();
+requestAnimationFrame(tick);
+</script>
