@@ -17,6 +17,12 @@ for (const e of net.common) els.push({ seg: 'common', parent: null, ...e, Q: sol
 const lb = lossBreakdown(net, sol);
 els.forEach((e, i) => (e.dp = lb[i].dp));
 const sp = shiftParams('adaptive');
+// «стандарт» без регулирования: заслонки на углах наладки при номинальной частоте (запас 10 % по давлению), вентилятор на n_ном
+const nstd = demoNetwork(); nstd.fanSpeed = c.nNom;
+for (const [id, a] of Object.entries(c.fixedAngles)) setDamper(nstd, id, a as number);
+const ssol = solve(nstd);
+const std = { nNom: c.nNom, pReq: c.pReq, angles: c.fixedAngles, Q: ssol.Q, Qtotal: ssol.Qtotal, pFan: ssol.pFan, power: ssol.power, powerEl: ssol.powerEl,
+  pFanNomAtReq: fanPressure(nstd.fan, sol.Qtotal, c.nNom) };
 // пример одного шага ПИ-регулятора заслонки (как в sim.ts, режим adaptive): Q = 1320 при уставке 1500, заслонка на 30°, kI = 4, dt = 1 с
 const piZold = damperZeta(30), piLn = Math.min(Math.log(damperZeta(70)), Math.max(Math.log(damperZeta(0)), Math.log(piZold) + 4 * ((1320 - 1500) / 1500) * 1));
 const piAngle = damperAngleForZeta(Math.exp(piLn));
@@ -31,6 +37,7 @@ writeFileSync('/home/claude/model/v2/engine.json', JSON.stringify({
   pSet: c.pSet, els, B225: B_BASE, alpha225: alphaMelt(225), B175: wireRate(175), B270: wireRate(270),
   Lgen3: genVentByFormula() * 3600, Lgen270: designLgen() * 3600, Ltot3: sp60Supply(3 * 0.2 * 1.9 * 1000 * B_BASE / 3600, 3 * 1500 / 3600, 0.2, 0.001) * 3600,
   dT: sp.room.dT, V: sp.room.V, piZold, piZnew: Math.exp(piLn), piAngle, Ct, shift, damperStroke: sp.damperStroke, kI: sp.kI,
+  std,
   etaMotor: motorEfficiency(sol.power / 2200, 0.867), damperZ: Object.fromEntries(Object.entries(c.angles).map(([k, a]) => [k, damperZeta(a as number)])),
 }, null, 1));
 console.log('n', c.n, 'pFan', sol.pFan, 'Qt', sol.Qtotal * 3600, 'P', sol.power, 'Pel', sol.powerEl, c.angles);

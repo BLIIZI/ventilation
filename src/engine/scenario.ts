@@ -1,7 +1,7 @@
 // Сценарий смены: 3 поста MAG-сварки, 8 ч с обедом. Все численные параметры — [Д] условные, кроме помеченных.
 import type { SimParams, Mode } from './sim.ts';
-import { m3h } from './physics.ts';
-import { balance } from './balance.ts';
+import { m3h, fanPressure } from './physics.ts';
+import { balance, anglesForSpeed } from './balance.ts';
 import { demoNetwork } from './demo-network.ts';
 import { ETA_LEV_DEFAULT, Q_POST_MIN_M3H, SV08G2S, PDK_MN_WELD_LE20, MN_ATM_SS, MOSCOW_HEATING, T_IN_WINTER, wireRate, sp60General } from './norms.ts';
 
@@ -41,9 +41,19 @@ export function makeSchedule(ids: string[], duration: number, seed = 7) {
 }
 
 /** Пусконаладка: балансировка ветвей при расчётном режиме (все посты по 1500 м³/ч) — фиксированные углы и частота */
+/** Пусконаладка демо-сети (3 поста × 1500 м³/ч).
+ *  angles, n — режим минимального давления (критическая заслонка открыта) — нужен регуляторам;
+ *  nNom, fixedAngles — «стандарт» без регулирования: вентилятор на номинальной частоте, заслонки зажаты на углы, при которых каждый пост получает норму.
+ *  Демо-характеристика вентилятора имеет запас ≈ 19 % по давлению; чтобы стандарт соответствовал правилу подбора «запас 10 %» (FAN_MARGIN, plant.ts),
+ *  номинальной считается частота, при которой p(Q_треб) = 1,1·p_треб — по законам подобия это тот же вентилятор, подобранный с запасом 10 % [Д]. */
 export function commissioning() {
-  const b = balance(demoNetwork(), { post1: m3h(1500), post2: m3h(1500), post3: m3h(1500) });
-  return { angles: b.angles, n: b.fanSpeed, pSet: b.sol.pFan - b.sol.segLoss['common'] };
+  const req = { post1: m3h(1500), post2: m3h(1500), post3: m3h(1500) };
+  const b = balance(demoNetwork(), req);
+  const pReq = b.sol.pFan, qReq = b.sol.Qtotal, fan = demoNetwork().fan;
+  let lo = b.fanSpeed, hi = 1500;
+  for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (fanPressure(fan, qReq, m) < 1.1 * pReq) lo = m; else hi = m; }
+  const nNom = hi, fixed = anglesForSpeed(demoNetwork(), req, nNom);
+  return { angles: b.angles, n: b.fanSpeed, pSet: b.sol.pFan - b.sol.segLoss['common'], pReq, nNom, fixedAngles: fixed.angles };
 }
 
 export function shiftParams(mode: Mode, pSet?: number, balanced = true): SimParams {
@@ -62,6 +72,6 @@ export function shiftParams(mode: Mode, pSet?: number, balanced = true): SimPara
     damperStroke: 8,  // 8 с — из ряда времени полного хода ГОСТ 7192-89 (исследованы также 15 и 30 с); одинаково для всех режимов
     fanRamp: 10, nMax: 1500, nMin: 300, pSet: pSet ?? c0.pSet, kI: 4,   // уставка разрежения — из пусконаладки, если не задана
     nFF: mode === 'adaptive' ? feedforwardTable(ids, m3h(1500)) : undefined,
-    openAngles: com ? com.angles : undefined, nConst: com ? com.n : undefined,
+    openAngles: com ? (mode === 'constant' ? com.fixedAngles : com.angles) : undefined, nConst: com ? com.nNom : undefined,
   };
 }

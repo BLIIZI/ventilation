@@ -543,7 +543,7 @@ function balance(net         , req                        , nMin = 300, nMax = 1
   }
   anglesForSpeed(net, req, hi, true); // привести сеть в найденное состояние
   return { feasible: true, fanSpeed: hi, angles: best.angles, sol: best.sol,
-    message: `Критическая ветвь: заслонка ${best.minAlpha.toFixed(1)}° (свободное сечение ${(100 * (1 - Math.sin(best.minAlpha * Math.PI / 180))).toFixed(0)} %)` };
+    message: `Критическая ветвь: заслонка ${best.minAlpha.toFixed(1)}°` };
 }
 
 
@@ -1009,9 +1009,19 @@ function makeSchedule(ids          , duration        , seed = 7) {
 }
 
 /** Пусконаладка: балансировка ветвей при расчётном режиме (все посты по 1500 м³/ч) — фиксированные углы и частота */
+/** Пусконаладка демо-сети (3 поста × 1500 м³/ч).
+ *  angles, n — режим минимального давления (критическая заслонка открыта) — нужен регуляторам;
+ *  nNom, fixedAngles — «стандарт» без регулирования: вентилятор на номинальной частоте, заслонки зажаты на углы, при которых каждый пост получает норму.
+ *  Демо-характеристика вентилятора имеет запас ≈ 19 % по давлению; чтобы стандарт соответствовал правилу подбора «запас 10 %» (FAN_MARGIN, plant.ts),
+ *  номинальной считается частота, при которой p(Q_треб) = 1,1·p_треб — по законам подобия это тот же вентилятор, подобранный с запасом 10 % [Д]. */
 function commissioning() {
-  const b = balance(demoNetwork(), { post1: m3h(1500), post2: m3h(1500), post3: m3h(1500) });
-  return { angles: b.angles, n: b.fanSpeed, pSet: b.sol.pFan - b.sol.segLoss['common'] };
+  const req = { post1: m3h(1500), post2: m3h(1500), post3: m3h(1500) };
+  const b = balance(demoNetwork(), req);
+  const pReq = b.sol.pFan, qReq = b.sol.Qtotal, fan = demoNetwork().fan;
+  let lo = b.fanSpeed, hi = 1500;
+  for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (fanPressure(fan, qReq, m) < 1.1 * pReq) lo = m; else hi = m; }
+  const nNom = hi, fixed = anglesForSpeed(demoNetwork(), req, nNom);
+  return { angles: b.angles, n: b.fanSpeed, pSet: b.sol.pFan - b.sol.segLoss['common'], pReq, nNom, fixedAngles: fixed.angles };
 }
 
 function shiftParams(mode      , pSet         , balanced = true)            {
@@ -1030,7 +1040,7 @@ function shiftParams(mode      , pSet         , balanced = true)            {
     damperStroke: 8,  // 8 с — из ряда времени полного хода ГОСТ 7192-89 (исследованы также 15 и 30 с); одинаково для всех режимов
     fanRamp: 10, nMax: 1500, nMin: 300, pSet: pSet ?? c0.pSet, kI: 4,   // уставка разрежения — из пусконаладки, если не задана
     nFF: mode === 'adaptive' ? feedforwardTable(ids, m3h(1500)) : undefined,
-    openAngles: com ? com.angles : undefined, nConst: com ? com.n : undefined,
+    openAngles: com ? (mode === 'constant' ? com.fixedAngles : com.angles) : undefined, nConst: com ? com.nNom : undefined,
   };
 }
 

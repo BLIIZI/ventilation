@@ -10,7 +10,7 @@ const b = balance(demoNetwork(), { post1: m3h(1500), post2: m3h(1500), post3: m3
 const pSet = b.sol.pFan - b.sol.segLoss['common'];
 console.log('Уставка разрежения в коллекторе, Па:', pSet.toFixed(0));
 
-const names = { constant: 'Без регулирования', onoff: 'Открыто/закрыто + ЧП (пром. стандарт)', adaptive: 'Предлагаемая система' } as const;
+const names = { constant: 'Стандарт: без регулирования', onoff: 'Открыто/закрыто + ЧП (для справки)', adaptive: 'Предлагаемая система' } as const;
 const res: any = {};
 for (const mode of ['constant', 'onoff', 'adaptive'] as const) {
   const t0 = Date.now(); res[mode] = simulate(demoNetwork(), shiftParams(mode, pSet));

@@ -3,6 +3,8 @@
 # Использование: ./publish.sh "что изменилось"   (без аргумента — только сборка, без выкладки)
 set -euo pipefail
 cd "$(dirname "$0")"
+# скрипты Excel-модели лежат в model/ этого репозитория; их пути зашиты как /home/claude/model
+[ -e /home/claude/model ] || ln -s "$PWD/model" /home/claude/model
 node build-engine.mjs >/dev/null 2>&1
 if [ -d /home/claude/model/v2 ]; then
   node --experimental-strip-types --no-warnings /home/claude/model/v2/export_engine.ts
