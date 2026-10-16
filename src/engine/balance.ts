@@ -12,7 +12,7 @@ export interface BalanceResult {
 
 const ALPHA_OPEN = 0, ALPHA_CLOSED = 90;
 
-function anglesForSpeed(net: Network, req: Record<string, number>, n: number, warm = false) {
+export function anglesForSpeed(net: Network, req: Record<string, number>, n: number, warm = false) {
   net.fanSpeed = n;
   const dampers = net.hoods.map(h => net.segments.find(s => s.id === h)!.elements.find(e => e.kind === 'damper') as any);
   // начальные углы: 20° (или, при warm, углы предыдущего шага бисекции — ускоряет подбор в 2–3 раза, результат тот же в пределах допуска 0,05 %)
@@ -54,5 +54,5 @@ export function balance(net: Network, req: Record<string, number>, nMin = 300, n
   }
   anglesForSpeed(net, req, hi, true); // привести сеть в найденное состояние
   return { feasible: true, fanSpeed: hi, angles: best.angles, sol: best.sol,
-    message: `Критическая ветвь открыта на ${(100 - best.minAlpha / 0.9).toFixed(0)} %` };
+    message: `Критическая ветвь: заслонка ${best.minAlpha.toFixed(1)}° (свободное сечение ${(100 * (1 - Math.sin(best.minAlpha * Math.PI / 180))).toFixed(0)} %)` };
 }

@@ -7,8 +7,11 @@
 //  5) общеобменная вентиляция по всем веществам: L = max по группам Σ(G_i/ПДК_i)/(1 − Σ q_пр,i/ПДК_i) (СП 60.13330.2020; Σ C/ПДК ≤ 1).
 import type { SimParams, Substance, GenVent, Mode } from './sim.ts';
 import type { Network } from './network.ts';
-import { balance } from './balance.ts';
-import { m3h } from './physics.ts';
+import { balance, anglesForSpeed } from './balance.ts';
+
+/** Запас вентилятора по давлению при подборе (1,1 = 10 %) [Д] */
+export const FAN_MARGIN = 1.1;
+import { m3h, fanPressure } from './physics.ts';
 import { makeNetworkFor } from './demo-network.ts';
 import { SUBSTANCES, pdkOf, mnCategory } from './substances.ts';
 import { processById, emissionOf, qsetOf, qminOf, type PostConfig } from './processes.ts';
@@ -33,7 +36,7 @@ export interface PlantReport {
   Ltotal: number; Llev: number;   // м³/ч — весь потребный удаляемый воздух и воздух местных отсосов
   limiting: string;           // вещество (группа), требующее наибольшего воздухообмена
   mnCategory?: string; mnShare?: number; postMnCategory?: Array<string | undefined>;
-  fanScale: number; fanFeasible: boolean; commissioning: { n: number; angles: Record<string, number>; pSet: number };
+  fanScale: number; fanFeasible: boolean; commissioning: { n: number; angles: Record<string, number>; pSet: number; pReq: number; fixedAngles: Record<string, number>; margin: number };
 }
 
 /** Сводка «вещества и потребный воздухообмен» без моделирования (блок 1 для смеси процессов) */
@@ -74,17 +77,22 @@ export function buildPlant(cfg: PlantConfig): { net: Network; params: SimParams;
   const posts = cfg.posts.map((p, i) => ({ ...p, id: `post${i + 1}` }));
   const ids = posts.map(p => p.id);
   const qsets = posts.map(p => qsetOf(p));
-  // ---- подбор вентилятора: увеличиваем запас, пока режим «все посты на уставке» не станет достижимым
-  let fanScale = 1, feasible = false, b: ReturnType<typeof balance> | null = null;
+  // ---- подбор вентилятора под данное число постов: все посты на норме, заслонка самой нагруженной ветви открыта.
+  // Требуемое давление p_треб и расход Q_треб сети не зависят от вентилятора → считаем один раз (с заведомо большим вентилятором),
+  // затем берём наименьший вентилятор ряда (шаг 2 %), у которого при номинальной частоте p(Q_треб) ≥ K_ЗАП·p_треб.
+  // K_ЗАП = 1,1 — запас 10 % по давлению [Д]: принятая практика проектирования; в СП 60.13330.2020 численного запаса нет.
   const req = Object.fromEntries(ids.map((id, k) => [id, m3h(qsets[k])]));
-  for (let it = 0; it < 15; it++) {
-    b = balance(makeNetworkFor(qsets, fanScale), req);
-    if (b.feasible && b.fanSpeed < 1450) { feasible = true; break; }   // запас ≥ 3 % по частоте
-    fanScale *= 1.08;
-  }
+  const ref = balance(makeNetworkFor(qsets, 4), req);
+  const pReq = ref.sol.pFan, qReq = ref.sol.Qtotal;
+  let fanScale = 0.3;
+  while (fanScale < 8 && fanPressure(makeNetworkFor(qsets, fanScale).fan, qReq, 1500) < FAN_MARGIN * pReq) fanScale *= 1.02;
   const makeNet = () => makeNetworkFor(qsets, fanScale);
   const net = makeNet();
-  const com = { n: b!.fanSpeed, angles: b!.angles, pSet: b!.sol.pFan - b!.sol.segLoss['common'] };
+  const b = balance(makeNet(), req);
+  const feasible = b.feasible;
+  // пусконаладка «стандарта»: вентилятор на номинальной частоте без регулирования, углы заслонок подобраны так, чтобы каждый пост получил норму
+  const fixed = anglesForSpeed(makeNet(), req, 1500);
+  const com = { n: b.fanSpeed, angles: b.angles, pSet: b.sol.pFan - b.sol.segLoss['common'], pReq, fixedAngles: fixed.angles, margin: FAN_MARGIN };
   // ---- упреждение по частоте для набора работающих постов
   const cache = new Map<string, number>();
   const nFF = (active: string[]) => { const k = active.join(','); if (!cache.has(k)) cache.set(k, balance(makeNet(), Object.fromEntries(ids.map((id, j) => [id, active.includes(id) ? m3h(qsets[j]) : 0]))).fanSpeed); return cache.get(k)!; };
@@ -106,7 +114,7 @@ export function buildPlant(cfg: PlantConfig): { net: Network; params: SimParams;
     substances: d.subs, limiting: limSub,
     room: { V: cfg.V ?? 48 * 24 * 14.4, Lgen: Ld, dT: T_IN_WINTER - MOSCOW_HEATING.tAvg },
     damperStroke: 8, fanRamp: 10, nMax: 1500, nMin: 300, pSet: com.pSet, kI: 4,
-    nFF: (cfg.lev ?? 'adaptive') === 'adaptive' ? nFF : undefined, openAngles: com.angles, nConst: com.n, gen,
+    nFF: (cfg.lev ?? 'adaptive') === 'adaptive' ? nFF : undefined, openAngles: (cfg.lev ?? 'adaptive') === 'constant' ? com.fixedAngles : com.angles, nConst: (cfg.lev ?? 'adaptive') === 'constant' ? 1500 : com.n, gen,
   };
   const report: PlantReport = {
     posts: posts.map((p, k) => { const q = qminOf(p); return { id: p.id, process: processById(p.process).name, material: (processById(p.process).materials.find(m => m.id === p.material) ?? processById(p.process).materials[0]).name,
