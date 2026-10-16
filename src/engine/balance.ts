@@ -54,5 +54,5 @@ export function balance(net: Network, req: Record<string, number>, nMin = 300, n
   }
   anglesForSpeed(net, req, hi, true); // привести сеть в найденное состояние
   return { feasible: true, fanSpeed: hi, angles: best.angles, sol: best.sol,
-    message: `Критическая ветвь: заслонка ${best.minAlpha.toFixed(1)}° (свободное сечение ${(100 * (1 - Math.sin(best.minAlpha * Math.PI / 180))).toFixed(0)} %)` };
+    message: `Критическая ветвь: заслонка ${best.minAlpha.toFixed(1)}°` };
 }
