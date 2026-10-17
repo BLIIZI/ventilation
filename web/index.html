@@ -228,7 +228,7 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
     <a href="example.html" >Пример расчёта</a>
   </nav>
   <span class="grow"></span>
-  <span class="ver" title="Версия модели и дата сборки сайта">модель v1.7 · сборка 17.10.2026 23:11</span>
+  <span class="ver" title="Версия модели и дата сборки сайта">модель v1.7 · сборка 17.10.2026 23:40</span>
   <a class="btn sm ghost dl" href="https://bliizi.github.io/ventilation/model_raschet.xlsx" title="Скачать книгу Excel со всеми листами и формулами">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Excel</span></a>
 </header>
@@ -249,7 +249,7 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
     <a href="https://bliizi.github.io/ventilation/model_raschet.xlsx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
       <div><b>Скачать Excel</b><span>Модель_расчёт_v2.xlsx — формулы живые, можно менять исходные</span></div></a>
   </nav>
-  <div class="foot">модель v1.7 · сборка 17.10.2026 23:11<br>Сайт, Excel и пример расчёта собираются из одного расчётного ядра — числа везде одинаковые.</div>
+  <div class="foot">модель v1.7 · сборка 17.10.2026 23:40<br>Сайт, Excel и пример расчёта собираются из одного расчётного ядра — числа везде одинаковые.</div>
 </aside>
 <script>
 (() => {
@@ -386,8 +386,8 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
         <div class="chart"><div class="head"><h2>Расход каждого поста, % нормы</h2>
           <p class="q">100 % — ровно норма. Простаивающий пост — ноль. Система, выбранная для 3D.</p>
           <div class="legend" id="lgPosts"></div></div><canvas id="c4"></canvas></div>
-        <div class="chart"><div class="head"><h2>Положение заслонок, °</h2>
-          <p class="q">0° — открыта полностью, 45° — наполовину, 90° — закрыта. Система, выбранная для 3D.</p>
+        <div class="chart"><div class="head"><h2 id="c5t">Положение заслонок, °</h2>
+          <p class="q" id="c5q">0° — открыта полностью, 45° — наполовину, 90° — закрыта. Система, выбранная для 3D.</p>
           <div class="legend" id="lgPosts2"></div></div><canvas id="c5"></canvas></div>
         <div class="chart"><div class="head"><h2>Обороты вентилятора, об/мин</h2>
           <p class="q">Мощность растёт примерно как куб оборотов — небольшое снижение даёт заметную экономию.</p>
@@ -466,7 +466,7 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
       <li><b>Мощность вентилятора.</b> Мгновенная электрическая мощность вентилятора местной вытяжки. Закрашенная полоса между линиями — экономия.</li>
       <li><b>Загрязнение воздуха.</b> Цех инерционный: концентрация меняется за десятки минут (постоянная времени V/L, см. «Размеры цеха»).</li>
       <li><b>Расход каждого поста</b> — в процентах от нормы; 100 % — ровно норма. Простаивающий пост показан нулём.</li>
-      <li><b>Положение заслонок</b> — угол поворота: 0° — открыта полностью, 45° — наполовину, 90° — закрыта.</li>
+      <li><b>Положение заслонок</b> — угол поворота: 0° — открыта полностью, 45° — наполовину, 90° — закрыта. У варианта «шибер» вместо угла показано «открыт / закрыт»: шибер — задвижка, она не поворачивается и переключается за ≈ 1,5 с.</li>
       <li>Под главными графиками — строка «Сейчас»: те же значения в числах на текущий момент.</li>
     </ul>
     <h3>Управление 3D</h3>
@@ -1543,7 +1543,7 @@ function shiftParams(mode      , pSet         , balanced = true)            {
     ],
     room: { V: 48 * 24 * 14.4, Lgen: genVentByFormula(), dT: T_IN_WINTER - MOSCOW_HEATING.tAvg },
     // объём цеха — из диплома; Δt = 18 − (−1,7) = 19,7 °C (СанПиН 1.2.3685-21; СП 131.13330.2025)
-    damperStroke: 8,  // 8 с — из ряда времени полного хода ГОСТ 7192-89 (исследованы также 15 и 30 с); одинаково для всех режимов
+    damperStroke: mode === 'manual' ? 1.5 : 8,  // 8 с — из ряда времени полного хода ГОСТ 7192-89 (исследованы также 15 и 30 с); одинаково для всех режимов
     fanRamp: 10, nMax: 1500, nMin: 300, pSet: pSet ?? c0.pSet, kI: 4,   // уставка разрежения — из пусконаладки, если не задана
     nFF: mode === 'adaptive' ? feedforwardTable(ids, m3h(1500)) : undefined,
     openAngles: com ? (mode === 'constant' || mode === 'manual' ? com.fixedAngles : com.angles) : undefined, nConst: com ? com.nNom : undefined,
@@ -2008,6 +2008,7 @@ function build(kind) {
   const pl = E.buildPlant({ posts: cfg, V: roomV(), lev: kind === 'B' ? 'adaptive' : (ui.base === 'none' ? 'constant' : 'manual'), gen: 'fffb', gasSensors: ['no2', 'co'] });
   const p = pl.params; p.record = undefined; p.duration = 1e12; p.schedule = isOn;
   if (kind === 'A') p.nFF = undefined;
+  if (kind === 'A' && ui.base === 'manual') p.damperStroke = 1.5;   // шибер: задвижка, ход ≈ 1,5 с (по словам заказчика)
   report = pl.report;
   const g = new Map(); for (const s of p.substances) if (Number.isFinite(s.pdk)) { const k = s.group ?? s.name; if (!g.has(k)) g.set(k, []); g.get(k).push(s); }
   groups = [...g.values()];
@@ -2043,7 +2044,7 @@ function cardHtml(id, i) {
     <div class="top"><h3>Пост ${i + 1}</h3><span class="proc" title="${pr.name}">${pr.name}</span><span class="pill" id="pill-${id}">простой</span></div>
     <div class="flow"><b id="q-${id}">—</b><span>из <span id="qs-${id}">—</span> м³/ч</span><span class="dev" id="dev-${id}"></span></div>
     <div class="gauge"><div id="bar-${id}"></div></div>
-    <div class="meta"><span>заслонка <b id="a-${id}">—</b></span></div>
+    <div class="meta"><span><span id="al-${id}">заслонка</span> <b id="a-${id}">—</b></span></div>
     <div class="acts"><button class="btn sm" id="tog-${id}">Включить</button><button class="btn sm ghost" id="show-${id}">Показать в 3D</button></div>
     <details class="cfgbox" id="cfg-${id}" ${ui.openCfg.has(id) ? 'open' : ''}><summary>Настроить пост: процесс, материал, режим</summary>
       <div class="cfg">
@@ -2372,7 +2373,7 @@ function tick(now) {
     while (acc >= 1 && k < 40) { for (const m of [A, B]) { m.last = m.sim.step(); m.hist.push(m.last); if (m.hist.length > WIN) m.hist.shift(); } acc -= 1; k++; }
     if (k === 40) acc = 0;
   }
-  const m = ui.view === 'B' ? B : A, s = m.last;
+  const m = ui.view === 'B' ? B : A, s = m.last, gate = ui.view === 'A' && ui.base === 'manual';
   if (s) {
     for (const id of IDS) {
       const o = posts3d[id], on = s.on[id];
@@ -2391,7 +2392,7 @@ function tick(now) {
 const setBar = (id, v, max) => { $(id).style.width = (max > 0 ? Math.min(100, v / max * 100) : 0) + '%'; };
 function chip(el, text, cls) { el.textContent = text; el.className = 'chip ' + cls; }
 function updatePanel() {
-  const m = ui.view === 'B' ? B : A, s = m.last, t = s.t;
+  const m = ui.view === 'B' ? B : A, s = m.last, t = s.t, gate = ui.view === 'A' && ui.base === 'manual';
   const hh = Math.floor(t / 3600), mm = Math.floor(t % 3600 / 60), ss = Math.floor(t % 60);
   $('clock').textContent = [hh, mm, ss].map(v => String(v).padStart(2, '0')).join(':');
   IDS.forEach((id, i) => {
@@ -2403,7 +2404,8 @@ function updatePanel() {
     const dev = $(`dev-${id}`), cls = idleDraw ? 'warn' : !on ? '' : r > 1.1 ? 'warn' : r < 0.95 ? 'crit' : 'ok';
     dev.textContent = on ? `${r >= 1 ? '+' : '−'}${fmt(Math.abs(r - 1) * 100)} %` : idleDraw ? 'впустую' : 'закрыт'; dev.className = 'dev ' + cls;
     const bar = $(`bar-${id}`); bar.style.width = Math.min(100, r / 1.5 * 100) + '%'; bar.className = cls;
-    $(`a-${id}`).textContent = fmt(s.alpha[id]) + '°';
+    $(`al-${id}`).textContent = gate ? 'шибер' : 'заслонка';
+    $(`a-${id}`).textContent = gate ? (s.alpha[id] < 45 ? 'открыт' : 'закрыт') : fmt(s.alpha[id]) + '°';
     const o = posts3d[id]; if (o) o.lbl.classList.toggle('on', on);
   });
   $('fanN').textContent = fmt(s.n); $('fanP').textContent = fmt(s.pFan); $('fanW').textContent = fmt(s.P / 1000, 2); $('qTot').textContent = fmt(s.Qtot);
@@ -2451,7 +2453,9 @@ function updatePanel() {
     drawChart(CH[2], { dec: 2, unit: '× ПДК', yMin: 1.2, lines: [{ v: 1, c: css('--crit'), dash: [] }, { v: 0.8, c: css('--muted') }], series: [
       { name: BN(), c: css('--std'), d: A.hist.map(x => worstRatio(x.C)) }, { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => worstRatio(x.C)) }] });
     drawChart(CH[3], { unit: '%', yMax: 150, lines: [{ v: 100, c: css('--muted') }], series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.on[id] ? x.Q[id] / (m.params.posts[i].Qset * 3600) * 100 : 0) })) });
-    drawChart(CH[4], { unit: '°', yMax: 90, series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.alpha[id]) })) });
+    $('c5t').textContent = gate ? 'Шибер на каждом посту: открыт / закрыт' : 'Положение заслонок, °';
+    $('c5q').textContent = gate ? '1 — шибер открыт, 0 — закрыт. Шибер не поворачивается: он либо открыт, либо закрыт, ход ≈ 1,5 с. Система, выбранная для 3D.' : '0° — открыта полностью, 45° — наполовину, 90° — закрыта. Система, выбранная для 3D.';
+    drawChart(CH[4], gate ? { unit: '', yMax: 1, series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.alpha[id] < 45 ? 1 : 0) })) } : { unit: '°', yMax: 90, series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.alpha[id]) })) });
     drawChart(CH[5], { unit: 'об/мин', yMax: 1600, series: [{ name: BN(), c: css('--std'), d: A.hist.map(x => x.n) }, { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => x.n) }] });
   }
 }
