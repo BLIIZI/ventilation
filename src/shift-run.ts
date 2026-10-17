@@ -10,9 +10,9 @@ const b = balance(demoNetwork(), { post1: m3h(1500), post2: m3h(1500), post3: m3
 const pSet = b.sol.pFan - b.sol.segLoss['common'];
 console.log('Уставка разрежения в коллекторе, Па:', pSet.toFixed(0));
 
-const names = { constant: 'Стандарт: без регулирования', onoff: 'Открыто/закрыто + ЧП (для справки)', adaptive: 'Предлагаемая система' } as const;
+const names = { constant: 'Без шибера: дует на всех постах', manual: 'Шибер: простаивающий пост закрывают', onoff: 'Открыто/закрыто + ЧП (для справки)', adaptive: 'Предлагаемая система' } as const;
 const res: any = {};
-for (const mode of ['constant', 'onoff', 'adaptive'] as const) {
+for (const mode of ['constant', 'manual', 'onoff', 'adaptive'] as const) {
   const t0 = Date.now(); res[mode] = simulate(demoNetwork(), shiftParams(mode, pSet));
   const r = res[mode];
   console.log(`${names[mode]}: вент ${r.fanKWh.toFixed(2)} кВт·ч, тепло ${r.heatKWh.toFixed(0)} кВт·ч, ср.расход МВВ ${r.avgFlow.toFixed(0)} м³/ч, <95% ${(r.underFlowShare*100).toFixed(1)}%, >110% ${(r.overFlowShare*100).toFixed(1)}%, Mn max ${r.maxC.Mn.toFixed(3)} ср ${r.avgC.Mn.toFixed(3)} (${Date.now()-t0} мс)`);

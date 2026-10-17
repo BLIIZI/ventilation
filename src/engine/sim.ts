@@ -11,8 +11,9 @@ import type { Network, Solution } from './network.ts';
 import { damperZeta, damperAngleForZeta, area } from './physics.ts';
 import { RHO_AIR, C_AIR } from './norms.ts';
 
-export type Mode = 'constant' | 'onoff' | 'adaptive';
+export type Mode = 'constant' | 'onoff' | 'adaptive' | 'manual';
 // constant  — без регулирования: заслонки открыты, вентилятор 100 % всю смену
+// manual    — шибер на отсосе: простаивающий пост закрывают, работающий открыт на пусконаладочном угле; вентилятор без регулирования
 // onoff     — промышленный стандарт: заслонка открыта/закрыта по датчику тока, ЧП держит постоянное разрежение
 // adaptive  — предлагаемая система: ПИ-регулятор расхода в каждой ветви + сброс давления (критическая ветвь открыта)
 
@@ -151,6 +152,7 @@ export function createSimulator(net: Network, p: SimParams) {
     // ---- регуляторы: целевые углы и частота
     const target: Record<string, number> = {};
     if (p.mode === 'constant') { ids.forEach(id => (target[id] = p.openAngles?.[id] ?? 0)); nTarget = p.nConst ?? p.nMax; }
+    if (p.mode === 'manual') { ids.forEach(id => (target[id] = on[id] ? (p.openAngles?.[id] ?? 0) : 90)); nTarget = anyOn ? (p.nConst ?? p.nMax) : 0; }
     if (p.mode === 'onoff') {
       ids.forEach(id => (target[id] = on[id] ? (p.openAngles?.[id] ?? 0) : 90));
       // ЧП: ПИ по разрежению в коллекторе (давление перед общим трактом)

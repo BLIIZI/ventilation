@@ -72,6 +72,6 @@ export function shiftParams(mode: Mode, pSet?: number, balanced = true): SimPara
     damperStroke: 8,  // 8 с — из ряда времени полного хода ГОСТ 7192-89 (исследованы также 15 и 30 с); одинаково для всех режимов
     fanRamp: 10, nMax: 1500, nMin: 300, pSet: pSet ?? c0.pSet, kI: 4,   // уставка разрежения — из пусконаладки, если не задана
     nFF: mode === 'adaptive' ? feedforwardTable(ids, m3h(1500)) : undefined,
-    openAngles: com ? (mode === 'constant' ? com.fixedAngles : com.angles) : undefined, nConst: com ? com.nNom : undefined,
+    openAngles: com ? (mode === 'constant' || mode === 'manual' ? com.fixedAngles : com.angles) : undefined, nConst: com ? com.nNom : undefined,
   };
 }

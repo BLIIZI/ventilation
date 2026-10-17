@@ -107,6 +107,7 @@ export function buildPlant(cfg: PlantConfig): { net: Network; params: SimParams;
     mode: cfg.gen, Ldesign: Ld, Lmin: 0.2 * Ld, Lmax: Math.max(1.5 * Ld, 1.1 * (d.Ltotal / frac - d.Llev)), limiting: limSub, Cset: frac, multi: { frac, gasSensors: cfg.gasSensors },
     sensor: { of: 'aerosol', ratio: 0, tau: 30, noise: 0.1 }, kP: 0.5, kI: 0.005, ffTau: 600, dpDesign: 600, etaFan: 0.6, ramp: 20,
   } : undefined;
+  const fixedLev = cfg.lev === 'constant' || cfg.lev === 'manual';   // без регулирования: пусконаладочные углы и номинальные обороты
   const params: SimParams = {
     mode: cfg.lev ?? 'adaptive', dt: 1, duration, record: 10,
     schedule: cfg.schedule ?? makeSchedule(ids, duration, cfg.seed ?? 7),
@@ -114,7 +115,7 @@ export function buildPlant(cfg: PlantConfig): { net: Network; params: SimParams;
     substances: d.subs, limiting: limSub,
     room: { V: cfg.V ?? 48 * 24 * 14.4, Lgen: Ld, dT: T_IN_WINTER - MOSCOW_HEATING.tAvg },
     damperStroke: 8, fanRamp: 10, nMax: 1500, nMin: 300, pSet: com.pSet, kI: 4,
-    nFF: (cfg.lev ?? 'adaptive') === 'adaptive' ? nFF : undefined, openAngles: (cfg.lev ?? 'adaptive') === 'constant' ? com.fixedAngles : com.angles, nConst: (cfg.lev ?? 'adaptive') === 'constant' ? 1500 : com.n, gen,
+    nFF: (cfg.lev ?? 'adaptive') === 'adaptive' ? nFF : undefined, openAngles: fixedLev ? com.fixedAngles : com.angles, nConst: fixedLev ? 1500 : com.n, gen,
   };
   const report: PlantReport = {
     posts: posts.map((p, k) => { const q = qminOf(p); return { id: p.id, process: processById(p.process).name, material: (processById(p.process).materials.find(m => m.id === p.material) ?? processById(p.process).materials[0]).name,

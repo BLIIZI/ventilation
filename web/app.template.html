@@ -157,7 +157,7 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
   <div class="pagehead">
     <div>
       <h1>Цифровой двойник вытяжки сварочного цеха</h1>
-      <p>Две системы управления работают на <b>одной и той же смене</b> с одинаковыми постами, сетью и вентилятором. Сравниваем, сколько уходит электроэнергии и тепла и держится ли воздух в норме.</p>
+      <p>Предлагаемая система и выбранный вариант сравнения (шибер на отсосе или без шибера) работают на <b>одной и той же смене</b> с одинаковыми постами, сетью и вентилятором. Сравниваем, сколько уходит электроэнергии и тепла и держится ли воздух в норме.</p>
     </div>
     <button class="btn primary" id="notesBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>Примечания</button>
   </div>
@@ -166,7 +166,12 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
     <div class="grp view"><span class="label">3D</span>
       <div class="seg" id="viewSeg">
         <button id="vB" aria-pressed="true" data-v="B"><i class="dot" style="background:var(--new)"></i>Предлагаемая</button>
-        <button id="vA" aria-pressed="false" data-v="A"><i class="dot" style="background:var(--std)"></i>Стандарт</button>
+        <button id="vA" aria-pressed="false" data-v="A"><i class="dot" style="background:var(--std)"></i><span class="bn">Стандарт</span></button>
+      </div></div>
+    <div class="grp"><span class="label">Сравнить с</span>
+      <div class="seg" id="baseSeg">
+        <button aria-pressed="true" data-b="manual">Шибер на отсосе</button>
+        <button aria-pressed="false" data-b="none">Без шибера</button>
       </div></div>
     <div class="grp"><span class="label">Скорость</span>
       <div class="seg" id="speedSeg">
@@ -184,25 +189,25 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
   <section class="kpis" aria-label="Итоги с начала смены">
     <div class="kpi">
       <div class="k-title">Электроэнергия вентиляторов с начала смены, кВт·ч</div>
-      <div class="cmp"><span>Стандарт</span><div class="bar"><i id="beA" style="background:var(--std)"></i></div><b id="eA">0</b>
+      <div class="cmp"><span class="bn">Стандарт</span><div class="bar"><i id="beA" style="background:var(--std)"></i></div><b id="eA">0</b>
         <span>Предлагаемая</span><div class="bar"><i id="beB" style="background:var(--new)"></i></div><b id="eB">0</b></div>
       <div class="chip neutral" id="saveE">—</div>
     </div>
     <div class="kpi">
       <div class="k-title">Тепло на подогрев наружного воздуха взамен удалённого, кВт·ч</div>
-      <div class="cmp"><span>Стандарт</span><div class="bar"><i id="bhA" style="background:var(--std)"></i></div><b id="hA">0</b>
+      <div class="cmp"><span class="bn">Стандарт</span><div class="bar"><i id="bhA" style="background:var(--std)"></i></div><b id="hA">0</b>
         <span>Предлагаемая</span><div class="bar"><i id="bhB" style="background:var(--new)"></i></div><b id="hB">0</b></div>
       <div class="chip neutral" id="saveH">—</div>
     </div>
     <div class="kpi">
       <div class="k-title">Доля времени, когда пост тянет лишний воздух (&gt; 110 % нормы)</div>
-      <div class="cmp"><span>Стандарт</span><div class="bar"><i id="boA" style="background:var(--std)"></i></div><b id="oA">0</b>
+      <div class="cmp"><span class="bn">Стандарт</span><div class="bar"><i id="boA" style="background:var(--std)"></i></div><b id="oA">0</b>
         <span>Предлагаемая</span><div class="bar"><i id="boB" style="background:var(--new)"></i></div><b id="oB">0</b></div>
       <div class="chip neutral" id="overChip">—</div>
     </div>
     <div class="kpi">
       <div class="k-title">Загрязнение воздуха в цехе: максимум за смену, доля ПДК (1 = норма)</div>
-      <div class="cmp"><span>Стандарт</span><div class="bar"><i id="bmA" style="background:var(--std)"></i></div><b id="mA">0</b>
+      <div class="cmp"><span class="bn">Стандарт</span><div class="bar"><i id="bmA" style="background:var(--std)"></i></div><b id="mA">0</b>
         <span>Предлагаемая</span><div class="bar"><i id="bmB" style="background:var(--new)"></i></div><b id="mB">0</b></div>
       <div class="now">Сейчас в цехе: <b id="mn">—</b></div>
       <div class="chip neutral" id="airChip">—</div>
@@ -245,14 +250,14 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
       <div class="chart">
         <div class="head"><h2>Сколько воздуха нужно и сколько тянут отсосы, м³/ч</h2>
           <p class="q">Чем ближе линия к пунктиру, тем меньше лишнего воздуха — и меньше электроэнергии и тепла.</p>
-          <div class="legend"><span><i class="dash"></i>нужно по норме</span><span><i class="sw" style="background:var(--std)"></i>стандарт</span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span></div></div>
+          <div class="legend"><span><i class="dash"></i>нужно по норме</span><span><i class="sw" style="background:var(--std)"></i><span class="bnl">стандарт</span></span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span></div></div>
         <canvas id="c1" aria-label="График расхода воздуха"></canvas>
         <p class="read" id="r1">—</p>
       </div>
       <div class="chart">
         <div class="head"><h2>Мощность вентилятора местной вытяжки, кВт</h2>
           <p class="q">Закрашенная полоса между линиями — сэкономленная электроэнергия.</p>
-          <div class="legend"><span><i class="sw" style="background:var(--std)"></i>стандарт</span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span></div></div>
+          <div class="legend"><span><i class="sw" style="background:var(--std)"></i><span class="bnl">стандарт</span></span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span></div></div>
         <canvas id="c2" aria-label="График мощности вентилятора"></canvas>
         <p class="read" id="r2">—</p>
       </div>
@@ -262,7 +267,7 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
       <div class="charts-more">
         <div class="chart"><div class="head"><h2>Загрязнение воздуха в цехе, доля ПДК</h2>
           <p class="q">Меньше 1 — в норме. Цех инерционный: концентрация меняется за десятки минут.</p>
-          <div class="legend"><span><i class="sw" style="background:var(--std)"></i>стандарт</span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span><span style="color:var(--crit)">— ПДК</span><span>- - цель 0,8</span></div></div>
+          <div class="legend"><span><i class="sw" style="background:var(--std)"></i><span class="bnl">стандарт</span></span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span><span style="color:var(--crit)">— ПДК</span><span>- - цель 0,8</span></div></div>
           <canvas id="c3"></canvas></div>
         <div class="chart"><div class="head"><h2>Расход каждого поста, % нормы</h2>
           <p class="q">100 % — ровно норма. Простаивающий пост — ноль. Система, выбранная для 3D.</p>
@@ -272,7 +277,7 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
           <div class="legend" id="lgPosts2"></div></div><canvas id="c5"></canvas></div>
         <div class="chart"><div class="head"><h2>Обороты вентилятора, об/мин</h2>
           <p class="q">Мощность растёт примерно как куб оборотов — небольшое снижение даёт заметную экономию.</p>
-          <div class="legend"><span><i class="sw" style="background:var(--std)"></i>стандарт</span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span></div></div>
+          <div class="legend"><span><i class="sw" style="background:var(--std)"></i><span class="bnl">стандарт</span></span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span></div></div>
           <canvas id="c6"></canvas></div>
       </div>
     </details>
@@ -327,7 +332,8 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
     <h3>Что сравнивается</h3>
     <p>Обе системы работают на одной и той же смене: одинаковые посты, одинаковое расписание сварки, одна сеть воздуховодов и один вентилятор.</p>
     <ul>
-      <li><b>Стандарт</b> — централизованная вытяжка без регулирования: при пусконаладке заслонки выставлены на углы, при которых каждый пост получает норму, и больше не двигаются; вентилятор всю смену работает на номинальных оборотах. Посты тянут воздух и в паузах между швами.</li>
+      <li><b>Шибер на отсосе</b> (вариант по умолчанию) — пост не работает, и его закрывают (шибер или заслонка закрыты); работающие посты открыты на пусконаладочных углах. Вентилятор не регулируется и всю смену на номинальных оборотах, поэтому при закрытии постов давление в сети растёт и работающие посты тянут больше нормы.</li>
+      <li><b>Без шибера</b> — на постах нет закрывающей заслонки: после пусконаладки углы не меняются, все посты тянут воздух всю смену, в том числе в паузах между швами. Вентилятор на номинальных оборотах.</li>
       <li><b>Вентилятор у обеих систем один и тот же</b> и подбирается под число постов: все посты на норме, заслонка самого нагруженного поста открыта, запас по давлению 10 %. Добавили посты — сеть и вентилятор подбираются заново.</li>
       <li><b>Предлагаемая система</b> — каждый работающий пост держит ровно норму расхода: датчик расхода и ПИ-регулятор подкручивают заслонку. Вентилятор снижает обороты, пока заслонка самого «трудного» поста не откроется полностью (сброс давления). При включении поста заслонка и вентилятор сразу встают на заранее рассчитанные значения (упреждение по сигналу тока). </li>
       <li><b>Общеобменная вентиляция у обеих систем одинаковая</b>, чтобы сравнение зависело только от управления местной вытяжкой: расход идёт за нагрузкой — по выделениям работающих процессов с коррекцией по датчикам аэрозоля, NO₂ и CO. Цель — 0,8 ПДК: запас 20 % на погрешность датчика (METIDA-PM ±20 %).</li>
@@ -335,14 +341,14 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
     <h3>Как читать итоги вверху</h3>
     <ul>
       <li><b>Электроэнергия</b> — вентилятор местной вытяжки и вентилятор общеобменной вместе, с учётом КПД двигателя (и частотника — у предлагаемой).</li>
-      <li><b>Тепло</b> — сколько тепла уходит на подогрев наружного воздуха, который заменяет удалённый. Общеобменная у обеих систем устроена одинаково (по потребности, цель 0,8 ПДК), поэтому разница по теплу — от лишнего воздуха местных отсосов стандарта, которые тянут и в паузах. Δt = 18 − (−1,7) °C — средняя температура отопительного периода в Москве (СП 131.13330.2025, табл. 5.1).</li>
+      <li><b>Тепло</b> — сколько тепла уходит на подогрев наружного воздуха, который заменяет удалённый. Общеобменная у обеих систем устроена одинаково (по потребности, цель 0,8 ПДК), поэтому разница по теплу — от лишнего воздуха местных отсосов выбранного варианта сравнения (при «шибере» — перерасход на работающих постах, при «без шибера» — ещё и воздух с простаивающих). Δt = 18 − (−1,7) °C — средняя температура отопительного периода в Москве (СП 131.13330.2025, табл. 5.1).</li>
       <li><b>Лишний воздух</b> — доля времени работы постов, когда через пост идёт больше 110 % нормы. Лишний воздух — это лишняя электроэнергия и лишнее тепло.</li>
       <li><b>Загрязнение</b> — сумма C/ПДК по веществам однонаправленного действия (СП 60.13330.2020, п. 7.4.3); показана худшая группа. Меньше 1 — в норме.</li>
       <li>Полосы в плитках сравнивают две системы между собой: длиннее полоса — больше значение.</li>
     </ul>
     <h3>Как читать графики</h3>
     <ul>
-      <li><b>Сколько воздуха нужно и сколько тянут.</b> Пунктир — норма отсоса, умноженная на число работающих постов. У стандарта линия всегда на уровне «все посты работают»: заслонки не закрываются, поэтому простаивающие посты тянут воздух впустую.</li>
+      <li><b>Сколько воздуха нужно и сколько тянут.</b> Пунктир — норма отсоса, умноженная на число работающих постов. Без шибера линия всегда на уровне «все посты работают»: простаивающие посты тянут воздух впустую. С шибером линия идёт ступенями за числом работающих постов, но выше пунктира: вентилятор не снижает обороты, и работающие посты получают больше нормы.</li>
       <li><b>Мощность вентилятора.</b> Мгновенная электрическая мощность вентилятора местной вытяжки. Закрашенная полоса между линиями — экономия.</li>
       <li><b>Загрязнение воздуха.</b> Цех инерционный: концентрация меняется за десятки минут (постоянная времени V/L, см. «Размеры цеха»).</li>
       <li><b>Расход каждого поста</b> — в процентах от нормы; 100 % — ровно норма. Простаивающий пост показан нулём.</li>
@@ -404,7 +410,7 @@ const cfg = [
   { id: 'post2', process: 'mma', material: 'uoni1345', params: { B: 1.5 }, hood: 'table', eta: 0.8 },
   { id: 'post3', process: 'saw', material: 'an348a', params: { B: 6 }, hood: 'table', eta: 0.8 },
 ];
-const ui = { auto: true, view: 'B', speed: 10, paused: false, posts: {}, fouling: 1, openCfg: new Set() };
+const ui = { base: 'manual', auto: true, view: 'B', speed: 10, paused: false, posts: {}, fouling: 1, openCfg: new Set() };
 function syncIds() {
   IDS = cfg.map((c, i) => (c.id = `post${i + 1}`));
   IDS.forEach((id, i) => { COL[id] = PALETTE[i % PALETTE.length]; if (!ui.posts[id]) ui.posts[id] = { on: false }; });
@@ -416,7 +422,7 @@ const isOn = (id, t) => ui.auto ? shift(id, t % (8 * 3600)) : ui.posts[id].on;
 // ---------- две модели параллельно: A — стандарт (фиксированные углы, вентилятор без регулирования), B — предлагаемая. Общеобменная у обеих одинаковая (по потребности, цель 0,8 ПДК), чтобы разница была только от управления заслонками и вентилятором
 let report = null, groups = [];
 function build(kind) {
-  const pl = E.buildPlant({ posts: cfg, V: roomV(), lev: kind === 'B' ? 'adaptive' : 'constant', gen: 'fffb', gasSensors: ['no2', 'co'] });
+  const pl = E.buildPlant({ posts: cfg, V: roomV(), lev: kind === 'B' ? 'adaptive' : (ui.base === 'none' ? 'constant' : 'manual'), gen: 'fffb', gasSensors: ['no2', 'co'] });
   const p = pl.params; p.record = undefined; p.duration = 1e12; p.schedule = isOn;
   if (kind === 'A') p.nFF = undefined;
   report = pl.report;
@@ -425,8 +431,11 @@ function build(kind) {
   return { sim: E.createSimulator(pl.net, p), net: pl.net, last: null, hist: [], params: p };
 }
 const worstRatio = C => groups.reduce((w, mem) => Math.max(w, mem.reduce((a, s) => a + C[s.name] / s.pdk, 0)), 0);
+const BASE = { manual: ['Шибер', 'шибер'], none: ['Без шибера', 'без шибера'] };
+const BN = () => BASE[ui.base][1];
+function setBaseNames() { document.querySelectorAll('.bn').forEach(e => (e.textContent = BASE[ui.base][0])); document.querySelectorAll('.bnl').forEach(e => (e.textContent = BASE[ui.base][1])); }
 let A, B;
-function reset() { A = build('A'); B = build('B'); shift = E.makeSchedule(IDS, 8 * 3600, 7); applyFouling(); renderDesign(); warm(); }
+function reset() { setBaseNames(); A = build('A'); B = build('B'); shift = E.makeSchedule(IDS, 8 * 3600, 7); applyFouling(); renderDesign(); warm(); }
 let scene3dReady = false;
 function changeLayout() { renderCards(); reset(); if (scene3dReady) { build3d(); fitAll(false); } }
 function applyFouling() { for (const m of [A, B]) m.net.common[0].spec.fouling = ui.fouling; }
@@ -524,7 +533,8 @@ function setAuto(v) {
 }
 $('autoSeg').onclick = e => { const b = e.target.closest('button'); if (b) setAuto(b.dataset.a === '1'); };
 $('viewSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.view = b.dataset.v; setPressed(e.currentTarget, b);
-  $('badge').innerHTML = ui.view === 'B' ? '<i style="background:var(--new)"></i>Предлагаемая система' : '<i style="background:var(--std)"></i>Стандарт (без регулирования)'; };
+  $('badge').innerHTML = ui.view === 'B' ? '<i style="background:var(--new)"></i>Предлагаемая система' : `<i style="background:var(--std)"></i>${BASE[ui.base][0]} (без регулирования вентилятора)`; };
+$('baseSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.base = b.dataset.b; setPressed(e.currentTarget, b); reset(); $('badge').innerHTML = ui.view === 'B' ? '<i style="background:var(--new)"></i>Предлагаемая система' : `<i style="background:var(--std)"></i>${BASE[ui.base][0]} (без регулирования вентилятора)`; };
 $('speedSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.speed = +b.dataset.s; setPressed(e.currentTarget, b); };
 const PAUSE_SVG = $('pauseBtn').querySelector('svg').outerHTML, PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7z"/></svg>';
 $('pauseBtn').onclick = e => { ui.paused = !ui.paused; const b = e.currentTarget; b.innerHTML = (ui.paused ? PLAY_SVG : PAUSE_SVG) + `<span class="pause-t">${ui.paused ? 'Продолжить' : 'Пауза'}</span>`; b.setAttribute('aria-label', ui.paused ? 'Продолжить' : 'Пауза'); };
@@ -806,7 +816,7 @@ function updatePanel() {
     pill.textContent = on ? 'варит' : 'простой'; pill.classList.toggle('on', on); $(`card-${id}`).classList.toggle('on', on);
     $(`tog-${id}`).textContent = (ui.auto ? on : ui.posts[id].on) ? 'Остановить' : 'Включить';
     $(`q-${id}`).textContent = fmt(q); $(`qs-${id}`).textContent = fmt(qs);
-    const idleDraw = !on && s.alpha[id] < 89;   // простой, но заслонка не закрыта — пост тянет воздух впустую (стандарт)
+    const idleDraw = !on && s.alpha[id] < 89;   // простой, но заслонка не закрыта — пост тянет воздух впустую (система без закрытия)
     const dev = $(`dev-${id}`), cls = idleDraw ? 'warn' : !on ? '' : r > 1.1 ? 'warn' : r < 0.95 ? 'crit' : 'ok';
     dev.textContent = on ? `${r >= 1 ? '+' : '−'}${fmt(Math.abs(r - 1) * 100)} %` : idleDraw ? 'впустую' : 'закрыт'; dev.className = 'dev ' + cls;
     const bar = $(`bar-${id}`); bar.style.width = Math.min(100, r / 1.5 * 100) + '%'; bar.className = cls;
@@ -835,7 +845,7 @@ function updatePanel() {
     chip($('saveH'), sh >= 0 ? `экономия ${fmt(sh * 100)} %` : `перерасход ${fmt(-sh * 100)} %`, sh >= 0 ? '' : 'warn');
     chip($('overChip'), oB < oA ? (oB > 0.05 ? `в ${fmt(oA / oB, 1)} раза реже` : 'лишнего воздуха нет') : 'без разницы', oB < oA ? '' : 'neutral');
     chip($('airChip'), rB.ratioMax <= 1 ? 'обе в норме' : 'предлагаемая выше ПДК', rB.ratioMax <= 1 ? (rA.ratioMax <= 1 ? '' : 'warn') : 'crit');
-    if (rB.ratioMax <= 1 && rA.ratioMax > 1) chip($('airChip'), 'стандарт выше ПДК', 'warn');
+    if (rB.ratioMax <= 1 && rA.ratioMax > 1) chip($('airChip'), BN() + ' выше ПДК', 'warn');
   }
   $('saving').textContent = ok ? `Экономия: тепло ${fmt(sh * 100)} %, электроэнергия ${fmt(se * 100)} %` : 'Экономия появится через минуту модельного времени';
   // графики
@@ -843,23 +853,23 @@ function updatePanel() {
   const need = B.hist.map(x => IDS.reduce((a, id, i) => a + (x.on[id] ? QS[i] : 0), 0));
   drawChart(CH[0], { unit: 'м³/ч', series: [
     { name: 'нужно', c: css('--need'), d: need, dash: [6, 4], w: 1.5 },
-    { name: 'стандарт', c: css('--std'), d: A.hist.map(x => x.Qtot) },
+    { name: BN(), c: css('--std'), d: A.hist.map(x => x.Qtot) },
     { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => x.Qtot) }] });
   drawChart(CH[1], { unit: 'кВт', dec: 2, band: [0, 1], bandColor: 'rgba(79,196,137,.14)', series: [
-    { name: 'стандарт', c: css('--std'), d: A.hist.map(x => x.P / 1000) },
+    { name: BN(), c: css('--std'), d: A.hist.map(x => x.P / 1000) },
     { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => x.P / 1000) }] });
   const nd = need[need.length - 1] ?? 0, qa = A.last.Qtot, qb = B.last.Qtot, pct = (q) => nd > 0 ? ` (${q >= nd ? '+' : '−'}${fmt(Math.abs(q / nd - 1) * 100)} %)` : '';
-  $('r1').innerHTML = nd > 0 ? `Сейчас нужно <b>${fmt(nd)}</b> м³/ч · стандарт тянет <b style="color:var(--std)">${fmt(qa)}</b>${pct(qa)} · предлагаемая <b style="color:var(--new)">${fmt(qb)}</b>${pct(qb)}`
-    : `Сейчас все посты простаивают: стандарт тянет <b style="color:var(--std)">${fmt(qa)}</b>, предлагаемая <b style="color:var(--new)">${fmt(qb)}</b> м³/ч`;
+  $('r1').innerHTML = nd > 0 ? `Сейчас нужно <b>${fmt(nd)}</b> м³/ч · ${BN()} тянет <b style="color:var(--std)">${fmt(qa)}</b>${pct(qa)} · предлагаемая <b style="color:var(--new)">${fmt(qb)}</b>${pct(qb)}`
+    : `Сейчас все посты простаивают: ${BN()} тянет <b style="color:var(--std)">${fmt(qa)}</b>, предлагаемая <b style="color:var(--new)">${fmt(qb)}</b> м³/ч`;
   const pa = A.last.P / 1000, pb = B.last.P / 1000;
-  $('r2').innerHTML = `Сейчас: стандарт <b style="color:var(--std)">${fmt(pa, 2)}</b> кВт · предлагаемая <b style="color:var(--new)">${fmt(pb, 2)}</b> кВт${pa > 0.01 ? ` · ${pb <= pa ? 'меньше' : 'больше'} на <b>${fmt(Math.abs(1 - pb / pa) * 100)} %</b>` : ''}`;
+  $('r2').innerHTML = `Сейчас: ${BN()} <b style="color:var(--std)">${fmt(pa, 2)}</b> кВт · предлагаемая <b style="color:var(--new)">${fmt(pb, 2)}</b> кВт${pa > 0.01 ? ` · ${pb <= pa ? 'меньше' : 'больше'} на <b>${fmt(Math.abs(1 - pb / pa) * 100)} %</b>` : ''}`;
   if ($('moreCharts').open) {
     const h = m.hist;
     drawChart(CH[2], { dec: 2, unit: '× ПДК', yMin: 1.2, lines: [{ v: 1, c: css('--crit'), dash: [] }, { v: 0.8, c: css('--muted') }], series: [
-      { name: 'стандарт', c: css('--std'), d: A.hist.map(x => worstRatio(x.C)) }, { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => worstRatio(x.C)) }] });
+      { name: BN(), c: css('--std'), d: A.hist.map(x => worstRatio(x.C)) }, { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => worstRatio(x.C)) }] });
     drawChart(CH[3], { unit: '%', yMax: 150, lines: [{ v: 100, c: css('--muted') }], series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.on[id] ? x.Q[id] / (m.params.posts[i].Qset * 3600) * 100 : 0) })) });
     drawChart(CH[4], { unit: '°', yMax: 90, series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.alpha[id]) })) });
-    drawChart(CH[5], { unit: 'об/мин', yMax: 1600, series: [{ name: 'стандарт', c: css('--std'), d: A.hist.map(x => x.n) }, { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => x.n) }] });
+    drawChart(CH[5], { unit: 'об/мин', yMax: 1600, series: [{ name: BN(), c: css('--std'), d: A.hist.map(x => x.n) }, { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => x.n) }] });
   }
 }
 updatePanel();
