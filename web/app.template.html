@@ -352,7 +352,7 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
       <li><b>Мощность вентилятора.</b> Мгновенная электрическая мощность вентилятора местной вытяжки. Закрашенная полоса между линиями — экономия.</li>
       <li><b>Загрязнение воздуха.</b> Цех инерционный: концентрация меняется за десятки минут (постоянная времени V/L, см. «Размеры цеха»).</li>
       <li><b>Расход каждого поста</b> — в процентах от нормы; 100 % — ровно норма. Простаивающий пост показан нулём.</li>
-      <li><b>Положение заслонок</b> — угол поворота: 0° — открыта полностью, 45° — наполовину, 90° — закрыта. У варианта «шибер» вместо угла показано «открыт / закрыт»: шибер — задвижка, она не поворачивается и переключается за ≈ 1,5 с.</li>
+      <li><b>Положение заслонок</b> — угол поворота: 0° — открыта полностью, 45° — наполовину, 90° — закрыта. У варианта «шибер» вместо угла показано «открыт / закрыт»: шибер — задвижка, она не поворачивается и переключается за ≈ 2,5 с.</li>
       <li>Под главными графиками — строка «Сейчас»: те же значения в числах на текущий момент.</li>
     </ul>
     <h3>Управление 3D</h3>
@@ -425,7 +425,7 @@ function build(kind) {
   const pl = E.buildPlant({ posts: cfg, V: roomV(), lev: kind === 'B' ? 'adaptive' : (ui.base === 'none' ? 'constant' : 'manual'), gen: 'fffb', gasSensors: ['no2', 'co'] });
   const p = pl.params; p.record = undefined; p.duration = 1e12; p.schedule = isOn;
   if (kind === 'A') p.nFF = undefined;
-  if (kind === 'A' && ui.base === 'manual') p.damperStroke = 1.5;   // шибер: задвижка, ход ≈ 1,5 с (по словам заказчика)
+  if (kind === 'A' && ui.base === 'manual') p.damperStroke = 2.5;   // шибер: задвижка, ход 2,5 с
   report = pl.report;
   const g = new Map(); for (const s of p.substances) if (Number.isFinite(s.pdk)) { const k = s.group ?? s.name; if (!g.has(k)) g.set(k, []); g.get(k).push(s); }
   groups = [...g.values()];
@@ -621,13 +621,16 @@ function build3d() {
     const pivot = new THREE.Group(); pivot.position.copy(dPos); pivot.quaternion.copy(body.quaternion); rig.add(pivot);
     for (const off of [-0.18, 0.18]) { const fl = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.025, 8, 32), M.steel); fl.rotation.x = Math.PI / 2; fl.position.y = off; pivot.add(fl); }
     const disk = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.025, 32), M.disk); pivot.add(disk);
+    // шибер: пластина-задвижка, выезжает поперёк воздуховода из кармана (показывается вместо поворотного диска)
+    const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.06, 0.5), M.dark); pocket.position.x = 0.58; pocket.visible = false; pivot.add(pocket);
+    const gateP = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.025, 0.46), M.disk); gateP.visible = false; pivot.add(gateP);
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 8), M.dark); shaft.rotation.z = Math.PI / 2; pivot.add(shaft);
     const act = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.22), new THREE.MeshStandardMaterial({ color: '#e0a23a', roughness: 0.6 })); act.position.set(0.46, 0, 0); pivot.add(act);
     const arc = new THREE.PointLight('#ffb347', 0, 6, 2); arc.position.set(x, 1.15, Z + 1.2); rig.add(arc);
     const spark = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), new THREE.MeshBasicMaterial({ color: '#fff2c4' })); spark.position.copy(arc.position); rig.add(spark);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.03, 8, 40), new THREE.MeshBasicMaterial({ color: COL[id] })); ring.rotation.x = Math.PI / 2; ring.position.set(x, 0.92, Z + 1.2); rig.add(ring);
     const lbl = addLabel(`Пост ${i + 1}`, V(x, 0.2, Z + 2.2), '', COL[id]);
-    posts3d[id] = { disk, arc, spark, lbl, path: [V(x, 1.4, Z + 1.2), V(x, 2.35, Z + 1.2), V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z)] };
+    posts3d[id] = { disk, gateP, pocket, arc, spark, lbl, path: [V(x, 1.4, Z + 1.2), V(x, 2.35, Z + 1.2), V(x, 3.0, Z + 1.2), V(x, 3.6, Z + 0.6), V(x, Y_COLL, Z)] };
   });
   tube(V(XS[IDS[0]] - 0.4, Y_COLL, Z), V(X_END, Y_COLL, Z), 0.36, M.duct);
   const filt = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.6, 1.8), M.filter); filt.position.set(X_END + 1.2, Y_COLL - 0.4, Z); rig.add(filt);
@@ -794,7 +797,9 @@ function tick(now) {
   if (s) {
     for (const id of IDS) {
       const o = posts3d[id], on = s.on[id];
-      o.disk.rotation.x = (90 - s.alpha[id]) * Math.PI / 180;
+      o.disk.visible = !gate; o.gateP.visible = gate; o.pocket.visible = gate;
+      if (gate) o.gateP.position.x = (90 - s.alpha[id]) / 90 * 0.6;   // закрыт — по центру воздуховода, открыт — в кармане сбоку
+      else o.disk.rotation.x = (90 - s.alpha[id]) * Math.PI / 180;
       o.arc.intensity = on ? 3.2 + Math.random() * 2.4 : 0; o.spark.visible = on;
       placeParticles(id, s.Q[id], dtR * Math.min(ui.speed, 10) / 3);
     }
@@ -871,7 +876,7 @@ function updatePanel() {
       { name: BN(), c: css('--std'), d: A.hist.map(x => worstRatio(x.C)) }, { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => worstRatio(x.C)) }] });
     drawChart(CH[3], { unit: '%', yMax: 150, lines: [{ v: 100, c: css('--muted') }], series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.on[id] ? x.Q[id] / (m.params.posts[i].Qset * 3600) * 100 : 0) })) });
     $('c5t').textContent = gate ? 'Шибер на каждом посту: открыт / закрыт' : 'Положение заслонок, °';
-    $('c5q').textContent = gate ? '1 — шибер открыт, 0 — закрыт. Шибер не поворачивается: он либо открыт, либо закрыт, ход ≈ 1,5 с. Система, выбранная для 3D.' : '0° — открыта полностью, 45° — наполовину, 90° — закрыта. Система, выбранная для 3D.';
+    $('c5q').textContent = gate ? '1 — шибер открыт, 0 — закрыт. Шибер не поворачивается: он либо открыт, либо закрыт, ход ≈ 2,5 с. Система, выбранная для 3D.' : '0° — открыта полностью, 45° — наполовину, 90° — закрыта. Система, выбранная для 3D.';
     drawChart(CH[4], gate ? { unit: '', yMax: 1, series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.alpha[id] < 45 ? 1 : 0) })) } : { unit: '°', yMax: 90, series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.alpha[id]) })) });
     drawChart(CH[5], { unit: 'об/мин', yMax: 1600, series: [{ name: BN(), c: css('--std'), d: A.hist.map(x => x.n) }, { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => x.n) }] });
   }
