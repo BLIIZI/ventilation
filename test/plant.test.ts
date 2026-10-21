@@ -114,7 +114,7 @@ test('Сейчас в интерфейсе — только сварка; ост
   const { activeProcesses, ENABLED_GROUPS } = await import('../src/engine/processes.ts');
   assert.deepEqual(ENABLED_GROUPS, ['Сварка']);
   assert.ok(activeProcesses().every(p => p.group === 'Сварка'));
-  assert.deepEqual(activeProcesses().map(p => p.id).sort(), ['contact', 'gas_weld', 'mag_co2', 'mma', 'saw']);
+  assert.deepEqual(activeProcesses().map(p => p.id).sort(), ['mag_co2', 'saw']);   // решение 21.10.2026: только CO₂ и под флюсом
   assert.ok(PROCESSES.length > activeProcesses().length);
   assert.ok(MIXED_EXAMPLE.every(p => processById(p.process).group === 'Сварка'));
 });

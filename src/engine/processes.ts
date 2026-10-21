@@ -185,7 +185,11 @@ export const processById = (id: string) => PROCESSES.find(p => p.id === id)!;
 /** Какие группы процессов доступны в интерфейсе. Сейчас — только сварка (решение 11.10.2026: остальные процессы —
  *  после согласования с руководителем). Чтобы включить, добавить группы: 'Резка', 'Механическая обработка', 'Покраска', 'Пайка', 'Гальваника / химия'. */
 export const ENABLED_GROUPS = ['Сварка'];
-export const activeProcesses = () => PROCESSES.filter(p => ENABLED_GROUPS.includes(p.group));
+/** Решение 21.10.2026: в интерфейсе пока только два процесса — сварка под флюсом и полуавтоматическая сварка в CO₂.
+ *  Остальные процессы (ручная дуговая, газовая, контактная, резка, механическая обработка и др.) сохранены в библиотеке, но скрыты;
+ *  чтобы вернуть, добавить их id в ENABLED_PROCESSES. */
+export const ENABLED_PROCESSES = ['mag_co2', 'saw'];
+export const activeProcesses = () => PROCESSES.filter(p => ENABLED_GROUPS.includes(p.group) && ENABLED_PROCESSES.includes(p.id));
 
 /** Настройка поста: процесс, материал, параметры, тип отсоса; factorsOverride — свои удельные показатели (ввод пользователя) */
 export interface PostConfig { id: string; process: string; material: string; params?: Record<string, number>; hood?: string; Qset?: number; factorsOverride?: Record<string, number>; eta?: number;
