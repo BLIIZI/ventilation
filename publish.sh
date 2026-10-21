@@ -18,8 +18,10 @@ else
 fi
 [ $# -eq 0 ] && { echo "собрано в web/ (без выкладки)"; exit 0; }
 DST=/home/claude/ventilation
-cp web/index.html web/calc.html web/example.html web/model_raschet.xlsx "$DST"/
+# Excel (calc.html, model_raschet.xlsx) на сайт не выкладываем (решение 21.10.2026); при необходимости вернуть: cp web/calc.html web/model_raschet.xlsx "$DST"/
+cp web/index.html web/example.html "$DST"/
 cd "$DST"
+rm -f calc.html model_raschet.xlsx
 git add -A
 git commit -q -m "$1" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01H9YaRfdcqriRWQHUHCPH6s" || echo "нет изменений"
