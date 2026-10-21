@@ -224,13 +224,10 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
     <span><b>Вытяжка сварочного цеха</b><small>цифровой двойник · МГТУ «СТАНКИН»</small></span></a>
   <nav class="tabs" aria-label="Разделы">
     <a href="index.html" aria-current="page">Двойник</a>
-    <a href="calc.html" >Расчёт (Excel)</a>
     <a href="example.html" >Пример расчёта</a>
   </nav>
   <span class="grow"></span>
-  <span class="ver" title="Версия модели и дата сборки сайта">модель v1.7 · сборка 17.10.2026 23:55</span>
-  <a class="btn sm ghost dl" href="https://bliizi.github.io/ventilation/model_raschet.xlsx" title="Скачать книгу Excel со всеми листами и формулами">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Excel</span></a>
+  <span class="ver" title="Версия модели и дата сборки сайта">модель v1.7 · сборка 21.10.2026 15:34</span>
 </header>
 <div class="scrim" id="scrim" hidden></div>
 <aside class="drawer" id="drawer" aria-label="Меню" hidden>
@@ -238,18 +235,13 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
     <button class="iconbtn" id="menuClose" aria-label="Закрыть меню"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
   <nav>
     <a href="index.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>
-      <div><b>Цифровой двойник</b><span>3D-цех, живое сравнение двух систем управления на одной смене</span></div></a>
-    <a href="calc.html" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>
-      <div><b>Расчёт (Excel)</b><span>Все листы книги с формулами: нажмите на ячейку — увидите формулу</span></div></a>
+      <div><b>Цифровой двойник</b><span>3D-цех: предлагаемая система в сравнении с шибером и без шибера на одной смене</span></div></a>
     <a href="example.html" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>
       <div><b>Пример расчёта</b><span>3 поста, все формулы с подстановкой чисел и пояснениями</span></div></a>
     <a href="index.html#notes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
-      <div><b>Примечания</b><span>Как читать итоги и графики, нормы, допущения</span></div></a>
-    <hr>
-    <a href="https://bliizi.github.io/ventilation/model_raschet.xlsx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
-      <div><b>Скачать Excel</b><span>Модель_расчёт_v2.xlsx — формулы живые, можно менять исходные</span></div></a>
+      <div><b>Примечания</b><span>Как читать итоги, нормы, допущения</span></div></a>
   </nav>
-  <div class="foot">модель v1.7 · сборка 17.10.2026 23:55<br>Сайт, Excel и пример расчёта собираются из одного расчётного ядра — числа везде одинаковые.</div>
+  <div class="foot">модель v1.7 · сборка 21.10.2026 15:34<br>Сайт и пример расчёта собираются из одного расчётного ядра — числа везде одинаковые.</div>
 </aside>
 <script>
 (() => {
@@ -277,11 +269,6 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
   </div>
 
   <div class="toolbar" role="toolbar" aria-label="Управление моделью">
-    <div class="grp view"><span class="label">3D</span>
-      <div class="seg" id="viewSeg">
-        <button id="vB" aria-pressed="true" data-v="B"><i class="dot" style="background:var(--new)"></i>Предлагаемая</button>
-        <button id="vA" aria-pressed="false" data-v="A"><i class="dot" style="background:var(--std)"></i><span class="bn">Стандарт</span></button>
-      </div></div>
     <div class="grp"><span class="label">Сравнить с</span>
       <div class="seg" id="baseSeg">
         <button aria-pressed="true" data-b="manual">Шибер на отсосе</button>
@@ -358,47 +345,8 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
     </aside>
   </main>
 
-  <section aria-label="Главные графики">
-    <div class="sec-h"><h2>Главное: воздух и электроэнергия</h2><span class="note">последние 15 минут модельного времени · наведите на график, чтобы увидеть значения</span></div>
-    <div class="charts-main">
-      <div class="chart">
-        <div class="head"><h2>Сколько воздуха нужно и сколько тянут отсосы, м³/ч</h2>
-          <p class="q">Чем ближе линия к пунктиру, тем меньше лишнего воздуха — и меньше электроэнергии и тепла.</p>
-          <div class="legend"><span><i class="dash"></i>нужно по норме</span><span><i class="sw" style="background:var(--std)"></i><span class="bnl">стандарт</span></span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span></div></div>
-        <canvas id="c1" aria-label="График расхода воздуха"></canvas>
-        <p class="read" id="r1">—</p>
-      </div>
-      <div class="chart">
-        <div class="head"><h2>Мощность вентилятора местной вытяжки, кВт</h2>
-          <p class="q">Закрашенная полоса между линиями — сэкономленная электроэнергия.</p>
-          <div class="legend"><span><i class="sw" style="background:var(--std)"></i><span class="bnl">стандарт</span></span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span></div></div>
-        <canvas id="c2" aria-label="График мощности вентилятора"></canvas>
-        <p class="read" id="r2">—</p>
-      </div>
-    </div>
-    <details class="more" id="moreCharts">
-      <summary>Дополнительные графики: загрязнение, посты, заслонки, обороты</summary>
-      <div class="charts-more">
-        <div class="chart"><div class="head"><h2>Загрязнение воздуха в цехе, доля ПДК</h2>
-          <p class="q">Меньше 1 — в норме. Цех инерционный: концентрация меняется за десятки минут.</p>
-          <div class="legend"><span><i class="sw" style="background:var(--std)"></i><span class="bnl">стандарт</span></span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span><span style="color:var(--crit)">— ПДК</span><span>- - цель 0,8</span></div></div>
-          <canvas id="c3"></canvas></div>
-        <div class="chart"><div class="head"><h2>Расход каждого поста, % нормы</h2>
-          <p class="q">100 % — ровно норма. Простаивающий пост — ноль. Система, выбранная для 3D.</p>
-          <div class="legend" id="lgPosts"></div></div><canvas id="c4"></canvas></div>
-        <div class="chart"><div class="head"><h2 id="c5t">Положение заслонок, °</h2>
-          <p class="q" id="c5q">0° — открыта полностью, 45° — наполовину, 90° — закрыта. Система, выбранная для 3D.</p>
-          <div class="legend" id="lgPosts2"></div></div><canvas id="c5"></canvas></div>
-        <div class="chart"><div class="head"><h2>Обороты вентилятора, об/мин</h2>
-          <p class="q">Мощность растёт примерно как куб оборотов — небольшое снижение даёт заметную экономию.</p>
-          <div class="legend"><span><i class="sw" style="background:var(--std)"></i><span class="bnl">стандарт</span></span><span><i class="sw" style="background:var(--new)"></i>предлагаемая</span></div></div>
-          <canvas id="c6"></canvas></div>
-      </div>
-    </details>
-  </section>
-
   <section aria-label="Подробности">
-    <div class="sec-h"><h2>Подробности расчёта</h2><a class="note" href="calc.html">все формулы — на странице «Расчёт» →</a></div>
+    <div class="sec-h"><h2>Подробности расчёта</h2></div>
     <div class="details-grid">
       <div class="card">
         <details class="more" id="lossDetails"><summary>Вентилятор, фильтр и потери давления</summary>
@@ -460,15 +408,6 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
       <li><b>Загрязнение</b> — сумма C/ПДК по веществам однонаправленного действия (СП 60.13330.2020, п. 7.4.3); показана худшая группа. Меньше 1 — в норме.</li>
       <li>Полосы в плитках сравнивают две системы между собой: длиннее полоса — больше значение.</li>
     </ul>
-    <h3>Как читать графики</h3>
-    <ul>
-      <li><b>Сколько воздуха нужно и сколько тянут.</b> Пунктир — норма отсоса, умноженная на число работающих постов. Без шибера линия всегда на уровне «все посты работают»: простаивающие посты тянут воздух впустую. С шибером линия идёт ступенями за числом работающих постов, но выше пунктира: вентилятор не снижает обороты, и работающие посты получают больше нормы.</li>
-      <li><b>Мощность вентилятора.</b> Мгновенная электрическая мощность вентилятора местной вытяжки. Закрашенная полоса между линиями — экономия.</li>
-      <li><b>Загрязнение воздуха.</b> Цех инерционный: концентрация меняется за десятки минут (постоянная времени V/L, см. «Размеры цеха»).</li>
-      <li><b>Расход каждого поста</b> — в процентах от нормы; 100 % — ровно норма. Простаивающий пост показан нулём.</li>
-      <li><b>Положение заслонок</b> — угол поворота: 0° — открыта полностью, 45° — наполовину, 90° — закрыта. У варианта «шибер» вместо угла показано «открыт / закрыт»: шибер — задвижка, она не поворачивается и переключается за ≈ 2,5 с.</li>
-      <li>Под главными графиками — строка «Сейчас»: те же значения в числах на текущий момент.</li>
-    </ul>
     <h3>Управление 3D</h3>
     <ul>
       <li>Мышь: колесо — зум к точке под курсором, левая кнопка — поворот, правая — сдвиг, двойной щелчок — плавно приблизить точку.</li>
@@ -490,8 +429,7 @@ dialog#notes::backdrop{background:rgba(4,7,9,.72);backdrop-filter:blur(2px)}
       <li>ПДК — СанПиН 1.2.3685-21 (ред. от 24.12.2025), табл. 2.1.</li>
       <li>Воздухообмен — <a href="https://base.garant.ru/400536193/" target="_blank" rel="noopener">СП 60.13330.2020</a> с изменениями № 1–6.</li>
       <li>Микроклимат — ГОСТ 12.1.005-88, табл. 1 (категория работ IIб).</li>
-      <li>Полный список с ссылками — лист «Источники» на странице <a href="calc.html">«Расчёт»</a>.</li>
-    </ul>
+          </ul>
     <h3>Допущения</h3>
     <ul>
       <li>Захват отсоса η = 0,8 — значение Методики при отсутствии данных; уточняется CFD-расчётом и замером.</li>
@@ -2084,8 +2022,6 @@ function renderCards() {
     });
     card.querySelectorAll('input[data-f]').forEach(el => el.onchange = () => { c.factorsOverride = { ...(c.factorsOverride ?? {}), [el.dataset.f]: +el.value }; reset(); });
   });
-  const lg = IDS.map((id, i) => `<span><i class="sw" style="background:${COL[id]}"></i>пост ${i + 1}</span>`).join('');
-  $('lgPosts').innerHTML = lg; $('lgPosts2').innerHTML = lg;
 }
 const KIND_RU = { duct: 'трение по длине', damper: 'заслонка', filter: 'фильтр', diffuser: 'переход на больший диаметр', teeSide: 'тройник: боковой вход', teeStraight: 'тройник: проход' };
 function renderLoss(m) {
@@ -2116,9 +2052,7 @@ function setAuto(v) {
   ui.auto = v; const seg = $('autoSeg'); setPressed(seg, seg.querySelector(`[data-a="${v ? 1 : 0}"]`));
 }
 $('autoSeg').onclick = e => { const b = e.target.closest('button'); if (b) setAuto(b.dataset.a === '1'); };
-$('viewSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.view = b.dataset.v; setPressed(e.currentTarget, b);
-  $('badge').innerHTML = ui.view === 'B' ? '<i style="background:var(--new)"></i>Предлагаемая система' : `<i style="background:var(--std)"></i>${BASE[ui.base][0]} (без регулирования вентилятора)`; };
-$('baseSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.base = b.dataset.b; setPressed(e.currentTarget, b); reset(); $('badge').innerHTML = ui.view === 'B' ? '<i style="background:var(--new)"></i>Предлагаемая система' : `<i style="background:var(--std)"></i>${BASE[ui.base][0]} (без регулирования вентилятора)`; };
+$('baseSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.base = b.dataset.b; setPressed(e.currentTarget, b); reset(); };
 $('speedSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; ui.speed = +b.dataset.s; setPressed(e.currentTarget, b); };
 const PAUSE_SVG = $('pauseBtn').querySelector('svg').outerHTML, PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7z"/></svg>';
 $('pauseBtn').onclick = e => { ui.paused = !ui.paused; const b = e.currentTarget; b.innerHTML = (ui.paused ? PLAY_SVG : PAUSE_SVG) + `<span class="pause-t">${ui.paused ? 'Продолжить' : 'Пауза'}</span>`; b.setAttribute('aria-label', ui.paused ? 'Продолжить' : 'Пауза'); };
@@ -2311,62 +2245,6 @@ let firstFit = true;
 function resize() { const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); if (firstFit) { fitAll(false); firstFit = false; } }
 new ResizeObserver(resize).observe(host); resize();
 
-// ---------- графики (последние 15 минут модельного времени), с подсказкой при наведении
-function niceMax(v) { if (!(v > 0)) return 1; const p = 10 ** Math.floor(Math.log10(v)), m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p; }
-const fmtAx = (v, yMax) => yMax >= 10 ? fmt(v) : yMax >= 1 ? fmt(v, 1) : fmt(v, 2);
-function drawChart(cv, o) {
-  cv.__o = o;
-  const dpr = Math.min(devicePixelRatio, 2), w = cv.clientWidth, h = cv.clientHeight;
-  if (!w || !h) return;
-  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
-  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
-  const all = o.series.flatMap(s => s.d).filter(Number.isFinite);
-  const yMax = o.yMax ?? niceMax(Math.max(o.yMin ?? 0, ...all, ...(o.lines ?? []).map(l => l.v)) * 1.08);
-  o._yMax = yMax;
-  const pl = 46, pr = 8, pt = 8, pb = 20, W = w - pl - pr, H = h - pt - pb;
-  o._g = { pl, pt, W, H };
-  const X = i => pl + W * i / (WIN - 1), Y = v => pt + H - H * Math.min(Math.max(v, 0) / yMax, 1);
-  g.font = '10.5px "IBM Plex Mono", monospace'; g.lineWidth = 1;
-  const nd = [4, 5, 3, 6, 2].find(k => { const st = yMax / k, p = 10 ** Math.floor(Math.log10(st)), mm = Math.round(st / p * 1000) / 1000; return [1, 2, 2.5, 5, 10].includes(mm); }) ?? 4;
-  for (let k = 0; k <= nd; k++) { const v = yMax * k / nd, y = Y(v); g.strokeStyle = css('--line'); g.beginPath(); g.moveTo(pl, y + .5); g.lineTo(pl + W, y + .5); g.stroke();
-    g.fillStyle = css('--faint'); g.textAlign = 'right'; g.fillText(fmtAx(v, yMax), pl - 6, y + 3.5); }
-  g.textAlign = 'center';
-  for (const [mins, lab] of [[15, '−15 мин'], [10, '−10'], [5, '−5'], [0, 'сейчас']]) { const x = X(WIN - 1 - mins * 60); g.fillStyle = css('--faint'); g.textAlign = mins === 15 ? 'left' : mins === 0 ? 'right' : 'center'; g.fillText(lab, x, h - 5); }
-  for (const l of o.lines ?? []) { const y = Y(l.v); g.setLineDash(l.dash ?? [5, 4]); g.strokeStyle = l.c; g.beginPath(); g.moveTo(pl, y); g.lineTo(pl + W, y); g.stroke(); g.setLineDash([]); }
-  const off = s => WIN - s.d.length;
-  if (o.band) { const [a, b] = o.band.map(k => o.series[k]); g.fillStyle = o.bandColor; g.beginPath();
-    a.d.forEach((v, i) => { const x = X(i + off(a)); i ? g.lineTo(x, Y(v)) : g.moveTo(x, Y(v)); });
-    for (let i = b.d.length - 1; i >= 0; i--) g.lineTo(X(i + off(b)), Y(b.d[i])); g.closePath(); g.fill(); }
-  for (const s of o.series) {
-    g.strokeStyle = s.c; g.lineWidth = s.w ?? 2; g.setLineDash(s.dash ?? []); g.lineJoin = 'round'; g.beginPath();
-    s.d.forEach((v, i) => { const x = X(i + off(s)), y = Y(v); i ? g.lineTo(x, y) : g.moveTo(x, y); });
-    g.stroke(); g.setLineDash([]);
-  }
-  const hi = cv.__hi;
-  const tip = cv.parentElement.querySelector('.tip');
-  if (hi != null && o.series[0].d.length) {
-    const i = Math.min(WIN - 1, Math.max(WIN - o.series[0].d.length, hi)), x = X(i);
-    g.strokeStyle = css('--muted'); g.globalAlpha = 0.6; g.beginPath(); g.moveTo(x, pt); g.lineTo(x, pt + H); g.stroke(); g.globalAlpha = 1;
-    const rows = o.series.map(s => { const v = s.d[i - off(s)]; if (!Number.isFinite(v)) return '';
-      g.fillStyle = s.c; g.beginPath(); g.arc(x, Y(v), 3.2, 0, 7); g.fill();
-      return `<div><i style="background:${s.c}"></i>${s.name}: <b>${fmt(v, o.dec ?? 0)}</b> ${o.unit ?? ''}</div>`; }).join('');
-    const ago = (WIN - 1 - i) / 60;
-    tip.innerHTML = `<div class="t">${ago < 0.05 ? 'сейчас' : `${fmt(ago, 1)} мин назад`}</div>${rows}`;
-    tip.hidden = false;
-    const cr = cv.getBoundingClientRect(), pr2 = cv.parentElement.getBoundingClientRect();
-    const left = cr.left - pr2.left + x, tw2 = tip.offsetWidth;
-    tip.style.left = Math.max(6, Math.min(pr2.width - tw2 - 6, left + (left > pr2.width / 2 ? -tw2 - 12 : 12))) + 'px';
-    tip.style.top = (cr.top - pr2.top + 8) + 'px';
-  } else if (tip) tip.hidden = true;
-}
-const CH = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'].map($);
-for (const cv of CH) {
-  const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; cv.parentElement.appendChild(tip);
-  const move = e => { const o = cv.__o; if (!o || !o._g) return; const r = cv.getBoundingClientRect(); cv.__hi = Math.round((e.clientX - r.left - o._g.pl) / o._g.W * (WIN - 1)); drawChart(cv, o); };
-  cv.addEventListener('pointermove', move); cv.addEventListener('pointerdown', move);
-  cv.addEventListener('pointerleave', () => { cv.__hi = null; if (cv.__o) drawChart(cv, cv.__o); });
-}
-
 // ---------- цикл
 let acc = 0, prev = performance.now(), frame = 0;
 function tick(now) {
@@ -2438,31 +2316,6 @@ function updatePanel() {
     if (rB.ratioMax <= 1 && rA.ratioMax > 1) chip($('airChip'), BN() + ' выше ПДК', 'warn');
   }
   $('saving').textContent = ok ? `Экономия: тепло ${fmt(sh * 100)} %, электроэнергия ${fmt(se * 100)} %` : 'Экономия появится через минуту модельного времени';
-  // графики
-  const QS = IDS.map((_, i) => B.params.posts[i].Qset * 3600);
-  const need = B.hist.map(x => IDS.reduce((a, id, i) => a + (x.on[id] ? QS[i] : 0), 0));
-  drawChart(CH[0], { unit: 'м³/ч', series: [
-    { name: 'нужно', c: css('--need'), d: need, dash: [6, 4], w: 1.5 },
-    { name: BN(), c: css('--std'), d: A.hist.map(x => x.Qtot) },
-    { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => x.Qtot) }] });
-  drawChart(CH[1], { unit: 'кВт', dec: 2, band: [0, 1], bandColor: 'rgba(79,196,137,.14)', series: [
-    { name: BN(), c: css('--std'), d: A.hist.map(x => x.P / 1000) },
-    { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => x.P / 1000) }] });
-  const nd = need[need.length - 1] ?? 0, qa = A.last.Qtot, qb = B.last.Qtot, pct = (q) => nd > 0 ? ` (${q >= nd ? '+' : '−'}${fmt(Math.abs(q / nd - 1) * 100)} %)` : '';
-  $('r1').innerHTML = nd > 0 ? `Сейчас нужно <b>${fmt(nd)}</b> м³/ч · ${BN()} тянет <b style="color:var(--std)">${fmt(qa)}</b>${pct(qa)} · предлагаемая <b style="color:var(--new)">${fmt(qb)}</b>${pct(qb)}`
-    : `Сейчас все посты простаивают: ${BN()} тянет <b style="color:var(--std)">${fmt(qa)}</b>, предлагаемая <b style="color:var(--new)">${fmt(qb)}</b> м³/ч`;
-  const pa = A.last.P / 1000, pb = B.last.P / 1000;
-  $('r2').innerHTML = `Сейчас: ${BN()} <b style="color:var(--std)">${fmt(pa, 2)}</b> кВт · предлагаемая <b style="color:var(--new)">${fmt(pb, 2)}</b> кВт${pa > 0.01 ? ` · ${pb <= pa ? 'меньше' : 'больше'} на <b>${fmt(Math.abs(1 - pb / pa) * 100)} %</b>` : ''}`;
-  if ($('moreCharts').open) {
-    const h = m.hist;
-    drawChart(CH[2], { dec: 2, unit: '× ПДК', yMin: 1.2, lines: [{ v: 1, c: css('--crit'), dash: [] }, { v: 0.8, c: css('--muted') }], series: [
-      { name: BN(), c: css('--std'), d: A.hist.map(x => worstRatio(x.C)) }, { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => worstRatio(x.C)) }] });
-    drawChart(CH[3], { unit: '%', yMax: 150, lines: [{ v: 100, c: css('--muted') }], series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.on[id] ? x.Q[id] / (m.params.posts[i].Qset * 3600) * 100 : 0) })) });
-    $('c5t').textContent = gate ? 'Шибер на каждом посту: открыт / закрыт' : 'Положение заслонок, °';
-    $('c5q').textContent = gate ? '1 — шибер открыт, 0 — закрыт. Шибер не поворачивается: он либо открыт, либо закрыт, ход ≈ 2,5 с. Система, выбранная для 3D.' : '0° — открыта полностью, 45° — наполовину, 90° — закрыта. Система, выбранная для 3D.';
-    drawChart(CH[4], gate ? { unit: '', yMax: 1, series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.alpha[id] < 45 ? 1 : 0) })) } : { unit: '°', yMax: 90, series: IDS.map((id, i) => ({ name: `пост ${i + 1}`, c: COL[id], d: h.map(x => x.alpha[id]) })) });
-    drawChart(CH[5], { unit: 'об/мин', yMax: 1600, series: [{ name: BN(), c: css('--std'), d: A.hist.map(x => x.n) }, { name: 'предлагаемая', c: css('--new'), d: B.hist.map(x => x.n) }] });
-  }
 }
 updatePanel();
 requestAnimationFrame(tick);
